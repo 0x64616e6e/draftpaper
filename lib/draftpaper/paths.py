@@ -2,7 +2,7 @@
 
 Installed, the shared files live in /usr/share/draftpaper; from a checkout, in the repository itself
 (the launcher sets DRAFTPAPER_ROOT). Per user: settings in ~/.config/draftpaper/config.toml, themes of
-their own in ~/.config/draftpaper/themes, generated files (wallpapers, theme.json, i3.conf) in
+their own in ~/.config/draftpaper/themes, generated files (theme.json) in
 ~/.cache/draftpaper, runtime state (parked windows) in $XDG_RUNTIME_DIR/draftpaper.
 """
 import os
@@ -16,7 +16,6 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "draftpaper
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "draftpaper"
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draftpaper"
 THEME_JSON = CACHE / "theme.json"
-I3_CONF = CACHE / "i3.conf"
 PARKED = RUNTIME / "parked.json"
 
 

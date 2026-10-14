@@ -14,12 +14,10 @@ Item {
     readonly property color alert: data.alert || "#E2231A"
     readonly property color strong: data.strong || "#000000"     // the focused workspace
     readonly property color accent: data.accent || "#E8B374"
-    readonly property real marginPx: data.marginPx || 37
     readonly property var title: data.title || ({})
     readonly property var cells: data.cells || []
     readonly property var alerts: data.alerts || ({ battery: 15 })
     readonly property var commands: data.commands || ({})
-    function mmFor(screenName) { return (data.mm && data.mm[screenName]) || data.mmDefault || 6.2 }
 
     FileView {
         path: Quickshell.env("DRAFTPAPER_CACHE") + "/theme.json"

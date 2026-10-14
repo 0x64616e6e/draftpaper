@@ -1,15 +1,14 @@
 //@ pragma UseQApplication
-// Draftpaper: the i3 desktop as a drafting sheet. There is no bar. The title block (TitleBlock.qml)
-// carries the readings; the top and bottom margins letter what it does not (workspaces, alerts, volume
-// and brightness while they change, the tray, Bluetooth, screenshot, theme); the side margins hold
-// parked windows (SideCells.qml, `draftpaper park`). Park every window of a workspace and the whole
-// sheet shows.
-// i3 keeps a 3 px dock strip along the top (the shell's only managed window); the margins and the title
-// block are unmanaged windows pushed under every i3 window (`draftpaper lower`), so fullscreen windows
-// cover them. Started by `draftpaper start`, which sets DRAFTPAPER_BIN, _CACHE and _RUNTIME.
+// Draftpaper's shell: the lettering on the sheet the compositor draws. There is no bar. The title block
+// (TitleBlock.qml) carries the readings; the top and bottom margins letter what it does not (workspaces,
+// alerts, volume and brightness while they change, the tray, Bluetooth, screenshot, theme); the side
+// margins hold parked windows (SideCells.qml). Park every window of a workspace and the whole sheet shows.
+// The margins and the title block are layer-shell surfaces on the bottom layer, under every window, so
+// fullscreen windows cover them; their geometry and the workspaces come from the compositor's IPC
+// (Compositor.qml). Started by `draftpaper start` (draftpaper-shell.service, with the session), which
+// sets DRAFTPAPER_BIN, _CACHE and _RUNTIME.
 import QtQuick
 import Quickshell
-import Quickshell.I3
 import Quickshell.Io
 import Quickshell.Widgets
 import Quickshell.Services.UPower
@@ -29,8 +28,7 @@ ShellRoot {
         const i = order.indexOf(readings.profile)
         if (i >= 0) run(["powerprofilesctl", "set", order[(i + 1) % order.length]])
     }
-    // a named workspace is lettered by its number and the name's initial: "9:mail" -> "9M"
-    function spaceLabel(name) { const m = /^(\d+):(.)/.exec(name); return m ? m[1] + m[2].toUpperCase() : name }
+    function spaceLabel(space) { return space ? String(space.number) : "" }
 
     // ---- readings ----
     Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 5000 }
@@ -92,35 +90,9 @@ ShellRoot {
     property bool settled: false
     Timer { interval: 3000; running: true; onTriggered: root.settled = true }
 
-    // screens plugged in or out, or a mode change: render the sheets again for the new set (issue #4);
-    // `draftpaper apply` also rewrites theme.json (millimetres per screen) and i3's gaps
-    readonly property string screensKey: Quickshell.screens.map(s => s.name + " " + s.width + "x" + s.height + "+" + s.x + "+" + s.y).join(", ")
-    onScreensKeyChanged: if (root.settled) reapply.restart()
-    Timer { id: reapply; interval: 1200; onTriggered: root.run([root.bin, "apply"]) }
-
-    // the parked windows ({workspace: [{id, cls, title, cell}]}), written by `draftpaper park`
+    // the parked windows ({workspace number: [{id, cls, title, cell}]}): from the compositor once it parks
+    // (#22, #24); none until then
     property var parked: ({})
-    readonly property var parkedIds: Object.keys(parked).reduce((ids, ws) => ids.concat(parked[ws].map(w => w.id)), [])   // no Array.flat in QML's JS
-    FileView {
-        path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/parked.json"
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onTextChanged: { try { root.parked = JSON.parse(text()) } catch (e) { root.parked = {} } }
-    }
-    // a parked window that closes, changes its title or leaves the scratchpad by other means: rewrite
-    // the state so its cell follows (issue #5); events for windows that are not parked are ignored
-    I3IpcListener {
-        subscriptions: ["window"]
-        onIpcEvent: event => {
-            if (root.parkedIds.length === 0) return
-            try {
-                const e = JSON.parse(event.data)
-                if (e.container && root.parkedIds.indexOf(e.container.id) >= 0) resync.restart()
-            } catch (err) {}
-        }
-    }
-    Timer { id: resync; interval: 300; onTriggered: root.run([root.bin, "park", "save"]) }
     property bool volumeLit: false
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }
@@ -135,26 +107,26 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
 
-        PanelWindow {
+        Scope {         // one screen: its sheet's geometry (logical pixels) and workspaces, from the compositor
             id: edge
             required property var modelData
-            screen: modelData
-            anchors { top: true; left: true; right: true }
-            implicitHeight: 2                       // logical px (3 px at 140 DPI): i3's dock area, allowed for in the top gap
-            color: "transparent"
-            readonly property real dpr: devicePixelRatio > 0 ? devicePixelRatio : 1
-            readonly property real mm: theme.mmFor(modelData.name) / dpr   // logical px per millimetre of this screen
-            readonly property real margin: theme.marginPx / dpr
+            readonly property var screen: modelData
+            readonly property var output: Compositor.output(modelData.name)
+            readonly property real dpr: output ? output.scale : (modelData.devicePixelRatio || 1)
+            readonly property real mm: output ? output.px_per_mm : 6.2 / dpr        // logical px per millimetre
+            readonly property real margin: output ? output.margin : Math.round(6 * mm)
+            readonly property real width: output ? output.width : modelData.width
+            readonly property real height: output ? output.height : modelData.height
+            readonly property int zonesAcross: output ? output.zones.across : Math.max(2, Math.round((width - 2 * margin) / (50 * mm)))
+            readonly property int zonesDown: output ? output.zones.down : Math.max(2, Math.round((height - 2 * margin) / (50 * mm)))
             readonly property real fontPx: Math.min(margin * 0.5, 3.2 * mm)
 
-            readonly property var monitor: { I3.monitors.values; return I3.monitorFor(modelData) }
-            readonly property var spaces: I3.workspaces.values
-                .filter(w => w.monitor && edge.monitor && w.monitor.name === edge.monitor.name)
-                .sort((a, b) => a.number - b.number)
-            readonly property var activeSpace: I3.workspaces.values.find(w => w.monitor && edge.monitor && w.monitor.name === edge.monitor.name && w.active) || null
+            // this screen's workspaces, by number (the compositor sends them sorted)
+            readonly property var spaces: Compositor.workspaces.filter(w => w.output === modelData.name)
+            readonly property var activeSpace: spaces.find(w => w.shown) || null
 
-            TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace ? edge.activeSpace.name : "") }
-            SideCells { shell: root; edge: edge; space: edge.activeSpace ? edge.activeSpace.name : "" }
+            TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
+            SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----
             Margin {
@@ -182,20 +154,19 @@ ShellRoot {
                                 horizontalAlignment: Text.AlignHCenter
                                 fontSizeMode: Text.HorizontalFit
                                 minimumPixelSize: edge.fontPx * 0.6
-                                text: root.spaceLabel(modelData.name)
+                                text: root.spaceLabel(modelData)
                                 // focused: bold in the theme's strong ink; shown on its screen but not focused: bold in the others'
-                                // ink; urgent: bold in the alert red; the rest: regular, lighter
+                                // ink; the rest: regular, lighter
                                 font.family: Fonts.mono; font.pixelSize: edge.fontPx
-                                font.bold: modelData.focused || modelData.active || modelData.urgent
-                                color: modelData.urgent ? theme.alert : modelData.focused ? theme.strong
-                                     : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
+                                font.bold: modelData.focused || modelData.shown
+                                color: modelData.focused ? theme.strong : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
                             }
                             Rectangle {     // separator: the full height of the margin, like the zone ticks
                                 visible: index > 0 && !(spacesZone.slotted && index % spacesZone.perZone === 0)
                                 width: Math.max(1, 1 / edge.dpr); height: parent.height
                                 color: topMargin.tick
                             }
-                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: modelData.activate() }
+                            MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Compositor.action("workspace " + modelData.number) }
                         }
                     }
                 }

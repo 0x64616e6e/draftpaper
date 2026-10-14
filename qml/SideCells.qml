@@ -1,11 +1,11 @@
 // The drafting sheet's side margins (shell.qml, one per screen): a cell per zone, down the left margin
 // first, then the right, each lettered with its zone (A, B, ...). Each window parked on the workspace
-// shown on this screen (`draftpaper park`) keeps its cell, its title running up the margin as a drawing letters
-// its side margins. A click on a title brings that window back; a click on an empty cell parks the
-// focused window of this screen's workspace there.
+// shown on this screen keeps its cell, its title running up the margin as a drawing letters its side
+// margins. A click on a title brings that window back; a click on an empty cell parks the focused window
+// of this screen's workspace there. (Parking moves into the compositor, #22 and #24: until then no
+// window is parked and the clicks are answered with an error.)
 import QtQuick
 import Quickshell
-import Quickshell.Io
 
 Item {
     id: cells
@@ -18,16 +18,7 @@ Item {
     readonly property var windows: shell.parked[space] || []
     function at(cell) { return windows.find(w => w.cell === cell) || null }
 
-    function act(cell, w) { shell.run(w ? [shell.bin, "park", "show", String(w.id)] : [shell.bin, "park", "at", String(cell), space]) }
-
-    // how many cells this screen has, for `draftpaper park`'s cycling (left and right margins alike)
-    FileView {
-        id: count
-        path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/cells-" + cells.edge.modelData.name
-        printErrors: false
-    }
-    property int total: 0
-    onTotalChanged: if (total > 0) count.setText(String(total))
+    function act(cell, w) { Compositor.action(w ? "unpark " + w.id : "park_at " + cell) }
 
     Repeater {
         model: ["left", "right"]
@@ -37,7 +28,6 @@ Item {
             required property int index
             edge: cells.edge; ink: cells.ink; inkAlpha: cells.theme.inkAlpha
             side: modelData
-            Component.onCompleted: if (index === 0) cells.total = Qt.binding(() => 2 * sideBand.zones)
             Repeater {
                 model: sideBand.zones
                 Item {              // the delegate holds the Zone (whose own `index` is its place in the band)

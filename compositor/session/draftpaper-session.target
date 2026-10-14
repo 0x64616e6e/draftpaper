@@ -4,4 +4,5 @@ Documentation=https://github.com/0x64616e6e/draftpaper
 BindsTo=graphical-session.target
 Wants=graphical-session-pre.target
 After=graphical-session-pre.target
-# the shell (margins, title block) joins this target once it runs on Wayland (#25)
+# the shell: the margins and the title block
+Wants=draftpaper-shell.service

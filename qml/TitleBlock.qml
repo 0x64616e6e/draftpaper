@@ -1,15 +1,15 @@
-// The sheet's title block, live (one per screen): the readings laid out as title-block cells at the
-// sheet's bottom-right corner, in the theme's ink. It is an unmanaged window pushed under every i3 window
-// (draftpaper lower), so it reads as part of the paper: seen on an empty workspace or once its windows
-// are parked, never on top of work. Sizes are millimetres of this screen.
+// The sheet's title block, live (one per screen): the readings laid out as title-block cells in the
+// frame's bottom-right corner, in the theme's ink. A layer-shell surface on the bottom layer, under every
+// window, so it reads as part of the paper: seen on an empty workspace or once its windows are parked,
+// never on top of work. Sizes are millimetres of this screen.
 import QtQuick
 import Quickshell
-import Quickshell.Io
+import Quickshell.Wayland
 
 Item {
     id: block
     required property var shell           // the ShellRoot of shell.qml: theme and readings
-    required property var edge            // this screen's dock strip, which the window is placed from
+    required property var edge            // this screen (shell.qml): its sheet's geometry from the compositor
     property string spaceName: ""
 
     readonly property var theme: shell.theme
@@ -38,16 +38,18 @@ Item {
                : [86, 24, 44, 12, "DRAWN", theme.title.drawn || "", null, null, false],
     ]
 
-    PopupWindow {
+    PanelWindow {
         id: win
-        anchor.window: block.edge
-        anchor.rect.x: block.edge.width - block.edge.margin - block.bw
-        anchor.rect.y: block.edge.screen.height - block.edge.margin - block.bh
+        screen: block.edge.screen
+        anchors { bottom: true; right: true }
+        margins { bottom: Math.round(block.edge.margin); right: Math.round(block.edge.margin) }
         implicitWidth: Math.round(block.bw)
         implicitHeight: Math.round(block.bh)
-        visible: block.edge.width > 0
+        exclusionMode: ExclusionMode.Ignore
+        aboveWindows: false
+        focusable: false
         color: "transparent"
-        onBackingWindowVisibleChanged: if (backingWindowVisible) { lower.running = true; again.restart() }
+        WlrLayershell.namespace: "draftpaper-title-block"
 
         Rectangle {                       // the block's outer rule, as heavy as the frame
             anchors.fill: parent
@@ -95,8 +97,4 @@ Item {
             }
         }
     }
-
-    // under every i3 window; again a moment later in case the window was mapped after the first try
-    Process { id: lower; command: [Quickshell.env("DRAFTPAPER_BIN"), "lower", String(Math.round(win.implicitWidth * block.edge.dpr)), String(Math.round(win.implicitHeight * block.edge.dpr))] }
-    Timer { id: again; interval: 800; onTriggered: lower.running = true }
 }

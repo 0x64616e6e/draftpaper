@@ -1,0 +1,12 @@
+[Unit]
+Description=Draftpaper shell (the sheet's margins and title block)
+Documentation=https://github.com/0x64616e6e/draftpaper
+# with the session: started by draftpaper-session.target, stopped with it
+PartOf=draftpaper-session.target
+After=draftpaper-session.target
+
+[Service]
+# draftpaper applies the theme, then runs Quickshell in the foreground
+ExecStart=draftpaper start
+Restart=on-failure
+RestartSec=2
