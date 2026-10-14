@@ -110,6 +110,13 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
     ("Print", "screenshot"),
+    // the laptop's media keys: PipeWire's wpctl (up to 150%, as the shell's volume cell), brightnessctl
+    ("XF86AudioRaiseVolume", "spawn wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"),
+    ("XF86AudioLowerVolume", "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
+    ("XF86AudioMute", "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+    ("XF86AudioMicMute", "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+    ("XF86MonBrightnessUp", "spawn brightnessctl -q set 5%+"),
+    ("XF86MonBrightnessDown", "spawn brightnessctl -q set 5%-"),
 ];
 
 pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
@@ -310,6 +317,20 @@ impl crate::state::Draftpaper {
         keyboard.change_repeat_info(input.repeat_rate, input.repeat_delay);
         if let Some(tty) = self.tty_data.as_mut() {
             tty.configure_devices(&input);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_bindings_parse() {
+        let config = Config::default_config();
+        for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print"] {
+            let sym = xkb::keysym_from_name(key, xkb::KEYSYM_CASE_INSENSITIVE);
+            assert!(config.bindings.iter().any(|b| b.key == sym), "{key} is bound");
         }
     }
 }

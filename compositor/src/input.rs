@@ -26,8 +26,12 @@ impl Draftpaper {
                 let pressed = event.state() == KeyState::Pressed;
                 let tty = self.tty;
                 let locked = self.locked;
+                // a held binding repeats until a key goes up or down
+                if let Some(token) = self.key_repeat.take() {
+                    self.loop_handle.remove(token);
+                }
 
-                let action = self.seat.get_keyboard().unwrap().input::<Action, _>(
+                let action = self.seat.get_keyboard().unwrap().input::<(Action, bool), _>(
                     self,
                     event.key_code(),
                     event.state(),
@@ -38,12 +42,21 @@ impl Draftpaper {
                         .flatten()
                         .filter(|a| !locked || matches!(a, Action::Vt(_)))
                     {
-                        Some(action) => FilterResult::Intercept(action),
+                        Some(action) => {
+                            // volume, brightness and resizing go on while the key is held
+                            let name = smithay::input::keyboard::xkb::keysym_get_name(keysym.modified_sym());
+                            let held = matches!(action, Action::Resize(_))
+                                || matches!(name.as_str(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume" | "XF86MonBrightnessUp" | "XF86MonBrightnessDown");
+                            FilterResult::Intercept((action, held))
+                        }
                         None => FilterResult::Forward,
                     },
                 );
-                if let Some(action) = action {
-                    self.act(action);
+                if let Some((action, held)) = action {
+                    self.act(action.clone());
+                    if held {
+                        self.repeat(action);
+                    }
                 }
             }
             InputEvent::PointerMotion { event, .. } => {
@@ -166,6 +179,20 @@ impl Draftpaper {
 }
 
 impl Draftpaper {
+    /// Run `action` again while its key is held: after the keyboard's repeat delay, then at its rate.
+    fn repeat(&mut self, action: Action) {
+        use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+        let delay = std::time::Duration::from_millis(self.config.input.repeat_delay.max(1) as u64);
+        let every = std::time::Duration::from_millis(1000 / self.config.input.repeat_rate.max(1) as u64);
+        self.key_repeat = self
+            .loop_handle
+            .insert_source(Timer::from_duration(delay), move |_, _, data| {
+                data.act(action.clone());
+                TimeoutAction::ToDuration(every)
+            })
+            .ok();
+    }
+
     pub fn act(&mut self, action: Action) {
         let i = self.active;
         if i >= self.screens.len() && matches!(action, Action::Focus(_) | Action::Move(_) | Action::Resize(_)) {

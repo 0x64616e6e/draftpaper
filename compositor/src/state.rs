@@ -85,6 +85,8 @@ pub struct Draftpaper {
     pub anim: crate::animation::Animations,
     /// nested: a screenshot of the next frame (tty::screenshot)
     pub screenshot_requested: bool,
+    /// the timer repeating a held binding (input.rs)
+    pub key_repeat: Option<smithay::reexports::calloop::RegistrationToken>,
 }
 
 impl Draftpaper {
@@ -182,6 +184,7 @@ impl Draftpaper {
             ipc: Default::default(),
             anim: Default::default(),
             screenshot_requested: false,
+            key_repeat: None,
         }
     }
 
