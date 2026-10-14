@@ -323,6 +323,7 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
 
 /// Render one output; on an unchanged frame try again a refresh later.
 fn render(data: &mut Draftpaper, crtc: crtc::Handle) {
+    data.anim.prune(std::time::Instant::now());
     let Some(mut tty) = data.tty_data.take() else { return };
     let queued = render_with(data, &mut tty, crtc);
     data.tty_data = Some(tty);
@@ -371,14 +372,23 @@ fn after_frame(data: &mut Draftpaper, output: &smithay::output::Output, queued: 
     }
 }
 
-/// Every output as drawn (without the pointer), to ~/Pictures/draftpaper-<seconds>-<output>.png.
-pub fn screenshot(data: &mut Draftpaper) {
-    let Some(mut tty) = data.tty_data.take() else { return };
-    let outputs: Vec<Output> = tty.outputs.values().map(|(o, _, _)| o.clone()).collect();
+/// ~/Pictures/draftpaper-<seconds>-<output>.png
+pub fn screenshot_path(output: &Output) -> PathBuf {
     let dir = PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("Pictures");
     let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    dir.join(format!("draftpaper-{stamp}-{}.png", output.name()))
+}
+
+/// Every output as drawn (without the pointer), to ~/Pictures/draftpaper-<seconds>-<output>.png. Nested,
+/// the next frame is taken (winit.rs).
+pub fn screenshot(data: &mut Draftpaper) {
+    let Some(mut tty) = data.tty_data.take() else {
+        data.screenshot_requested = true;
+        return;
+    };
+    let outputs: Vec<Output> = tty.outputs.values().map(|(o, _, _)| o.clone()).collect();
     for output in outputs {
-        let path = dir.join(format!("draftpaper-{stamp}-{}.png", output.name()));
+        let path = screenshot_path(&output);
         match capture(data, &mut tty.renderer, &output, &path) {
             Ok(()) => eprintln!("draftpaper: screenshot {}", path.display()),
             Err(e) => eprintln!("draftpaper: screenshot of {}: {e}", output.name()),
@@ -387,7 +397,7 @@ pub fn screenshot(data: &mut Draftpaper) {
     data.tty_data = Some(tty);
 }
 
-fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path: &std::path::Path) -> Result<(), String> {
+pub fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path: &std::path::Path) -> Result<(), String> {
     use smithay::backend::renderer::{damage::OutputDamageTracker, gles::GlesTexture, Bind, ExportMem, Offscreen};
     use smithay::utils::{Rectangle, Size};
     let mode = output.current_mode().ok_or("no mode")?;
@@ -396,7 +406,8 @@ fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path
     let mut texture: GlesTexture = renderer.create_buffer(Fourcc::Abgr8888, size).map_err(|e| format!("{e:?}"))?;
     let pixels = {
         let mut target = renderer.bind(&mut texture).map_err(|e| format!("{e:?}"))?;
-        let mut damage = OutputDamageTracker::from_output(output);
+        // upright, whatever the output's transform (nested, winit draws flipped)
+        let mut damage = OutputDamageTracker::new((size.w, size.h), output.current_scale().fractional_scale(), smithay::utils::Transform::Normal);
         damage.render_output(renderer, &mut target, 0, &elements, [0.1, 0.1, 0.1, 1.0]).map_err(|e| format!("{e:?}"))?;
         let mapping = renderer.copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888).map_err(|e| format!("{e:?}"))?;
         renderer.map_texture(&mapping).map_err(|e| format!("{e:?}"))?.to_vec()

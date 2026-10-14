@@ -9,6 +9,10 @@
 //!     tap = true                       # touchpad: tap to click
 //!     natural_scroll = true            # touchpad: content follows the fingers
 //!
+//!     [animations]                     # parking, unparking, switching workspaces
+//!     enabled = true                   # false: reduced motion, every change at once
+//!     duration_ms = 220
+//!
 //!     [bindings]                       # key = action; "none" removes a default
 //!     "Mod+Return" = "spawn foot"      # Mod is Super on the TTY, Alt when nested
 //!     "Mod+d" = "spawn fuzzel"
@@ -80,6 +84,8 @@ pub struct Input {
 pub struct Config {
     pub input: Input,
     pub bindings: Vec<Binding>,
+    /// how long parking, unparking and switching workspaces take; None: no animations
+    pub animations: Option<std::time::Duration>,
 }
 
 pub fn path() -> PathBuf {
@@ -210,7 +216,11 @@ impl Config {
                 bindings.push(Binding { mods, key, action });
             }
         }
-        Ok(Config { input, bindings })
+        let anim = table.get("animations").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let enabled = anim.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
+        let ms = anim.get("duration_ms").and_then(|v| v.as_integer()).unwrap_or(220).clamp(0, 2000) as u64;
+        let animations = (enabled && ms > 0).then(|| std::time::Duration::from_millis(ms));
+        Ok(Config { input, bindings, animations })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

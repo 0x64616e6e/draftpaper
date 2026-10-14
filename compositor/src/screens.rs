@@ -109,6 +109,14 @@ impl Draftpaper {
                 (self.active, s.workspaces.iter().position(|w| w.number == number).unwrap())
             }
         };
+        // the windows leaving the screen, where they are, to slide them out
+        let outgoing: Vec<(Window, Point<i32, Logical>)> = if self.screens[i].current != k {
+            let ws = self.screens[i].workspace();
+            ws.layout.windows().chain(ws.floating.iter()).filter_map(|w| Some((w.clone(), self.space.element_location(w)?))).collect()
+        } else {
+            Vec::new()
+        };
+        let from = self.screens[i].workspace().number;
         let s = &mut self.screens[i];
         let old = s.current;
         s.current = k;
@@ -121,6 +129,9 @@ impl Draftpaper {
         }
         self.active = i;
         self.relayout();
+        if old != k {
+            self.animate_slide(i, outgoing, if number > from { 1 } else { -1 });
+        }
         let w = self.screens[i].layout().focused();
         self.focus(w);
     }

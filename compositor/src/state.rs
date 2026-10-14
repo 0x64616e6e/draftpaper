@@ -81,6 +81,10 @@ pub struct Draftpaper {
     pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, Draftpaper>,
     /// the IPC socket and its clients (ipc.rs)
     pub ipc: crate::ipc::Ipc,
+    /// windows flying into and out of cells, workspaces sliding (animation.rs)
+    pub anim: crate::animation::Animations,
+    /// nested: a screenshot of the next frame (tty::screenshot)
+    pub screenshot_requested: bool,
 }
 
 impl Draftpaper {
@@ -172,6 +176,8 @@ impl Draftpaper {
             tty_data: None,
             loop_handle: event_loop.handle(),
             ipc: Default::default(),
+            anim: Default::default(),
+            screenshot_requested: false,
         }
     }
 

@@ -12,7 +12,7 @@
 //!   takes the next free cell after the last (before the first) taken one, round the margin; with
 //!   nothing parked, the focus moves right (left).
 
-use smithay::desktop::Window;
+use smithay::{desktop::Window, utils::Rectangle};
 
 use crate::{config::Action, layout::{Direction, Placeholder}, Draftpaper};
 
@@ -69,6 +69,10 @@ impl Draftpaper {
             }
         };
         ws.parked.push(Parked { window: window.clone(), cell, spot });
+        // from where it was drawn into its cell
+        if let Some(loc) = self.space.element_location(&window) {
+            self.animate_park(&window, Rectangle::new(loc, window.geometry().size), i, cell);
+        }
         self.space.unmap_elem(&window);
         window.set_activated(false);
         if let Some(t) = window.toplevel() {
@@ -79,8 +83,9 @@ impl Draftpaper {
         self.focus(next);
     }
 
-    /// Back into its workspace (screen `i`, workspace `k`, the parked entry `p`); not focused.
-    fn unpark_window(&mut self, i: usize, k: usize, p: usize) -> Window {
+    /// Back into its workspace (screen `i`, workspace `k`, the parked entry `p`); not focused. Returns
+    /// the window and the cell it was in.
+    fn unpark_window(&mut self, i: usize, k: usize, p: usize) -> (Window, usize) {
         let grid = self.screens[i].grid;
         let ws = &mut self.screens[i].workspaces[k];
         let parked = ws.parked.remove(p);
@@ -88,7 +93,7 @@ impl Draftpaper {
             Spot::Tiled(placeholder) => ws.layout.unpark(parked.window.clone(), placeholder, &grid),
             Spot::Floating => ws.floating.push(parked.window.clone()),
         }
-        parked.window
+        (parked.window, parked.cell)
     }
 
     fn taken_cells(&self) -> Vec<usize> {
@@ -103,14 +108,17 @@ impl Draftpaper {
         } else if s.workspace().layout.windows().next().is_none() && s.workspace().floating.is_empty() {
             // nothing showing: everything back, last parked first
             let (i, k) = (self.active, s.current);
-            let mut last = None;
+            let mut back = Vec::new();
             while !self.screens[i].workspaces[k].parked.is_empty() {
                 let p = self.screens[i].workspaces[k].parked.len() - 1;
-                last = Some(self.unpark_window(i, k, p));
+                back.push(self.unpark_window(i, k, p));
             }
             self.relayout();
-            if last.is_some() {
-                self.focus(last);
+            for (window, cell) in &back {
+                self.animate_unpark(window, i, *cell);
+            }
+            if let Some((last, _)) = back.pop() {
+                self.focus(Some(last));
             }
         }
     }
@@ -132,11 +140,12 @@ impl Draftpaper {
             })
         });
         let Some((i, k, p, number)) = found else { return };
-        let window = self.unpark_window(i, k, p);
+        let (window, cell) = self.unpark_window(i, k, p);
         if self.screens[i].current != k {
             self.switch_to(number);
         }
         self.relayout();
+        self.animate_unpark(&window, i, cell);
         self.focus(Some(window));
     }
 

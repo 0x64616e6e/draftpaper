@@ -77,6 +77,7 @@ pub fn init_winit(
             }
             WinitEvent::Input(event) => state.process_input_event(event),
             WinitEvent::Redraw => {
+                state.anim.prune(std::time::Instant::now());
                 let size = backend.window_size();
                 let damage = Rectangle::from_size(size);
 
@@ -89,6 +90,13 @@ pub fn init_winit(
                         .unwrap();
                 }
                 backend.submit(Some(&[damage])).unwrap();
+                if std::mem::take(&mut state.screenshot_requested) {
+                    let path = crate::tty::screenshot_path(&output);
+                    match crate::tty::capture(state, backend.renderer(), &output, &path) {
+                        Ok(()) => eprintln!("draftpaper: screenshot {}", path.display()),
+                        Err(e) => eprintln!("draftpaper: screenshot: {e}"),
+                    }
+                }
 
                 state.send_frames(&output, state.start_time.elapsed());
 

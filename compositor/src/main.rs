@@ -15,6 +15,7 @@ mod state;
 mod theme;
 mod ipc;
 mod parking;
+mod animation;
 mod tty;
 mod winit;
 

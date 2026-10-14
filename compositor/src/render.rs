@@ -1,8 +1,11 @@
-//! What an output shows, for every backend: the pointer (on the TTY, where nobody else draws it), the
-//! low layers' menus, the windows and layer surfaces, their 1 px borders (in the gutters between tiles,
-//! so they never cover content), and the sheet at the bottom, in front-to-back order.
+//! What an output shows, for every backend, in front-to-back order: the pointer (on the TTY, where
+//! nobody else draws it), the low layers' menus, the overlay and top layer surfaces, the windows (each
+//! through a rescale, a shift and a crop, so a parking window can fly and a workspace slide; at rest
+//! they are the identity), their 1 px borders (in the gutters between tiles, so they never cover
+//! content), the bottom and background layer surfaces (the shell's margins and title block), and the
+//! sheet.
 
-use std::cell::RefCell;
+use std::{cell::RefCell, time::Instant};
 
 use smithay::{
     backend::renderer::{
@@ -11,13 +14,15 @@ use smithay::{
             render_elements,
             solid::{SolidColorBuffer, SolidColorRenderElement},
             surface::WaylandSurfaceRenderElement,
-            Kind,
+            utils::{CropRenderElement, Relocate, RelocateRenderElement, RescaleRenderElement},
+            AsRenderElements, Kind,
         },
         gles::{element::PixelShaderElement, GlesRenderer},
     },
-    desktop::space::{space_render_elements, SpaceRenderElements},
+    desktop::{layer_map_for_output, Window},
     output::Output,
-    utils::{Logical, Point, Size},
+    utils::{Logical, Physical, Point, Rectangle, Scale, Size},
+    wayland::shell::wlr_layer::Layer,
 };
 
 use crate::{sheet::SheetRenderer, state::Draftpaper, theme::Theme};
@@ -25,7 +30,7 @@ use crate::{sheet::SheetRenderer, state::Draftpaper, theme::Theme};
 render_elements! {
     pub OutputElements<=GlesRenderer>;
     Pointer=MemoryRenderBufferRenderElement<GlesRenderer>,
-    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+    Window=CropRenderElement<RelocateRenderElement<RescaleRenderElement<WaylandSurfaceRenderElement<GlesRenderer>>>>,
     Border=SolidColorRenderElement,
     /// the lock surface, and the low layers' menus drawn above the windows
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
@@ -97,12 +102,89 @@ pub fn output_elements(
         elements.extend(popup_elements.into_iter().map(OutputElements::Surface));
     }
 
-    elements.extend(
-        space_render_elements(renderer, [&state.space], output, 1.0)
-            .unwrap_or_default()
-            .into_iter()
-            .map(OutputElements::Space),
-    );
+    let now = Instant::now();
+    let to_phys = |r: Rectangle<f64, Logical>| -> Rectangle<i32, Physical> {
+        Rectangle::new(
+            (r.loc - geometry.loc.to_f64()).to_physical(scale).to_i32_round(),
+            r.size.to_physical(scale).to_i32_round(),
+        )
+    };
+    let whole = Rectangle::from_size(geometry.size.to_physical_precise_round(scale));
+
+    // layer surfaces of `layers`, front first
+    let layer_elements = |renderer: &mut GlesRenderer, layers: &[Layer]| -> Vec<OutputElements> {
+        let map = layer_map_for_output(output);
+        let mut out = Vec::new();
+        for layer in layers {
+            for surface in map.layers_on(*layer).rev() {
+                let loc = map.layer_geometry(surface).map(|g| g.loc).unwrap_or_default().to_physical_precise_round(scale);
+                let e: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = surface.render_elements(renderer, loc, Scale::from(scale), 1.0);
+                out.extend(e.into_iter().map(OutputElements::Surface));
+            }
+        }
+        out
+    };
+    elements.extend(layer_elements(renderer, &[Layer::Overlay, Layer::Top]));
+
+    // the windows: each drawn at `at` (its geometry, global logical), then mapped onto `to`, faded by
+    // `alpha`, cropped to `crop`
+    let mut draw = |renderer: &mut GlesRenderer, window: &Window, at: Rectangle<i32, Logical>, to: Rectangle<f64, Logical>, alpha: f32, crop: Rectangle<i32, Physical>| {
+        let g = to_phys(at.to_f64());
+        let t = to_phys(to);
+        let loc = (at.loc - window.geometry().loc - geometry.loc).to_physical_precise_round(scale);
+        let e: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = window.render_elements(renderer, loc, Scale::from(scale), alpha);
+        let rescale = Scale { x: t.size.w as f64 / g.size.w.max(1) as f64, y: t.size.h as f64 / g.size.h.max(1) as f64 };
+        for e in e {
+            let e = RescaleRenderElement::from_element(e, g.loc, rescale);
+            let e = RelocateRenderElement::from_element(e, t.loc - g.loc, Relocate::Relative);
+            if let Some(e) = CropRenderElement::from_element(e, scale, crop) {
+                elements.push(OutputElements::Window(e));
+            }
+        }
+    };
+    let name = output.name();
+    // parking windows (out of the space), in front: from their place into their cell, fading
+    for f in state.anim.flights.iter().filter(|f| f.output == name) {
+        if let Some(to) = f.to {
+            let e = f.progress(now);
+            draw(renderer, &f.window, f.from, crate::animation::lerp(f.from, to, e), (1.0 - 0.85 * e) as f32, whole);
+        }
+    }
+    // a workspace switch: the new windows come in from `dir`, the old go out, inside the frame
+    let slide = state.anim.slide(&name);
+    let (shift, frame) = match (slide, state.screens.iter().find(|s| &s.output == output)) {
+        (Some(sl), Some(sc)) => {
+            let e = sl.progress(now);
+            let area = sc.grid.area;
+            let frame = to_phys(Rectangle::new(area.loc - Point::from((1, 1)), area.size + Size::from((2, 2))).to_f64());
+            (Some((sl, e, geometry.size.w as f64)), frame)
+        }
+        _ => (None, whole),
+    };
+    let animated = |w: &Window| state.anim.flight(w).is_some() || shift.is_some();
+    for window in state.space.elements_for_output(output).rev() {
+        let Some(loc) = state.space.element_location(window) else { continue };
+        let at = Rectangle::new(loc, window.geometry().size);
+        match (state.anim.flight(window), shift) {
+            // unparking: from its cell into its place, appearing
+            (Some(f), _) if f.to.is_none() => {
+                let e = f.progress(now);
+                draw(renderer, window, at, crate::animation::lerp(f.from, at, e), (0.15 + 0.85 * e) as f32, whole);
+            }
+            (_, Some((sl, e, w))) => {
+                let to = Rectangle::new(at.loc.to_f64() + Point::from((sl.dir as f64 * (1.0 - e) * w, 0.0)), at.size.to_f64());
+                draw(renderer, window, at, to, 1.0, frame);
+            }
+            _ => draw(renderer, window, at, at.to_f64(), 1.0, whole),
+        }
+    }
+    if let Some((sl, e, w)) = shift {
+        for (window, loc) in &sl.outgoing {
+            let at = Rectangle::new(*loc, window.geometry().size);
+            let to = Rectangle::new(at.loc.to_f64() - Point::from((sl.dir as f64 * e * w, 0.0)), at.size.to_f64());
+            draw(renderer, window, at, to, 1.0, frame);
+        }
+    }
 
     // borders, in the theme's window colours; a fullscreen window has none
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
@@ -111,7 +193,7 @@ pub fn output_elements(
         let focused = state.focused_window();
         let fullscreen: Vec<_> = state.screens.iter().filter_map(|s| s.workspace().fullscreen.clone()).collect();
         for window in state.space.elements_for_output(output) {
-            if fullscreen.contains(window) {
+            if fullscreen.contains(window) || animated(window) {
                 continue;
             }
             let Some(loc) = state.space.element_location(window) else { continue };
@@ -139,6 +221,8 @@ pub fn output_elements(
             }
         }
     }
+
+    elements.extend(layer_elements(renderer, &[Layer::Bottom, Layer::Background]));
 
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
         let size: Size<i32, Logical> = geometry.size;
