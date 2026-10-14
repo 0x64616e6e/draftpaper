@@ -104,7 +104,8 @@ def focused_ws(t):
 
 
 def park(leaf, ws, n):
-    cmd(f'[con_id={leaf["id"]}] mark --add "{PREFIX}{ws}:{n}", move scratchpad')
+    stale = "".join(f'unmark "{m}", ' for m in leaf.get("marks", []) if m.startswith(PREFIX))   # left by a window taken out by hand
+    cmd(f'[con_id={leaf["id"]}] {stale}mark --add "{PREFIX}{ws}:{n}", move scratchpad')
 
 
 def unpark(leaf, mark):

@@ -91,6 +91,36 @@ ShellRoot {
     // volume and brightness are lettered for a few seconds after they change (volume stays while muted)
     property bool settled: false
     Timer { interval: 3000; running: true; onTriggered: root.settled = true }
+
+    // screens plugged in or out, or a mode change: render the sheets again for the new set (issue #4);
+    // `draftpaper apply` also rewrites theme.json (millimetres per screen) and i3's gaps
+    readonly property string screensKey: Quickshell.screens.map(s => s.name + " " + s.width + "x" + s.height + "+" + s.x + "+" + s.y).join(", ")
+    onScreensKeyChanged: if (root.settled) reapply.restart()
+    Timer { id: reapply; interval: 1200; onTriggered: root.run([root.bin, "apply"]) }
+
+    // the parked windows ({workspace: [{id, cls, title, cell}]}), written by `draftpaper park`
+    property var parked: ({})
+    readonly property var parkedIds: Object.keys(parked).reduce((ids, ws) => ids.concat(parked[ws].map(w => w.id)), [])   // no Array.flat in QML's JS
+    FileView {
+        path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/parked.json"
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onTextChanged: { try { root.parked = JSON.parse(text()) } catch (e) { root.parked = {} } }
+    }
+    // a parked window that closes, changes its title or leaves the scratchpad by other means: rewrite
+    // the state so its cell follows (issue #5); events for windows that are not parked are ignored
+    I3IpcListener {
+        subscriptions: ["window"]
+        onIpcEvent: event => {
+            if (root.parkedIds.length === 0) return
+            try {
+                const e = JSON.parse(event.data)
+                if (e.container && root.parkedIds.indexOf(e.container.id) >= 0) resync.restart()
+            } catch (err) {}
+        }
+    }
+    Timer { id: resync; interval: 300; onTriggered: root.run([root.bin, "park", "save"]) }
     property bool volumeLit: false
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }

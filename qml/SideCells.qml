@@ -15,17 +15,8 @@ Item {
 
     readonly property var theme: shell.theme
     readonly property color ink: theme.ink
-    property var parked: ({})             // `draftpaper park`'s state file: {workspace: [{id, cls, title, cell}]}
-    readonly property var windows: parked[space] || []
+    readonly property var windows: shell.parked[space] || []
     function at(cell) { return windows.find(w => w.cell === cell) || null }
-
-    FileView {
-        path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/parked.json"
-        watchChanges: true
-        printErrors: false
-        onFileChanged: reload()
-        onTextChanged: { try { cells.parked = JSON.parse(text()) } catch (e) { cells.parked = {} } }
-    }
 
     function act(cell, w) { shell.run(w ? [shell.bin, "park", "show", String(w.id)] : [shell.bin, "park", "at", String(cell), space]) }
 
