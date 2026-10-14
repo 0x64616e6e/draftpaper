@@ -31,7 +31,7 @@ impl XdgShellHandler for Draftpaper {
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         self.pending.retain(|w| w.toplevel() != Some(&surface));
-        let Some(window) = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned() else { return };
+        let Some(window) = self.window_where(|w| w.toplevel() == Some(&surface)) else { return };
         self.space.unmap_elem(&window);
         if let Some((i, k)) = self.workspace_of(&window) {
             let grid = self.screens[i].grid;
@@ -50,14 +50,14 @@ impl XdgShellHandler for Draftpaper {
     }
 
     fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>) {
-        let window = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned();
+        let window = self.window_where(|w| w.toplevel() == Some(&surface));
         if let Some(window) = window {
             self.set_fullscreen(&window, true);
         }
     }
 
     fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
-        let window = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned();
+        let window = self.window_where(|w| w.toplevel() == Some(&surface));
         if let Some(window) = window {
             self.set_fullscreen(&window, false);
         }

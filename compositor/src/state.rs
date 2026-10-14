@@ -262,6 +262,13 @@ impl ClientData for ClientState {
 impl Draftpaper {
     /// Place the windows on their screens' grids again (after a change in a layout or an output).
     pub fn relayout(&mut self) {
+        // a workspace that is neither shown nor holds a window goes away (its last window closed or
+        // moved while another workspace was shown)
+        for s in &mut self.screens {
+            let current = s.workspaces[s.current].number;
+            s.workspaces.retain(|w| w.number == current || w.layout.windows().next().is_some() || !w.floating.is_empty() || w.fullscreen.is_some());
+            s.current = s.workspaces.iter().position(|w| w.number == current).unwrap_or(0);
+        }
         for s in &self.screens {
             // windows of workspaces not shown leave the space
             for (k, w) in s.workspaces.iter().enumerate() {
@@ -317,6 +324,15 @@ impl Draftpaper {
                 self.space.raise_element(window, false);
             }
         }
+    }
+
+    /// The first window, mapped or on a workspace not shown, for which `f` holds.
+    pub fn window_where(&self, f: impl Fn(&Window) -> bool) -> Option<Window> {
+        self.space
+            .elements()
+            .chain(self.screens.iter().flat_map(|s| s.workspaces.iter().flat_map(|w| w.layout.windows().chain(w.floating.iter()))))
+            .find(|w| f(w))
+            .cloned()
     }
 
     /// The window with the keyboard focus.

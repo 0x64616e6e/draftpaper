@@ -81,11 +81,7 @@ impl Draftpaper {
     }
 
     fn x11_window(&self, surface: &X11Surface) -> Option<Window> {
-        self.space
-            .elements()
-            .chain(self.screens.iter().flat_map(|s| s.workspaces.iter().flat_map(|w| w.layout.windows().chain(w.floating.iter()))))
-            .find(|w| w.x11_surface() == Some(surface))
-            .cloned()
+        self.window_where(|w| w.x11_surface() == Some(surface))
     }
 
     /// An X11 window is gone (unmapped or destroyed): out of its workspace and the space.
