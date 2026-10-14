@@ -44,7 +44,7 @@ use crate::{
     cursor::Cursor,
     render::{attach_sheet, output_elements, OutputElements},
     theme::{output_settings, Theme},
-    CalloopData,
+    Draftpaper,
 };
 
 type Allocator = GbmAllocator<DrmDeviceFd>;
@@ -80,7 +80,7 @@ fn err<E: std::fmt::Display>(what: &str) -> impl FnOnce(E) -> TtyError + '_ {
     move |e| TtyError::Device(format!("{what}: {e}"))
 }
 
-pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData) -> Result<(), TtyError> {
+pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpaper) -> Result<(), TtyError> {
     let (session, session_notifier) = LibSeatSession::new().map_err(|e| TtyError::Session(e.to_string()))?;
     let seat = session.seat();
 
@@ -112,23 +112,23 @@ pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData)
         [Fourcc::Abgr8888, Fourcc::Argb8888, Fourcc::Xbgr8888, Fourcc::Xrgb8888],
         render_formats,
     );
-    data.state.shm_state.update_formats(renderer.shm_formats());
+    data.shm_state.update_formats(renderer.shm_formats());
 
     let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(session.clone().into());
     libinput.udev_assign_seat(&seat).map_err(|_| TtyError::Device("libinput seat".into()))?;
 
-    data.state.session = Some(session.clone());
-    data.state.tty = true;
-    data.tty = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone() });
+    data.session = Some(session.clone());
+    data.tty = true;
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone() });
 
     let handle = event_loop.handle();
     handle
-        .insert_source(LibinputInputBackend::new(libinput), |event, _, data| data.state.process_input_event(event))
+        .insert_source(LibinputInputBackend::new(libinput), |event, _, data| data.process_input_event(event))
         .map_err(|e| TtyError::Device(e.to_string()))?;
     handle
         .insert_source(drm_notifier, move |event, _, data| match event {
             DrmEvent::VBlank(crtc) => {
-                if let Some((_, surface, _)) = data.tty.as_mut().and_then(|t| t.outputs.get_mut(&crtc)) {
+                if let Some((_, surface, _)) = data.tty_data.as_mut().and_then(|t| t.outputs.get_mut(&crtc)) {
                     let _ = surface.frame_submitted();
                 }
                 render(data, crtc);
@@ -138,7 +138,7 @@ pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData)
         .map_err(|e| TtyError::Device(e.to_string()))?;
     handle
         .insert_source(session_notifier, |event, _, data| {
-            let Some(tty) = data.tty.as_mut() else { return };
+            let Some(tty) = data.tty_data.as_mut() else { return };
             match event {
                 SessionEvent::PauseSession => {
                     tty.libinput.suspend();
@@ -161,7 +161,7 @@ pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData)
     handle
         .insert_source(udev, |event, _, data| {
             if let UdevEvent::Changed { device_id } = event {
-                if data.tty.as_ref().is_some_and(|t| t.node.dev_id() == device_id) {
+                if data.tty_data.as_ref().is_some_and(|t| t.node.dev_id() == device_id) {
                     scan_outputs(data);
                 }
             }
@@ -169,7 +169,7 @@ pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData)
         .map_err(|e| TtyError::Device(e.to_string()))?;
 
     scan_outputs(data);
-    if data.tty.as_ref().unwrap().outputs.is_empty() {
+    if data.tty_data.as_ref().unwrap().outputs.is_empty() {
         return Err(TtyError::Device("no connected display".into()));
     }
     Ok(())
@@ -177,11 +177,21 @@ pub fn init_tty(event_loop: &mut EventLoop<CalloopData>, data: &mut CalloopData)
 
 /// Bring the outputs in line with the connected displays: new ones get an output (at its preferred mode,
 /// right of the others unless config.toml places it) and a screen; gone ones lose theirs.
-fn scan_outputs(data: &mut CalloopData) {
+fn scan_outputs(data: &mut Draftpaper) {
+    // the TTY data is taken out of the state while outputs and screens change together
+    let Some(mut tty_data) = data.tty_data.take() else { return };
+    let started = scan_with(data, &mut tty_data);
+    data.tty_data = Some(tty_data);
+    data.relayout();
+    for crtc in started {
+        render(data, crtc);
+    }
+}
+
+fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
     let theme = Theme::load();
-    let tty = data.tty.as_mut().unwrap();
     let device = tty.manager.device();
-    let Ok(resources) = device.resource_handles() else { return };
+    let Ok(resources) = device.resource_handles() else { return Vec::new() };
 
     let mut connected = Vec::new();
     for &handle in resources.connectors() {
@@ -202,13 +212,12 @@ fn scan_outputs(data: &mut CalloopData) {
     for crtc in gone {
         if let Some((output, _surface, _)) = tty.outputs.remove(&crtc) {
             eprintln!("draftpaper: output {} gone", output.name());
-            data.state.space.unmap_output(&output);
-            data.state.remove_screen(&output);
+            data.space.unmap_output(&output);
+            data.remove_screen(&output);
         }
     }
 
     // new
-    let tty = data.tty.as_mut().unwrap();
     let mut started = Vec::new();
     for info in connected {
         if tty.outputs.values().any(|(_, _, c)| *c == info.handle()) {
@@ -232,7 +241,7 @@ fn scan_outputs(data: &mut CalloopData) {
         let mm = settings.mm.unwrap_or(if phys_w > 0 { w as f32 / phys_w as f32 } else { FALLBACK_MM });
         let scale = settings.scale.unwrap_or(1.0);
         let position = settings.position.unwrap_or_else(|| {
-            let right = data.state.space.outputs().filter_map(|o| data.state.space.output_geometry(o)).map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
+            let right = data.space.outputs().filter_map(|o| data.space.output_geometry(o)).map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
             (right, 0)
         });
         eprintln!("draftpaper: output {name} {w}x{h} ({phys_w}x{phys_h} mm, {mm:.2} px/mm), scale {scale}, at {position:?}");
@@ -241,11 +250,11 @@ fn scan_outputs(data: &mut CalloopData) {
             name,
             PhysicalProperties { size: (phys_w as i32, phys_h as i32).into(), subpixel: Subpixel::Unknown, make: "Unknown".into(), model: "Unknown".into() },
         );
-        let _global = output.create_global::<crate::Draftpaper>(&data.display_handle);
+        let _global = output.create_global::<Draftpaper>(&data.display_handle);
         let wl_mode = WlMode::from(mode);
         output.set_preferred(wl_mode);
         output.change_current_state(Some(wl_mode), None, Some(Scale::Fractional(scale)), Some(position.into()));
-        data.state.space.map_output(&output, position);
+        data.space.map_output(&output, position);
         attach_sheet(&output, theme.clone(), mm);
 
         match tty.manager.initialize_output::<_, OutputElements>(
@@ -258,31 +267,37 @@ fn scan_outputs(data: &mut CalloopData) {
             &DrmOutputRenderElements::default(),
         ) {
             Ok(surface) => {
-                data.state.add_screen(output.clone(), mm as f64, theme.margin_mm as f64);
+                data.add_screen(output.clone(), mm as f64, theme.margin_mm as f64);
                 tty.outputs.insert(crtc, (output, surface, info.handle()));
                 started.push(crtc);
             }
             Err(e) => {
                 eprintln!("draftpaper: output {}: {e:?}", output.name());
-                data.state.space.unmap_output(&output);
+                data.space.unmap_output(&output);
             }
         }
     }
-    data.state.relayout();
-    for crtc in started {
-        render(data, crtc);
-    }
+    started
 }
 
 /// Render one output; on an unchanged frame try again a refresh later.
-fn render(data: &mut CalloopData, crtc: crtc::Handle) {
-    let Some(tty) = data.tty.as_mut() else { return };
+fn render(data: &mut Draftpaper, crtc: crtc::Handle) {
+    let Some(mut tty) = data.tty_data.take() else { return };
+    let queued = render_with(data, &mut tty, crtc);
+    data.tty_data = Some(tty);
+    let Some(queued) = queued else { return };
+    let Some(output) = data.space.outputs().find(|o| data.tty_data.as_ref().is_some_and(|t| t.outputs.get(&crtc).is_some_and(|(out, _, _)| out == *o))).cloned() else { return };
+    after_frame(data, &output, queued, crtc);
+}
+
+/// Draw and queue a frame; None when nothing can be drawn (session inactive, unknown crtc).
+fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> Option<bool> {
     if !tty.session.is_active() {
-        return;
+        return None;
     }
-    let Some((output, surface, _)) = tty.outputs.get_mut(&crtc) else { return };
+    let (output, surface, _) = tty.outputs.get_mut(&crtc)?;
     let output = output.clone();
-    let elements = output_elements(&data.state, &mut tty.renderer, &output, Some((&tty.cursor.buffer, tty.cursor.hotspot)));
+    let elements = output_elements(data, &mut tty.renderer, &output, Some((&tty.cursor.buffer, tty.cursor.hotspot)));
     let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], FrameFlags::DEFAULT) {
         Ok(result) if !result.is_empty => surface.queue_frame(()).is_ok(),
         Ok(_) => false,
@@ -291,17 +306,23 @@ fn render(data: &mut CalloopData, crtc: crtc::Handle) {
             false
         }
     };
+    Some(queued)
+}
 
-    let now = data.state.start_time.elapsed();
-    data.state.space.elements().for_each(|w| w.send_frame(&output, now, Some(Duration::ZERO), |_, _| Some(output.clone())));
-    data.state.space.refresh();
-    data.state.popups.cleanup();
+/// After a frame: frame callbacks, housekeeping, and on an unchanged frame a retry a refresh later.
+fn after_frame(data: &mut Draftpaper, output: &smithay::output::Output, queued: bool, crtc: crtc::Handle) {
+    let output = output.clone();
+
+    let now = data.start_time.elapsed();
+    data.space.elements().for_each(|w| w.send_frame(&output, now, Some(Duration::ZERO), |_, _| Some(output.clone())));
+    data.space.refresh();
+    data.popups.cleanup();
     let _ = data.display_handle.flush_clients();
 
     if !queued {
         let refresh = output.current_mode().map(|m| m.refresh).unwrap_or(60_000).max(1);
         let delay = Duration::from_micros(1_000_000_000 / refresh as u64);
-        let handle: LoopHandle<CalloopData> = data.state.loop_handle.clone();
+        let handle: LoopHandle<'static, Draftpaper> = data.loop_handle.clone();
         let _ = handle.insert_source(Timer::from_duration(delay), move |_, _, data| {
             render(data, crtc);
             TimeoutAction::Drop

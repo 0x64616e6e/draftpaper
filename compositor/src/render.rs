@@ -27,6 +27,7 @@ render_elements! {
     Pointer=MemoryRenderBufferRenderElement<GlesRenderer>,
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Border=SolidColorRenderElement,
+    Lock=WaylandSurfaceRenderElement<GlesRenderer>,
     Sheet=PixelShaderElement,
 }
 
@@ -51,6 +52,26 @@ pub fn output_elements(
 ) -> Vec<OutputElements> {
     let geometry = state.space.output_geometry(output).unwrap();
     let mut elements = Vec::new();
+
+    // locked: the lock surface (if the locker has made one yet) on black, nothing else
+    if state.locked {
+        let scale = output.current_scale().fractional_scale();
+        if let Some(lock) = state.lock_surfaces.get(&output.name()) {
+            let lock_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> =
+                smithay::backend::renderer::element::surface::render_elements_from_surface_tree(
+                    renderer, lock.wl_surface(), (0, 0), scale, 1.0, Kind::Unspecified,
+                );
+            elements.extend(lock_elements.into_iter().map(OutputElements::Lock));
+        }
+        elements.push(OutputElements::Border(SolidColorRenderElement::new(
+            smithay::backend::renderer::element::Id::new(),
+            smithay::utils::Rectangle::from_size(geometry.size.to_physical_precise_round(scale)),
+            0,
+            [0.0, 0.0, 0.0, 1.0],
+            Kind::Unspecified,
+        )));
+        return elements;
+    }
 
     if let Some((buffer, hotspot)) = pointer {
         let at = state.seat.get_pointer().unwrap().current_location();

@@ -77,12 +77,15 @@ fn binding(mods: &ModifiersState, sym: Keysym, raw_sym: Option<Keysym>, tty: boo
 
 impl Draftpaper {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+        let seat = self.seat.clone();
+        self.idle_notifier_state.notify_activity(&seat);
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = Event::time_msec(&event);
                 let pressed = event.state() == KeyState::Pressed;
                 let tty = self.tty;
+                let locked = self.locked;
 
                 let action = self.seat.get_keyboard().unwrap().input::<Action, _>(
                     self,
@@ -90,7 +93,11 @@ impl Draftpaper {
                     event.state(),
                     serial,
                     time,
-                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty)).flatten() {
+                    |_, mods, keysym| match pressed
+                        .then(|| binding(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty))
+                        .flatten()
+                        .filter(|a| !locked || matches!(a, Action::Vt(_)))
+                    {
                         Some(action) => FilterResult::Intercept(action),
                         None => FilterResult::Forward,
                     },

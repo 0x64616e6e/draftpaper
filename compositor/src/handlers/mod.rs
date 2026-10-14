@@ -2,6 +2,7 @@
 mod compositor;
 mod decoration;
 pub mod layer_shell;
+mod lock_idle;
 mod selection;
 mod xdg_shell;
 

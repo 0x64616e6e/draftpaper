@@ -14,18 +14,8 @@ mod theme;
 mod tty;
 mod winit;
 
-use smithay::reexports::{
-    calloop::EventLoop,
-    wayland_server::{Display, DisplayHandle},
-};
+use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 pub use state::Draftpaper;
-
-pub struct CalloopData {
-    state: Draftpaper,
-    display_handle: DisplayHandle,
-    /// the TTY backend's devices and outputs (None when nested)
-    tty: Option<tty::TtyData>,
-}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
@@ -34,13 +24,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing_subscriber::fmt().init();
     }
 
-    let mut event_loop: EventLoop<CalloopData> = EventLoop::try_new()?;
+    // the event loop's data is the compositor's state (Smithay's idle notifier needs that)
+    let mut event_loop: EventLoop<Draftpaper> = EventLoop::try_new()?;
 
     let display: Display<Draftpaper> = Display::new()?;
-    let display_handle = display.handle();
-    let state = Draftpaper::new(&mut event_loop, display);
-
-    let mut data = CalloopData { state, display_handle, tty: None };
+    let mut data = Draftpaper::new(&mut event_loop, display);
 
     // draftpaper-compositor [--tty] [--command PROGRAM]
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -52,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("draftpaper: {e}");
             std::process::exit(1);
         }
-        std::env::set_var("WAYLAND_DISPLAY", &data.state.socket_name);
+        std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
     } else {
         crate::winit::init_winit(&mut event_loop, &mut data)?;
     }

@@ -25,7 +25,6 @@ use smithay::{
 
 use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
 
-use crate::CalloopData;
 
 pub struct Draftpaper {
     pub start_time: std::time::Instant,
@@ -44,6 +43,14 @@ pub struct Draftpaper {
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Draftpaper>,
     pub data_device_state: DataDeviceState,
+    // locking and idle (handlers/lock_idle.rs)
+    pub session_lock_state: smithay::wayland::session_lock::SessionLockManagerState,
+    pub idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState<Self>,
+    pub idle_inhibit_state: smithay::wayland::idle_inhibit::IdleInhibitManagerState,
+    pub locked: bool,
+    /// lock surfaces by output name
+    pub lock_surfaces: std::collections::HashMap<String, smithay::wayland::session_lock::LockSurface>,
+    pub inhibitors: Vec<WlSurface>,
     pub primary_selection_state: smithay::wayland::selection::primary_selection::PrimarySelectionState,
     pub wlr_data_control_state: smithay::wayland::selection::wlr_data_control::DataControlState,
     pub ext_data_control_state: smithay::wayland::selection::ext_data_control::DataControlState,
@@ -60,11 +67,13 @@ pub struct Draftpaper {
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
     pub tty: bool,
-    pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, CalloopData>,
+    /// the TTY backend's devices and outputs (None when nested)
+    pub tty_data: Option<crate::tty::TtyData>,
+    pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, Draftpaper>,
 }
 
 impl Draftpaper {
-    pub fn new(event_loop: &mut EventLoop<'static, CalloopData>, display: Display<Self>) -> Self {
+    pub fn new(event_loop: &mut EventLoop<'static, Draftpaper>, display: Display<Self>) -> Self {
         let start_time = std::time::Instant::now();
 
         let dh = display.handle();
@@ -77,6 +86,9 @@ impl Draftpaper {
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&dh);
+        let session_lock_state = smithay::wayland::session_lock::SessionLockManagerState::new::<Self, _>(&dh, |_| true);
+        let idle_notifier_state = smithay::wayland::idle_notify::IdleNotifierState::new(&dh, event_loop.handle());
+        let idle_inhibit_state = smithay::wayland::idle_inhibit::IdleInhibitManagerState::new::<Self>(&dh);
         let primary_selection_state = smithay::wayland::selection::primary_selection::PrimarySelectionState::new::<Self>(&dh);
         let wlr_data_control_state =
             smithay::wayland::selection::wlr_data_control::DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
@@ -123,6 +135,12 @@ impl Draftpaper {
             output_manager_state,
             seat_state,
             data_device_state,
+            session_lock_state,
+            idle_notifier_state,
+            idle_inhibit_state,
+            locked: false,
+            lock_surfaces: Default::default(),
+            inhibitors: Vec::new(),
             primary_selection_state,
             wlr_data_control_state,
             ext_data_control_state,
@@ -133,13 +151,14 @@ impl Draftpaper {
             active: 0,
             session: None,
             tty: false,
+            tty_data: None,
             loop_handle: event_loop.handle(),
         }
     }
 
     fn init_wayland_listener(
         display: Display<Draftpaper>,
-        event_loop: &mut EventLoop<CalloopData>,
+        event_loop: &mut EventLoop<'static, Draftpaper>,
     ) -> OsString {
         // Creates a new listening socket, automatically choosing the next available `wayland` socket name.
         let listening_socket = ListeningSocketSource::new_auto().unwrap();
@@ -169,7 +188,7 @@ impl Draftpaper {
                 |_, display, state| {
                     // Safety: we don't drop the display
                     unsafe {
-                        display.get_mut().dispatch_clients(&mut state.state).unwrap();
+                        display.get_mut().dispatch_clients(state).unwrap();
                     }
                     Ok(PostAction::Continue)
                 },
@@ -185,6 +204,10 @@ impl Draftpaper {
         use smithay::{desktop::layer_map_for_output, wayland::shell::wlr_layer::Layer};
         let output = self.space.outputs().find(|o| self.space.output_geometry(o).is_some_and(|g| g.to_f64().contains(pos)))?;
         let og = self.space.output_geometry(output)?;
+        if self.locked {
+            let lock = self.lock_surfaces.get(&output.name())?;
+            return Some((lock.wl_surface().clone(), og.loc.to_f64()));
+        }
         let map = layer_map_for_output(output);
         let layer_under = |layers: &[Layer]| {
             layers.iter().find_map(|l| {
@@ -288,6 +311,9 @@ impl Draftpaper {
 
     /// Give the keyboard to `window` (or to nobody) and mark it activated.
     pub fn focus(&mut self, window: Option<Window>) {
+        if self.locked {
+            return;
+        }
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         if let Some(w) = &window {
             if let Some(i) = self.screen_of(w) {

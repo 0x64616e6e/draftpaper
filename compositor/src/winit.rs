@@ -14,7 +14,7 @@ use smithay::{
 use crate::{
     render::{attach_sheet, output_elements},
     theme::Theme,
-    CalloopData, Draftpaper,
+    Draftpaper,
 };
 
 /// Pixels per millimetre for the nested window: DRAFTPAPER_MM, else about 160 PPI (the i3 edition's fallback)
@@ -23,11 +23,11 @@ fn nested_mm() -> f32 {
 }
 
 pub fn init_winit(
-    event_loop: &mut EventLoop<CalloopData>,
-    data: &mut CalloopData,
+    event_loop: &mut EventLoop<'static, Draftpaper>,
+    data: &mut Draftpaper,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let display_handle = &mut data.display_handle;
-    let state = &mut data.state;
+    let display_handle = data.display_handle.clone();
+    let state = data;
 
     let (mut backend, winit) = winit::init()?;
 
@@ -45,7 +45,7 @@ pub fn init_winit(
             model: "Winit".into(),
         },
     );
-    let _global = output.create_global::<Draftpaper>(display_handle);
+    let _global = output.create_global::<Draftpaper>(&display_handle);
     output.change_current_state(Some(mode), Some(Transform::Flipped180), None, Some((0, 0).into()));
     output.set_preferred(mode);
 
@@ -61,8 +61,7 @@ pub fn init_winit(
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
     event_loop.handle().insert_source(winit, move |event, _, data| {
-        let display = &mut data.display_handle;
-        let state = &mut data.state;
+        let state = data;
 
         match event {
             WinitEvent::Resized { size, .. } => {
@@ -103,7 +102,7 @@ pub fn init_winit(
 
                 state.space.refresh();
                 state.popups.cleanup();
-                let _ = display.flush_clients();
+                let _ = state.display_handle.flush_clients();
 
                 // Ask for redraw to schedule new frame.
                 backend.window().request_redraw();
