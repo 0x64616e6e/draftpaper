@@ -87,6 +87,8 @@ pub struct Draftpaper {
     pub screenshot_requested: bool,
     /// the timer repeating a held binding (input.rs)
     pub key_repeat: Option<smithay::reexports::calloop::RegistrationToken>,
+    /// screencopy frames waiting for the backend's next frame (screencopy.rs)
+    pub screencopies: Vec<crate::screencopy::PendingCopy>,
 }
 
 impl Draftpaper {
@@ -100,6 +102,8 @@ impl Draftpaper {
         // a client draws at an output's exact scale (1.5) and says how big its buffer is on screen
         smithay::wayland::viewporter::ViewporterState::new::<Self>(&dh);
         smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
+        // screenshots for clients (grim, slurp, the screenshot portal)
+        crate::screencopy::init(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
         let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
         let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
@@ -185,6 +189,7 @@ impl Draftpaper {
             anim: Default::default(),
             screenshot_requested: false,
             key_repeat: None,
+            screencopies: Vec::new(),
         }
     }
 

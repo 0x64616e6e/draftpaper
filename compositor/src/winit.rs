@@ -90,6 +90,9 @@ pub fn init_winit(
                         .unwrap();
                 }
                 backend.submit(Some(&[damage])).unwrap();
+                if !state.screencopies.is_empty() {
+                    crate::screencopy::finish(state, backend.renderer(), None);
+                }
                 if std::mem::take(&mut state.screenshot_requested) {
                     let path = crate::tty::screenshot_path(&output);
                     match crate::tty::capture(state, backend.renderer(), &output, &path) {

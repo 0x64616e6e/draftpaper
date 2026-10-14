@@ -36,6 +36,48 @@ ShellRoot {
     readonly property bool glyphs: theme.glyphs && Fonts.glyph !== ""
     function g(c) { return glyphs ? "<font face='" + Fonts.glyph + "'>" + c + "</font> " : "" }
     function ramp(v, gs) { return gs[Math.min(gs.length - 1, Math.max(0, Math.floor(v * gs.length)))] }
+    // workspace glyphs: the apps on a workspace by their app_id (X11: class), first match wins; any other
+    // app is a window. Up to three glyphs follow the number.
+    readonly property var appGlyphs: [
+        [["firefox", "librewolf", "zen"], "󰈹"],
+        [["chromium", "chrome", "brave"], "󰊯"],
+        [["alacritty", "foot", "kitty", "xterm", "wezterm", "terminal", "konsole", "ghostty"], ""],
+        [["code", "codium"], "󰨞"],
+        [["claude"], "󰚩"],
+        [["thunderbird", "evolution", "geary"], "󰇰"],
+        [["signal"], "󰭹"],
+        [["telegram"], ""],
+        [["teams"], "󰊻"],
+        [["slack"], "󰒱"],
+        [["discord", "vesktop"], "󰙯"],
+        [["spotify"], "󰓇"],
+        [["mpv", "vlc", "totem", "celluloid"], "󰕼"],
+        [["gimp", "inkscape", "krita"], "󰸾"],
+        [["libreoffice", "soffice"], "󰈙"],
+        [["nautilus", "thunar", "pcmanfm", "nemo", "dolphin"], "󰉋"],
+        [["evince", "zathura", "okular", "papers"], "󰈦"],
+        [["keepassxc", "bitwarden"], "󰌋"],
+        [["obs"], "󰑋"],
+        [["steam"], ""],
+        [["emacs"], ""]
+    ]
+    function appGlyph(appId) {
+        const id = (appId || "").toLowerCase()
+        const hit = appGlyphs.find(e => e[0].some(f => id.indexOf(f) >= 0))
+        return hit ? hit[1] : "󰖯"
+    }
+    // "2" and, with glyphs, the apps on it: "2 <firefox> <terminal>"
+    function spaceMarkup(space) {
+        if (!space) return ""
+        if (!glyphs) return String(space.number)
+        const seen = []
+        for (const w of Compositor.windows)
+            if (w.workspace === space.number && !w.parked) {
+                const c = appGlyph(w.app_id)
+                if (seen.indexOf(c) < 0) seen.push(c)
+            }
+        return String(space.number) + (seen.length ? " " + seen.slice(0, 3).map(c => g(c).trim()).join(" ") : "")
+    }
     // a temperature's label as a glyph (CPU, SSD, memory, fan), or the label itself
     function tempLabel(label) {
         const k = { CPU: "󰘚", NVME: "󰋊", SSD: "󰋊", RAM: "󰍛", FAN: "󰈐" }[label]
@@ -186,7 +228,8 @@ ShellRoot {
                                 horizontalAlignment: Text.AlignHCenter
                                 fontSizeMode: Text.HorizontalFit
                                 minimumPixelSize: edge.fontPx * 0.6
-                                text: root.spaceLabel(modelData)
+                                text: root.spaceMarkup(modelData)
+                                textFormat: Text.StyledText
                                 // focused: bold in the theme's strong ink; shown on its screen but not focused: bold in the others'
                                 // ink; the rest: regular, lighter
                                 font.family: Fonts.mono; font.pixelSize: edge.fontPx

@@ -23,7 +23,7 @@
     battery = 15                  # percent
 
     [commands]
-    screenshot = ["flameshot", "gui"]
+    screenshot = ["sh", "-c", "g=$(slurp) && grim -g \"$g\" - | swappy -f -"]
 """
 import getpass, socket, tomllib
 from . import paths
@@ -35,7 +35,8 @@ DEFAULTS = {
     "title": {},
     "cell": [],
     "alerts": {"cpu": 85, "nvme": 60, "fan": 5000, "battery": 15},
-    "commands": {"screenshot": ["flameshot", "gui"]},
+    # a region picked with slurp, captured by grim (the compositor's screencopy), annotated in swappy
+    "commands": {"screenshot": ["sh", "-c", 'g=$(slurp) && grim -g "$g" - | swappy -f -']},
 }
 
 

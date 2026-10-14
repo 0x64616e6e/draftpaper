@@ -16,6 +16,7 @@ mod theme;
 mod ipc;
 mod parking;
 mod animation;
+mod screencopy;
 mod tty;
 mod winit;
 

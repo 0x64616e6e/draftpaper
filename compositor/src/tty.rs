@@ -324,6 +324,14 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
 /// Render one output; on an unchanged frame try again a refresh later.
 fn render(data: &mut Draftpaper, crtc: crtc::Handle) {
     data.anim.prune(std::time::Instant::now());
+    if !data.screencopies.is_empty() {
+        if let Some(mut tty) = data.tty_data.take() {
+            let pointer = cursor(&tty);
+            let pointer = (pointer.0.clone(), pointer.1);
+            crate::screencopy::finish(data, &mut tty.renderer, Some((&pointer.0, pointer.1)));
+            data.tty_data = Some(tty);
+        }
+    }
     let Some(mut tty) = data.tty_data.take() else { return };
     let queued = render_with(data, &mut tty, crtc);
     data.tty_data = Some(tty);
@@ -397,21 +405,39 @@ pub fn screenshot(data: &mut Draftpaper) {
     data.tty_data = Some(tty);
 }
 
-pub fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path: &std::path::Path) -> Result<(), String> {
+/// `output` as drawn, offscreen: RGBA bytes, row by row, with its size in pixels. Upright whatever the
+/// output's transform (the Print screenshot), or as the output scans out (`upright` false: screencopy,
+/// whose clients apply the transform they are told). `pointer` adds the cursor.
+pub fn render_pixels(
+    data: &Draftpaper,
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    pointer: Option<(&smithay::backend::renderer::element::memory::MemoryRenderBuffer, smithay::utils::Point<i32, smithay::utils::Logical>)>,
+    upright: bool,
+) -> Result<(Vec<u8>, i32, i32), String> {
     use smithay::backend::renderer::{damage::OutputDamageTracker, gles::GlesTexture, Bind, ExportMem, Offscreen};
     use smithay::utils::{Rectangle, Size};
     let mode = output.current_mode().ok_or("no mode")?;
     let size: Size<i32, smithay::utils::Buffer> = (mode.size.w, mode.size.h).into();
-    let elements = output_elements(data, renderer, output, None);
+    let elements = output_elements(data, renderer, output, pointer);
     let mut texture: GlesTexture = renderer.create_buffer(Fourcc::Abgr8888, size).map_err(|e| format!("{e:?}"))?;
-    let pixels = {
-        let mut target = renderer.bind(&mut texture).map_err(|e| format!("{e:?}"))?;
-        // upright, whatever the output's transform (nested, winit draws flipped)
-        let mut damage = OutputDamageTracker::new((size.w, size.h), output.current_scale().fractional_scale(), smithay::utils::Transform::Normal);
-        damage.render_output(renderer, &mut target, 0, &elements, [0.1, 0.1, 0.1, 1.0]).map_err(|e| format!("{e:?}"))?;
-        let mapping = renderer.copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888).map_err(|e| format!("{e:?}"))?;
-        renderer.map_texture(&mapping).map_err(|e| format!("{e:?}"))?.to_vec()
-    };
+    let mut target = renderer.bind(&mut texture).map_err(|e| format!("{e:?}"))?;
+    let transform = if upright { smithay::utils::Transform::Normal } else { output.current_transform() };
+    let mut damage = OutputDamageTracker::new((size.w, size.h), output.current_scale().fractional_scale(), transform);
+    damage.render_output(renderer, &mut target, 0, &elements, [0.1, 0.1, 0.1, 1.0]).map_err(|e| format!("{e:?}"))?;
+    let mapping = renderer.copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888).map_err(|e| format!("{e:?}"))?;
+    let pixels = renderer.map_texture(&mapping).map_err(|e| format!("{e:?}"))?.to_vec();
+    Ok((pixels, size.w, size.h))
+}
+
+/// The pointer image of the TTY backend, for a screencopy that wants it.
+pub fn cursor(tty: &TtyData) -> (&smithay::backend::renderer::element::memory::MemoryRenderBuffer, smithay::utils::Point<i32, smithay::utils::Logical>) {
+    (&tty.cursor.buffer, tty.cursor.hotspot)
+}
+
+pub fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path: &std::path::Path) -> Result<(), String> {
+    let (pixels, w, h) = render_pixels(data, renderer, output, None, true)?;
+    let size = smithay::utils::Size::<i32, smithay::utils::Buffer>::from((w, h));
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
     let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size.w as u32, size.h as u32);

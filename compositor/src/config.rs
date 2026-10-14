@@ -109,7 +109,11 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Return", "spawn alacritty"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
-    ("Print", "screenshot"),
+    // screenshots through screencopy: a region picked with slurp into swappy (annotate, save, copy), the
+    // whole screen into ~/Pictures; Mod+Print is the compositor's own, needing neither
+    ("Print", r#"spawn g=$(slurp) && grim -g "$g" - | swappy -f -"#),
+    ("Shift+Print", r#"spawn mkdir -p ~/Pictures && grim ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"#),
+    ("Mod+Print", "screenshot"),
     // the laptop's media keys: PipeWire's wpctl (up to 150%, as the shell's volume cell), brightnessctl
     ("XF86AudioRaiseVolume", "spawn wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"),
     ("XF86AudioLowerVolume", "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
