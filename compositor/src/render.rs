@@ -127,14 +127,32 @@ pub fn output_elements(
     elements.extend(layer_elements(renderer, &[Layer::Overlay, Layer::Top]));
 
     // the windows: each drawn at `at` (its geometry, global logical), then mapped onto `to`, faded by
-    // `alpha`, cropped to `crop`
+    // `alpha`. A window's own surfaces are clipped to its rectangle (a client that draws more than its
+    // tile, as Firefox can while it catches up with a new size, does not spill over its neighbours, even
+    // when its buffer goes straight to a display plane); its popups (menus) are not, and are in front.
+    // Everything stays inside `crop`.
     let mut draw = |renderer: &mut GlesRenderer, window: &Window, at: Rectangle<i32, Logical>, to: Rectangle<f64, Logical>, alpha: f32, crop: Rectangle<i32, Physical>| {
+        use smithay::{backend::renderer::element::surface::render_elements_from_surface_tree, desktop::{PopupManager, WindowSurface}};
         let g = to_phys(at.to_f64());
         let t = to_phys(to);
         let loc = (at.loc - window.geometry().loc - geometry.loc).to_physical_precise_round(scale);
-        let e: Vec<WaylandSurfaceRenderElement<GlesRenderer>> = window.render_elements(renderer, loc, Scale::from(scale), alpha);
+        let (own, popups): (Vec<WaylandSurfaceRenderElement<GlesRenderer>>, Vec<WaylandSurfaceRenderElement<GlesRenderer>>) =
+            match window.underlying_surface() {
+                WindowSurface::Wayland(toplevel) => {
+                    let surface = toplevel.wl_surface();
+                    let own = render_elements_from_surface_tree(renderer, surface, loc, scale, alpha, Kind::Unspecified);
+                    let mut popups = Vec::new();
+                    for (popup, offset) in PopupManager::popups_for_surface(surface) {
+                        let at = loc + (window.geometry().loc + offset - popup.geometry().loc).to_physical_precise_round(scale);
+                        popups.extend(render_elements_from_surface_tree(renderer, popup.wl_surface(), at, scale, alpha, Kind::Unspecified));
+                    }
+                    (own, popups)
+                }
+                WindowSurface::X11(_) => (window.render_elements(renderer, loc, Scale::from(scale), alpha), Vec::new()),
+            };
         let rescale = Scale { x: t.size.w as f64 / g.size.w.max(1) as f64, y: t.size.h as f64 / g.size.h.max(1) as f64 };
-        for e in e {
+        let clip = t.intersection(crop).unwrap_or_default();
+        for (e, crop) in popups.into_iter().map(|e| (e, crop)).chain(own.into_iter().map(|e| (e, clip))) {
             let e = RescaleRenderElement::from_element(e, g.loc, rescale);
             let e = RelocateRenderElement::from_element(e, t.loc - g.loc, Relocate::Relative);
             if let Some(e) = CropRenderElement::from_element(e, scale, crop) {
