@@ -355,7 +355,7 @@ fn after_frame(data: &mut Draftpaper, output: &smithay::output::Output, queued: 
     let output = output.clone();
 
     let now = data.start_time.elapsed();
-    data.space.elements().for_each(|w| w.send_frame(&output, now, Some(Duration::ZERO), |_, _| Some(output.clone())));
+    data.send_frames(&output, now);
     data.space.refresh();
     data.popups.cleanup();
     let _ = data.display_handle.flush_clients();

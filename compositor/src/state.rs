@@ -331,6 +331,20 @@ impl Draftpaper {
         }
     }
 
+    /// After a frame of `output`: frame callbacks to everything drawn on it, windows, layer surfaces (the
+    /// shell's margins and title block) and the lock surface. A client that waits for its callback
+    /// before drawing again (Qt does) stays on its first picture without one.
+    pub fn send_frames(&self, output: &smithay::output::Output, now: std::time::Duration) {
+        let throttle = Some(std::time::Duration::ZERO);
+        self.space.elements().for_each(|w| w.send_frame(output, now, throttle, |_, _| Some(output.clone())));
+        for layer in smithay::desktop::layer_map_for_output(output).layers() {
+            layer.send_frame(output, now, throttle, |_, _| Some(output.clone()));
+        }
+        if let Some(lock) = self.lock_surfaces.get(&output.name()) {
+            smithay::desktop::utils::send_frames_surface_tree(lock.wl_surface(), output, now, throttle, |_, _| Some(output.clone()));
+        }
+    }
+
     /// The first window, mapped or on a workspace not shown, for which `f` holds.
     pub fn window_where(&self, f: impl Fn(&Window) -> bool) -> Option<Window> {
         self.space

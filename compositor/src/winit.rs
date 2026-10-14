@@ -1,5 +1,4 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
-use std::time::Duration;
 
 use smithay::{
     backend::{
@@ -91,14 +90,7 @@ pub fn init_winit(
                 }
                 backend.submit(Some(&[damage])).unwrap();
 
-                state.space.elements().for_each(|window| {
-                    window.send_frame(
-                        &output,
-                        state.start_time.elapsed(),
-                        Some(Duration::ZERO),
-                        |_, _| Some(output.clone()),
-                    )
-                });
+                state.send_frames(&output, state.start_time.elapsed());
 
                 state.space.refresh();
                 state.popups.cleanup();
