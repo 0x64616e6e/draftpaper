@@ -43,6 +43,10 @@ pub struct Draftpaper {
     pub popups: PopupManager,
 
     pub seat: Seat<Self>,
+
+    // the Draftpaper layout on the (one, nested) output: columns and rows on the zone grid
+    pub layout: crate::layout::Layout,
+    pub grid: Option<crate::layout::Grid>,
 }
 
 impl Draftpaper {
@@ -98,6 +102,8 @@ impl Draftpaper {
             data_device_state,
             popups,
             seat,
+            layout: Default::default(),
+            grid: None,
         }
     }
 
@@ -160,4 +166,32 @@ pub struct ClientState {
 impl ClientData for ClientState {
     fn initialized(&self, _client_id: ClientId) {}
     fn disconnected(&self, _client_id: ClientId, _reason: DisconnectReason) {}
+}
+
+impl Draftpaper {
+    /// Place the windows on the grid again (after a change in the layout or the output's size).
+    pub fn relayout(&mut self) {
+        if let Some(grid) = self.grid {
+            self.layout.arrange(&mut self.space, &grid);
+        }
+    }
+
+    /// Give the keyboard to `window` (or to nobody) and mark it activated.
+    pub fn focus(&mut self, window: Option<Window>) {
+        let serial = smithay::utils::SERIAL_COUNTER.next_serial();
+        if let Some(w) = &window {
+            self.layout.focus_window(w);
+            self.space.raise_element(w, true);
+        }
+        for w in self.space.elements() {
+            w.set_activated(Some(w) == window.as_ref());
+            if let Some(t) = w.toplevel() {
+                if t.is_initial_configure_sent() {
+                    t.send_pending_configure();
+                }
+            }
+        }
+        let keyboard = self.seat.get_keyboard().unwrap();
+        keyboard.set_focus(self, window.and_then(|w| w.toplevel().map(|t| t.wl_surface().clone())), serial);
+    }
 }

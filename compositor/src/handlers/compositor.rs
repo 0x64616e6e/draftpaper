@@ -1,5 +1,5 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
-use crate::{grabs::resize_grab, state::ClientState, Draftpaper};
+use crate::{state::ClientState, Draftpaper};
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     delegate_compositor, delegate_shm,
@@ -44,7 +44,6 @@ impl CompositorHandler for Draftpaper {
         };
 
         xdg_shell::handle_commit(&mut self.popups, &self.space, surface);
-        resize_grab::handle_commit(&mut self.space, surface);
     }
 }
 

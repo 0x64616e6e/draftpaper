@@ -16,7 +16,7 @@ use smithay::{
     utils::{Rectangle, Transform},
 };
 
-use crate::{sheet::SheetRenderer, theme::Theme, CalloopData, Draftpaper};
+use crate::{layout::Grid, sheet::SheetRenderer, theme::Theme, CalloopData, Draftpaper};
 
 render_elements! {
     /// What an output shows: the windows (and layer surfaces), and the sheet under them.
@@ -62,7 +62,9 @@ pub fn init_winit(
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
     let theme = Theme::load();
     eprintln!("draftpaper: sheet in theme {}, margin {} mm, {} px/mm", theme.name, theme.margin_mm, nested_mm());
+    let margin_mm = theme.margin_mm as f64;
     let mut sheet = SheetRenderer::new(theme, nested_mm());
+    state.grid = Some(Grid::new(mode.size.to_logical(1), nested_mm() as f64, margin_mm));
 
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
@@ -72,6 +74,8 @@ pub fn init_winit(
 
         match event {
             WinitEvent::Resized { size, .. } => {
+                state.grid = Some(Grid::new(size.to_logical(1), nested_mm() as f64, margin_mm));
+                state.relayout();
                 output.change_current_state(
                     Some(Mode {
                         size,

@@ -12,7 +12,45 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use crate::state::Draftpaper;
+use smithay::{backend::input::KeyState, input::keyboard::{xkb::keysyms, Keysym, ModifiersState}};
+
+use crate::{layout::Direction, state::Draftpaper};
+
+/// What a key binding does.
+#[derive(Debug, Clone, Copy)]
+pub enum Action {
+    Focus(Direction),
+    Move(Direction),
+    Resize(Direction),
+    Terminal,
+    Close,
+}
+
+/// The bindings. Nested inside another desktop, whose window manager keeps Super for itself, they sit
+/// on Alt: Alt+arrows (or h/j/k/l) focus, with Shift move the window, with Ctrl resize by a zone;
+/// Alt+Return opens a terminal, Alt+Shift+q closes the focused window.
+fn binding(mods: &ModifiersState, sym: Keysym) -> Option<Action> {
+    if !mods.alt {
+        return None;
+    }
+    let dir = match sym.raw() {
+        keysyms::KEY_Left | keysyms::KEY_h | keysyms::KEY_H => Some(Direction::Left),
+        keysyms::KEY_Right | keysyms::KEY_l | keysyms::KEY_L => Some(Direction::Right),
+        keysyms::KEY_Up | keysyms::KEY_k | keysyms::KEY_K => Some(Direction::Up),
+        keysyms::KEY_Down | keysyms::KEY_j | keysyms::KEY_J => Some(Direction::Down),
+        _ => None,
+    };
+    match (dir, mods.shift, mods.ctrl) {
+        (Some(d), false, false) => Some(Action::Focus(d)),
+        (Some(d), true, false) => Some(Action::Move(d)),
+        (Some(d), false, true) => Some(Action::Resize(d)),
+        _ => match sym.raw() {
+            keysyms::KEY_Return => Some(Action::Terminal),
+            keysyms::KEY_q | keysyms::KEY_Q if mods.shift => Some(Action::Close),
+            _ => None,
+        },
+    }
+}
 
 impl Draftpaper {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
@@ -20,15 +58,22 @@ impl Draftpaper {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = Event::time_msec(&event);
+                let pressed = event.state() == KeyState::Pressed;
 
-                self.seat.get_keyboard().unwrap().input::<(), _>(
+                let action = self.seat.get_keyboard().unwrap().input::<Action, _>(
                     self,
                     event.key_code(),
                     event.state(),
                     serial,
                     time,
-                    |_, _, _| FilterResult::Forward,
+                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym())).flatten() {
+                        Some(action) => FilterResult::Intercept(action),
+                        None => FilterResult::Forward,
+                    },
                 );
+                if let Some(action) = action {
+                    self.act(action);
+                }
             }
             InputEvent::PointerMotion { .. } => {}
             InputEvent::PointerMotionAbsolute { event, .. } => {
@@ -72,6 +117,7 @@ impl Draftpaper {
                         .map(|(w, l)| (w.clone(), l))
                     {
                         self.space.raise_element(&window, true);
+                        self.layout.focus_window(&window);
                         keyboard.set_focus(
                             self,
                             Some(window.toplevel().unwrap().wl_surface().clone()),
@@ -140,6 +186,34 @@ impl Draftpaper {
                 pointer.frame(self);
             }
             _ => {}
+        }
+    }
+}
+
+impl Draftpaper {
+    pub fn act(&mut self, action: Action) {
+        let Some(grid) = self.grid else { return };
+        match action {
+            Action::Focus(d) => {
+                let w = self.layout.focus_dir(d);
+                self.focus(w);
+            }
+            Action::Move(d) => {
+                self.layout.move_dir(d, &grid);
+                self.relayout();
+            }
+            Action::Resize(d) => {
+                self.layout.resize(d);
+                self.relayout();
+            }
+            Action::Terminal => {
+                let _ = std::process::Command::new("alacritty").spawn();
+            }
+            Action::Close => {
+                if let Some(t) = self.layout.focused().and_then(|w| w.toplevel().cloned()) {
+                    t.send_close();
+                }
+            }
         }
     }
 }
