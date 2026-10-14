@@ -93,7 +93,11 @@ impl Draftpaper {
 
         let dh = display.handle();
 
-        let compositor_state = CompositorState::new::<Self>(&dh);
+        // v6: wl_surface.preferred_buffer_scale and _transform (send_scale)
+        let compositor_state = CompositorState::new_v6::<Self>(&dh);
+        // a client draws at an output's exact scale (1.5) and says how big its buffer is on screen
+        smithay::wayland::viewporter::ViewporterState::new::<Self>(&dh);
+        smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
         let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
         let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
@@ -363,14 +367,48 @@ impl Draftpaper {
         }
     }
 
+    /// Tell a surface (and its subsurfaces) the scale and transform of `output`, the one it is on: the
+    /// integer scale (wl_surface v6) and the exact one (fractional-scale-v1). A client that knows them
+    /// before it first draws never has to guess from the largest scale of all outputs (Firefox does,
+    /// and then draws at the wrong size on another output).
+    pub fn send_scale(surface: &WlSurface, output: &smithay::output::Output) {
+        use smithay::wayland::{
+            compositor::{send_surface_state, with_surface_tree_downward, TraversalAction},
+            fractional_scale::with_fractional_scale,
+        };
+        let (scale, transform) = (output.current_scale(), output.current_transform());
+        with_surface_tree_downward(
+            surface,
+            (),
+            |_, _, _| TraversalAction::DoChildren(()),
+            |surface, states, _| {
+                send_surface_state(surface, states, scale.integer_scale(), transform);
+                with_fractional_scale(states, |fs| fs.set_preferred_scale(scale.fractional_scale()));
+            },
+            |_, _, _| true,
+        );
+    }
+
+    /// The output a new surface will most likely be on: the active screen's.
+    pub fn active_output(&self) -> Option<smithay::output::Output> {
+        self.screens.get(self.active).map(|s| s.output.clone()).or_else(|| self.space.outputs().next().cloned())
+    }
+
     /// After a frame of `output`: frame callbacks to everything drawn on it, windows, layer surfaces (the
     /// shell's margins and title block) and the lock surface. A client that waits for its callback
-    /// before drawing again (Qt does) stays on its first picture without one.
+    /// before drawing again (Qt does) stays on its first picture without one. The windows and layer
+    /// surfaces on it are told its scale (send_scale; unchanged values are not sent again).
     pub fn send_frames(&self, output: &smithay::output::Output, now: std::time::Duration) {
         let throttle = Some(std::time::Duration::ZERO);
         self.space.elements().for_each(|w| w.send_frame(output, now, throttle, |_, _| Some(output.clone())));
+        for w in self.space.elements_for_output(output) {
+            if let Some(surface) = smithay::wayland::seat::WaylandFocus::wl_surface(w) {
+                Self::send_scale(&surface, output);
+            }
+        }
         for layer in smithay::desktop::layer_map_for_output(output).layers() {
             layer.send_frame(output, now, throttle, |_, _| Some(output.clone()));
+            Self::send_scale(layer.wl_surface(), output);
         }
         if let Some(lock) = self.lock_surfaces.get(&output.name()) {
             smithay::desktop::utils::send_frames_surface_tree(lock.wl_surface(), output, now, throttle, |_, _| Some(output.clone()));

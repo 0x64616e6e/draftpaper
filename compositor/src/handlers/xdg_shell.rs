@@ -25,6 +25,10 @@ impl XdgShellHandler for Draftpaper {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
+        // the scale of the screen it will open on, before it first draws
+        if let Some(output) = self.active_output() {
+            Self::send_scale(surface.wl_surface(), &output);
+        }
         // placed on its first commit, when its parent (if it is a dialog) is known
         self.pending.push(Window::new_wayland_window(surface));
     }

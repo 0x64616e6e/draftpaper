@@ -264,6 +264,10 @@ impl Draftpaper {
                         let size = window.geometry().size;
                         json!({ "x": loc.x, "y": loc.y, "width": size.w, "height": size.h })
                     });
+                    // what the client draws (all its surfaces), relative to its geometry's corner; larger
+                    // than the geometry when it draws more than its tile
+                    let (b, g) = (window.bbox(), window.geometry());
+                    let surface = json!({ "x": b.loc.x - g.loc.x, "y": b.loc.y - g.loc.y, "width": b.size.w, "height": b.size.h });
                     all.push(json!({
                         "id": window_id(window),
                         "app_id": app_id,
@@ -277,6 +281,7 @@ impl Draftpaper {
                         "parked": cell.is_some(),
                         "cell": cell,
                         "geometry": geometry,
+                        "surface": surface,
                     }));
                 }
             }

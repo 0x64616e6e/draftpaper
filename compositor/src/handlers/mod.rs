@@ -117,3 +117,19 @@ impl smithay::wayland::dmabuf::DmabufHandler for Draftpaper {
     }
 }
 smithay::delegate_dmabuf!(Draftpaper);
+
+// fractional-scale-v1: a new object is told the scale of the output its surface is on (or will be)
+impl smithay::wayland::fractional_scale::FractionalScaleHandler for Draftpaper {
+    fn new_fractional_scale(&mut self, surface: smithay::reexports::wayland_server::protocol::wl_surface::WlSurface) {
+        use smithay::wayland::seat::WaylandFocus;
+        let output = self
+            .window_where(|w| w.wl_surface().as_deref() == Some(&surface))
+            .and_then(|w| self.space.outputs_for_element(&w).into_iter().next())
+            .or_else(|| self.active_output());
+        if let Some(output) = output {
+            Self::send_scale(&surface, &output);
+        }
+    }
+}
+smithay::delegate_fractional_scale!(Draftpaper);
+smithay::delegate_viewporter!(Draftpaper);

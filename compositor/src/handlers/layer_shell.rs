@@ -31,6 +31,7 @@ impl WlrLayerShellHandler for Draftpaper {
             .or_else(|| self.screens.get(self.active).map(|s| s.output.clone()))
             .or_else(|| self.space.outputs().next().cloned());
         if let Some(output) = output {
+            Self::send_scale(surface.wl_surface(), &output);
             let _ = layer_map_for_output(&output).map_layer(&LayerSurface::new(surface, namespace));
         }
     }
