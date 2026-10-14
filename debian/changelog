@@ -1,3 +1,19 @@
+draftpaper (0.1.1) unstable; urgency=medium
+
+  * Redraw the sheet when screens are added, removed or change mode (#4).
+  * Keep parked windows in step with i3: a parked window that closes, changes
+    its title or leaves the scratchpad by hand updates its cell (#5).
+  * Several custom cells: the first in the title block, the others in the
+    bottom margin's free zones (#6).
+  * Blueprint, a dark theme; themes gain a "strong" colour for the focused
+    workspace (#7).
+  * Super+Left/Right cycling moves to its own include, draftpaper-cycle.conf,
+    so the main include no longer clashes with i3's focus keys (#8).
+  * IBM Plex Mono is recommended (it is in contrib); DejaVu Sans Mono is used
+    without it.
+
+ -- 0x64616e6e <daniel@este.systems>  Wed, 14 Oct 2026 20:11:14 +0300
+
 draftpaper (0.1.0) unstable; urgency=medium
 
   * First release: the drafting sheet (paper, frame, zones), live margins and

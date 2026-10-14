@@ -34,7 +34,7 @@ Draftpaper is a Debian package for i3 on X11. It needs Quickshell 0.3 or later, 
 provides in trixie-backports:
 
     sudo apt install -t trixie-backports quickshell
-    sudo apt install ./draftpaper_0.1.0_all.deb
+    sudo apt install ./draftpaper_0.1.1_all.deb      # from the latest release
 
 Then, in `~/.config/i3/config`, after `set $mod ...`:
 
