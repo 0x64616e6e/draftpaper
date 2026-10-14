@@ -50,6 +50,8 @@ pub struct Screen {
     /// logical pixels per millimetre (for the grid when the output changes size or scale)
     pub mm: f64,
     pub margin_mm: f64,
+    /// the margins' ticks the shell's merged cells leave out (sheet.rs), top, bottom, left, right
+    pub hidden_ticks: [u32; 4],
 }
 
 impl Draftpaper {
@@ -61,7 +63,7 @@ impl Draftpaper {
         let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm);
         // the lowest number not yet in use
         let number = (1..).find(|n| !self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.number == *n))).unwrap();
-        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, margin_mm });
+        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, margin_mm, hidden_ticks: [0; 4] });
         self.screens.sort_by_key(|s| s.grid.area.loc.x);
     }
 

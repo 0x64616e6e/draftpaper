@@ -245,7 +245,10 @@ pub fn output_elements(
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
         let size: Size<i32, Logical> = geometry.size;
         let scale = output.current_scale().fractional_scale();
-        elements.push(OutputElements::Sheet(sheet.0.borrow_mut().element(renderer, size, scale)));
+        let hidden = state.screens.iter().find(|s| &s.output == output).map(|s| s.hidden_ticks).unwrap_or_default();
+        let mut sheet = sheet.0.borrow_mut();
+        sheet.set_hidden(hidden);
+        elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale)));
     }
     elements
 }

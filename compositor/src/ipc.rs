@@ -5,6 +5,7 @@
 //!   {"request": "version" | "outputs" | "workspaces" | "windows"}
 //!   {"request": "action", "action": "workspace 3"}        any binding action (config.rs)
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
+//!   {"request": "sheet", "output": "eDP-1", "merged": {"top": [[7, 9]]}}   cells the shell merged
 //!
 //! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
@@ -172,6 +173,25 @@ impl Draftpaper {
                     }
                     None => Ok(Value::Null),
                 }
+            }
+            "sheet" => {
+                // the shell's merged cells: {"output": NAME, "merged": {"top": [[FROM, TO], ...], ...}},
+                // zone ranges counted from the frame's corner; the ticks inside each are not drawn
+                let name = request.get("output").and_then(Value::as_str).ok_or("no \"output\"")?;
+                let screen = self.screens.iter_mut().find(|s| s.output.name() == name).ok_or(format!("no output {name}"))?;
+                let merged = request.get("merged").and_then(Value::as_object).ok_or("no \"merged\"")?;
+                let mut hidden = [0u32; 4];
+                for (side, mask) in ["top", "bottom", "left", "right"].iter().zip(hidden.iter_mut()) {
+                    for range in merged.get(*side).and_then(Value::as_array).into_iter().flatten() {
+                        let (from, to) = (range.get(0).and_then(Value::as_u64), range.get(1).and_then(Value::as_u64));
+                        let (Some(from), Some(to)) = (from, to) else { return Err(format!("{side}: ranges are [FROM, TO]")) };
+                        for k in (from + 1)..=to.min(23) {
+                            *mask |= 1 << k;
+                        }
+                    }
+                }
+                screen.hidden_ticks = hidden;
+                Ok(Value::Null)
             }
             "subscribe" => {
                 let kinds = request.get("events").and_then(Value::as_array).ok_or("no \"events\"")?;

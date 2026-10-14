@@ -236,6 +236,17 @@ ShellRoot {
             readonly property var spaces: Compositor.workspaces.filter(w => w.output === modelData.name)
             readonly property var activeSpace: spaces.find(w => w.shown) || null
 
+            // cells that take more than one zone are one cell: the compositor leaves out the ticks inside
+            // (the workspaces past five, a notification); [first, last] zones from the frame's corner
+            readonly property var mergedCells: {
+                const top = []
+                if (spacesZone.span > 1) top.push([spacesZone.first, spacesZone.first + spacesZone.span - 1])
+                if (noticeZone.visible && noticeZone.span > 1) top.push([noticeZone.first, noticeZone.first + noticeZone.span - 1])
+                return { top: top }
+            }
+            onMergedCellsChanged: Compositor.setMerged(modelData.name, mergedCells)
+            Component.onCompleted: Compositor.setMerged(modelData.name, mergedCells)
+
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
@@ -273,8 +284,9 @@ ShellRoot {
                                 font.bold: modelData.focused || modelData.shown
                                 color: modelData.focused ? theme.strong : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
                             }
-                            Rectangle {     // separator: the full height of the margin, like the zone ticks
-                                visible: index > 0 && !(spacesZone.slotted && index % spacesZone.perZone === 0)
+                            Rectangle {     // separator: the full height of the margin, like the zone ticks (whose
+                                            // own ticks a cell of several zones leaves out)
+                                visible: index > 0
                                 width: Math.max(1, 1 / edge.dpr); height: parent.height
                                 color: topMargin.tick
                             }

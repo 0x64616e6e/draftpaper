@@ -15,6 +15,14 @@ Singleton {
     readonly property string path: Quickshell.env("DRAFTPAPER_SOCKET") || ""
 
     function output(name) { return outputs.find(o => o.name === name) || null }
+    // the cells merged on each screen ({top: [[from, to]], ...}): the compositor leaves out their inner
+    // ticks; sent when they change and again whenever the connection is made
+    property var merged: ({})
+    function setMerged(name, cells) {
+        if (JSON.stringify(merged[name]) === JSON.stringify(cells)) return
+        merged[name] = cells
+        send({ request: "sheet", output: name, merged: cells })
+    }
     function action(text) { send({ request: "action", action: text }) }
     function send(request) {
         if (!socket.connected) return
@@ -27,7 +35,10 @@ Singleton {
         path: compositor.path
         connected: compositor.path !== ""
         onConnectionStateChanged: {
-            if (connected) compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
+            if (connected) {
+                compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
+                for (const name in compositor.merged) compositor.send({ request: "sheet", output: name, merged: compositor.merged[name] })
+            }
             else retry.restart()
         }
         onError: retry.restart()

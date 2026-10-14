@@ -1,6 +1,10 @@
 //! The sheet, drawn by the GPU under every window: the same picture as the i3 edition's render.py
 //! (paper gradient and blooms, 5 mm dots, the frame, zone ticks across the margins, dither; the i3 edition also draws crop marks in the corners),
 //! computed per pixel in a fragment shader. Sizes are in the output's pixels per millimetre.
+//!
+//! The margins' zones are cells, and the shell may merge neighbouring ones into one (a notification
+//! that takes two zones): the ticks inside a merged cell are not drawn. `hidden` holds, per side, a mask
+//! of the boundaries left out (bit k: the boundary k zones from the frame's corner).
 
 use smithay::{
     backend::renderer::{
@@ -29,6 +33,8 @@ uniform vec4 shape;
 uniform vec4 strength;
 // margin (px), zones across, zones down
 uniform vec3 grid;
+// the boundaries not ticked, per side (top, bottom, left, right): bit k is boundary k
+uniform vec4 hidden;
 // the output in physical pixels (Smithay's `size` is the element's logical size)
 uniform vec2 physical;
 
@@ -40,6 +46,9 @@ float bloom(vec2 uv, vec2 c, float r, float k) {
 
 // 1.0 within half a pixel of a line at `at`
 float near(float p, float at) { return step(abs(p - at), 0.5); }
+
+// bit k of a mask held in a float (no bit operations in GLSL ES 2; exact up to 2^24)
+float bit(float mask, float k) { return mod(floor(mask / exp2(k) + 0.25), 2.0); }
 
 void main() {
     vec2 uv = v_coords;
@@ -67,10 +76,16 @@ void main() {
     if (inY && ((px.x >= mg && px.x < mg + 2.0) || (px.x >= w - mg - 2.0 && px.x < w - mg))) m = max(m, 0.85);
     if (inX && ((px.y >= mg && px.y < mg + 2.0) || (px.y >= h - mg - 2.0 && px.y < h - mg))) m = max(m, 0.85);
     float zw = (w - 2.0 * mg) / grid.y, zh = (h - 2.0 * mg) / grid.z;
-    if ((px.y < mg || px.y >= h - mg) && px.x >= mg - 0.5 && px.x <= w - mg + 0.5)
-        m = max(m, 0.6 * near(px.x, mg + floor((px.x - mg) / zw + 0.5) * zw));
-    if ((px.x < mg || px.x >= w - mg) && px.y >= mg - 0.5 && px.y <= h - mg + 0.5)
-        m = max(m, 0.6 * near(px.y, mg + floor((px.y - mg) / zh + 0.5) * zh));
+    if ((px.y < mg || px.y >= h - mg) && px.x >= mg - 0.5 && px.x <= w - mg + 0.5) {
+        float k = floor((px.x - mg) / zw + 0.5);
+        float off = bit(px.y < mg ? hidden.x : hidden.y, k);
+        m = max(m, 0.6 * near(px.x, mg + k * zw) * (1.0 - off));
+    }
+    if ((px.x < mg || px.x >= w - mg) && px.y >= mg - 0.5 && px.y <= h - mg + 0.5) {
+        float k = floor((px.y - mg) / zh + 0.5);
+        float off = bit(px.x < mg ? hidden.z : hidden.w, k);
+        m = max(m, 0.6 * near(px.y, mg + k * zh) * (1.0 - off));
+    }
     c += (ink - c) * m * strength.z;
 
     // half a level of noise so the 8-bit steps of the gradient do not band
@@ -88,11 +103,13 @@ pub struct SheetRenderer {
     pub theme: Theme,
     /// physical pixels per millimetre of the output (from its physical size, or the 160 PPI fallback)
     pub mm: f32,
+    /// the ticks not drawn, per side (top, bottom, left, right): see the module's comment
+    hidden: [u32; 4],
 }
 
 impl SheetRenderer {
     pub fn new(theme: Theme, mm: f32) -> Self {
-        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm }
+        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm, hidden: [0; 4] }
     }
 
     /// The sheet for an output of `size`, built once and rebuilt when the size changes.
@@ -100,6 +117,14 @@ impl SheetRenderer {
     pub fn set_theme(&mut self, theme: Theme) {
         self.theme = theme;
         self.element = None;
+    }
+
+    /// The ticks to leave out (Screen::hidden_ticks); the sheet is drawn again when they change.
+    pub fn set_hidden(&mut self, hidden: [u32; 4]) {
+        if self.hidden != hidden {
+            self.hidden = hidden;
+            self.element = None;
+        }
     }
 
     /// `size` is the output's logical size and `scale` its scale: the shader works in the physical pixels
@@ -116,6 +141,7 @@ impl SheetRenderer {
                 UniformName::new("strength", UniformType::_4f),
                 UniformName::new("grid", UniformType::_3f),
                 UniformName::new("physical", UniformType::_2f),
+                UniformName::new("hidden", UniformType::_4f),
             ];
             self.program = Some(renderer.compile_custom_pixel_shader(SHADER, &names).expect("the sheet shader compiles"));
         }
@@ -137,6 +163,7 @@ impl SheetRenderer {
                 Uniform::new("strength", [s.glow_strength, s.glow_size, s.pattern_strength, self.mm]),
                 Uniform::new("grid", [margin, zones(physical.0), zones(physical.1)]),
                 Uniform::new("physical", [physical.0, physical.1]),
+                Uniform::new("hidden", self.hidden.map(|m| m as f32)),
             ];
             self.element = Some(PixelShaderElement::new(
                 self.program.clone().unwrap(),
