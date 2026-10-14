@@ -76,6 +76,8 @@ pub struct Draftpaper {
     /// the TTY backend's devices and outputs (None when nested)
     pub tty_data: Option<crate::tty::TtyData>,
     pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, Draftpaper>,
+    /// the IPC socket and its clients (ipc.rs)
+    pub ipc: crate::ipc::Ipc,
 }
 
 impl Draftpaper {
@@ -164,6 +166,7 @@ impl Draftpaper {
             config_mtime: None,
             tty_data: None,
             loop_handle: event_loop.handle(),
+            ipc: Default::default(),
         }
     }
 
@@ -272,7 +275,11 @@ impl Draftpaper {
             // panels with an exclusive zone (a foreign bar) take their room from the frame's interior
             let mut grid = s.grid;
             if let Some(og) = self.space.output_geometry(&s.output) {
-                let mut zone = smithay::desktop::layer_map_for_output(&s.output).non_exclusive_zone();
+                // arranged first: after a change of the output's size or scale the map still has the old one
+                let mut map = smithay::desktop::layer_map_for_output(&s.output);
+                map.arrange();
+                let mut zone = map.non_exclusive_zone();
+                drop(map);
                 zone.loc += og.loc;
                 if let Some(area) = grid.area.intersection(zone) {
                     grid.area = area;

@@ -2,6 +2,10 @@
 
 An i3 desktop drawn as a drafting sheet.
 
+> **Status:** this describes 0.1, the i3 edition, which is frozen: no further releases, the last one stays
+> installable. Draftpaper continues as a Wayland compositor of its own (`compositor/`, design in
+> `docs/wayland-design.md`, plan in `docs/roadmap.md`).
+
 There is no bar. The wallpaper is a sheet of paper with a frame, a dot grid and zone ticks, and windows
 end exactly on the frame line. What a bar would show is lettered onto the sheet:
 

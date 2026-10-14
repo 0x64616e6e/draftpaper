@@ -95,7 +95,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Print", "screenshot"),
 ];
 
-fn parse_action(s: &str) -> Result<Option<Action>, String> {
+pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
     let s = s.trim();
     if s == "none" {
         return Ok(None);

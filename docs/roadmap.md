@@ -2,16 +2,17 @@
 
 Where Draftpaper is going, in order. Each stage is usable on its own before the next starts.
 
-## 1. The i3 edition (done: 0.1.x)
+## 1. The i3 edition (done: 0.1.x, frozen)
 
 Draftpaper as an add-on to i3 on X11: the sheet, the live title block and margins, parking. Released as a
-Debian package.
+Debian package. Frozen since 2026-10-14: no further releases; 0.1.x stays installable. Draftpaper is now
+the compositor.
 
 ## 2. The Wayland compositor (in progress)
 
 Draftpaper as a compositor of its own, on Smithay: the sheet drawn by the compositor, windows tiled in
 columns and rows aligned to the zones, parking with exact restore. Design: `docs/wayland-design.md`;
-plan: milestones M0 to M3 on GitHub. It ships in the same `draftpaper` package as the i3 edition.
+plan: milestones M0 to M3 on GitHub. It replaces the i3 edition in the `draftpaper` package.
 
 ## 3. A distribution (vision)
 

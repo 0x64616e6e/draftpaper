@@ -1,7 +1,8 @@
 # Draftpaper as a Wayland compositor: design
 
-Status: proposal, 2026-10-14. Draftpaper 0.1 (an i3 add-on on X11) stays the shipping product while this
-is built.
+Status: in progress. Decided 2026-10-14: Draftpaper is this compositor. The i3 edition is frozen at 0.1.x
+(no further releases; the last one stays installable), and nothing in the compositor imitates i3: its IPC
+is its own, and the shell is ported to it.
 
 ## Why
 
@@ -78,7 +79,7 @@ differs in the layout model and the sheet, not in the plumbing.
  libinput ─▶│ input ─▶ bindings ─▶ actions ─▶ layout (per output: workspaces, tiles, parked)  │
  DRM/KMS ◀─▶│ outputs, scale ◀── render: sheet (shader) ▸ background layers ▸ windows ▸ top/overlay │
             │ xdg-shell, layer-shell, Xwayland + X11 WM, session-lock, idle, data-device, ...    │
-            │ IPC: i3-compatible subset + draftpaper extension (Unix socket, JSON)                │
+            │ IPC: Draftpaper's own protocol (Unix socket, newline-delimited JSON)                │
             └──────────────────────────────────────────┬──────────────────────────────────────────┘
                                                        │
        Quickshell (layer-shell, "bottom" layer) ◀──────┘   margins, title block, cells: shell.qml,
@@ -102,16 +103,24 @@ without restarting the session. The compositor owns geometry; the shell draws in
 
 ### IPC
 
-A Unix socket at `$XDG_RUNTIME_DIR/draftpaper-<display>.sock`, JSON messages.
+A Unix socket at `$XDG_RUNTIME_DIR/draftpaper-<wayland display>.sock`, its path in `DRAFTPAPER_SOCKET`
+for the session's programs. Newline-delimited JSON: a client writes one request per line and reads one
+reply per line, in order (`{"ok": true, "reply": ...}` or `{"ok": false, "error": "..."}`).
 
-- **An i3/sway-compatible subset**: `get_workspaces`, `get_outputs`, `get_tree` (enough of it), `command`
-  (a documented subset of i3 commands), `subscribe` to `workspace`, `window` and `output` events. sway
-  speaks this protocol, and Quickshell's `Quickshell.I3` module talks to it, so 0.1's workspace margin
-  works unchanged.
-- **A Draftpaper extension**: `get_sheet` (per output: frame rectangle, margin, px/mm, zones, cells),
-  `get_parked`, events `parked` and `sheet`, and commands `park`, `park_at <cell>`, `unpark <id>`,
+- `version`, `outputs`, `workspaces`, `windows`: the state now. Outputs carry the sheet's geometry
+  (frame, margin, px/mm, zones), so the shell draws in the compositor's own numbers.
+- `action`: any action a key binding can name (`workspace 3`, `focus left`, `send 4`, `spawn foot`...),
+  one vocabulary for keys, scripts and the shell.
+- `subscribe` to `workspaces`, `outputs`, `windows`: the current state at once, then the whole new state
+  of a kind whenever it changes. Clients replace their model and never apply deltas, so a client that
+  joins late or misses nothing to reconcile.
+- To come with parking (#22, #24): `cells`, `parked`, actions `park`, `park_at <cell>`, `unpark <id>`,
   `park_next`, `park_prev`.
-- A `draftpaper msg` client for scripts and key bindings.
+- `draftpaper-compositor msg <request | action...>` is the client for scripts and testing.
+
+Not i3's protocol: an i3-compatible subset would have kept the 0.1 shell's workspace margin unchanged,
+but the shell is ported anyway (layer-shell, the sheet's geometry), and i3's model (containers, marks,
+the scratchpad) is the one Draftpaper leaves behind.
 
 ## The layout
 
@@ -203,8 +212,8 @@ as defaults). Reloaded on change without restarting.
 |---|---|---|
 | M0 | Nested prototype: Smithay winit backend inside the current desktop; the sheet shader; xdg-shell windows tiled inside the frame in columns | A terminal and Firefox tile on a sheet in a window |
 | M1 | Daily-drivable base: DRM session, libinput, multiple outputs, workspaces, focus, fullscreen, layer-shell, XWayland, clipboard, lock and idle, config and bindings | One working day on it, falling back to i3 only for screencasting |
-| M2 | Draftpaper: zones, parking with placeholders and exact restore, cells, the IPC with the i3 subset, the 0.1 shell running against it | 0.1's features on Wayland, parking better than on i3 |
-| M3 | Finish: animations (park, unpark, workspace switch), fractional scale, screencasting through the portal, session files, packaging in the same `draftpaper` .deb as the i3 edition | Installable from the .deb on a clean Debian 13 |
+| M2 | Draftpaper: zones, parking with placeholders and exact restore, cells, the IPC, the shell ported to it | 0.1's features on Wayland, parking better than on i3 |
+| M3 | Finish: animations (park, unpark, workspace switch), fractional scale, screencasting through the portal, session files, the compositor and the shell in the `draftpaper` .deb | Installable from the .deb on a clean Debian 13 |
 
 ## Effort and risks
 
@@ -216,11 +225,10 @@ front of the plumbing.
 
 | Risk | Mitigation |
 |---|---|
-| Screencasting (video calls, recording) is the hardest piece to get right | Follow niri's portal integration closely; until it works, keep the i3 edition for calls |
+| Screencasting (video calls, recording) is the hardest piece to get right | Follow niri's portal integration closely; until it works, keep an i3 session (with the frozen 0.1.x) for calls |
 | Smithay API churn | Pin a release; follow niri's upgrades, which track Smithay closely |
-| XWayland edge cases (old apps, games, Java) | Smithay's X11 window manager handles the common cases (anvil and cosmic-comp use it); keep the i3 edition as the fallback session |
+| XWayland edge cases (old apps, games, Java) | Smithay's X11 window manager handles the common cases (anvil and cosmic-comp use it); keep an i3 session (with the frozen 0.1.x) as the fallback |
 | One maintainer for a compositor | Keep the compositor small: text, readings and theming stay in the shell and Python; scope stays at the non-goals above |
-| Quickshell's I3 module expecting more of the i3 protocol than the subset | Implement against Quickshell's source, test with it from M2 |
 
 ## Decisions
 
@@ -231,9 +239,11 @@ Settled on 2026-10-14:
 2. **Each workspace shows only its own title block** (and cells and lettering); a screen shows the sheet
    of the workspace visible on it.
 3. **The bottom margin stays**: it is part of the drafting-sheet layout.
-4. **One package**, `draftpaper`, holding both the i3 edition and the Wayland session; **Debian only** for
-   now.
+4. **One package**, `draftpaper`, holding the compositor, its session and the shell; **Debian only** for
+   now. (First decided as one package for both editions; the i3 edition was then frozen, 2026-10-14.)
 5. **Public repository**: anyone may open issues and send pull requests (see CONTRIBUTING.md).
+6. **No i3 compatibility** (2026-10-14): the IPC is Draftpaper's own, the shell is ported to it, and the i3
+   edition is frozen at 0.1.x.
 
 ## Open questions
 
@@ -247,4 +257,4 @@ Settled on 2026-10-14:
 - xwayland-satellite: https://github.com/Supreeeme/xwayland-satellite
 - cosmic-comp: https://github.com/pop-os/cosmic-comp
 - wlr-layer-shell and the other protocols: https://wayland.app/protocols/
-- Quickshell: https://quickshell.org (layer-shell, `Quickshell.I3` for i3/sway IPC)
+- Quickshell: https://quickshell.org (layer-shell; `Quickshell.Io` sockets for the IPC)

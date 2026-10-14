@@ -13,6 +13,7 @@ mod screens;
 mod sheet;
 mod state;
 mod theme;
+mod ipc;
 mod tty;
 mod winit;
 
@@ -20,6 +21,12 @@ use smithay::reexports::{calloop::EventLoop, wayland_server::Display};
 pub use state::Draftpaper;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // draftpaper-compositor msg ...: a client of a running compositor
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("msg") {
+        std::process::exit(ipc::msg(&args[1..]));
+    }
+
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
         tracing_subscriber::fmt().with_env_filter(env_filter).init();
     } else {
@@ -32,8 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display: Display<Draftpaper> = Display::new()?;
     let mut data = Draftpaper::new(&mut event_loop, display);
 
-    // draftpaper-compositor [--tty] [--session] [--command PROGRAM]
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // draftpaper-compositor [--tty] [--session] [--command PROGRAM] | msg REQUEST...
     // the TTY backend when asked for, or when there is no display to nest in
     let tty = args.iter().any(|a| a == "--tty")
         || (std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none());
@@ -52,8 +58,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         crate::winit::init_winit(&mut event_loop, &mut data)?;
     }
 
+    // the IPC socket (DRAFTPAPER_SOCKET), before anything is started that might talk to it
+    data.start_ipc();
+
     if session {
-        let vars = "WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP";
+        let vars = "WAYLAND_DISPLAY DRAFTPAPER_SOCKET XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP";
         let _ = std::process::Command::new("sh")
             .arg("-c")
             .arg(format!(
@@ -89,9 +98,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
-    event_loop.run(None, &mut data, move |_| {
-        // Draftpaper is running
-    })?;
+    event_loop.run(None, &mut data, move |data| data.ipc_refresh())?;
+    data.stop_ipc();
 
     if session {
         let _ = std::process::Command::new("systemctl").args(["--user", "stop", "draftpaper-session.target"]).status();

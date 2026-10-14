@@ -279,7 +279,8 @@ impl Layout {
                 let r = if ci == last_c { right } else { right - 1 };
                 let t = if ri == 0 { top } else { top + 1 };
                 let b = if ri == last_r { bottom } else { bottom - 1 };
-                let rect = Rectangle::new((l, t).into(), (r - l, b - t).into());
+                // never a negative size, however small the area has become
+                let rect = Rectangle::new((l, t).into(), ((r - l).max(1), (b - t).max(1)).into());
                 if Some(window) == skip {
                     y0 = y1;
                     continue;
