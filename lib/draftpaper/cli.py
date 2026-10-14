@@ -8,6 +8,9 @@
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
   draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
+  draftpaper audio save|restore
+                              the default output's volume and mute, kept from one session to the next
+                              (draftpaper-audio.service: the switch to the login screen mutes it)
   draftpaper wallpaper [FILE | none]
                               a picture in the frame, or none (the compositor picks it up at once)
   draftpaper margins paper|ambient
@@ -35,6 +38,29 @@ def start():
     env = dict(os.environ, DRAFTPAPER_BIN=os.path.realpath(sys.argv[0]), DRAFTPAPER_CACHE=str(paths.CACHE),
                DRAFTPAPER_RUNTIME=str(paths.RUNTIME))
     os.execve(qs, ["qs", "-p", str(paths.QML), "-n"], env)
+
+
+def audio(how):
+    """Keep the default output's volume and mute across sessions. Logging out hands the sound card to the
+    login screen, and the handover mutes it; the session saves the state as it ends (while it still has
+    the card) and puts it back as the next one starts."""
+    import json, re
+    state = paths.STATE / "audio.json"
+    if how == "save":
+        r = subprocess.run(["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"], capture_output=True, text=True)
+        m = re.search(r"Volume:\s*([0-9.]+)(\s*\[MUTED\])?", r.stdout)
+        if m:
+            state.parent.mkdir(parents=True, exist_ok=True)
+            state.write_text(json.dumps({"volume": float(m.group(1)), "muted": bool(m.group(2))}))
+    elif how == "restore":
+        try:
+            s = json.loads(state.read_text())
+        except (OSError, ValueError):
+            return
+        subprocess.run(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", str(s["volume"])], capture_output=True)
+        subprocess.run(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "1" if s["muted"] else "0"], capture_output=True)
+    else:
+        sys.exit("draftpaper audio save|restore")
 
 
 def lock_on_sleep(how):
@@ -105,6 +131,8 @@ def main(argv=None):
         if not rest or rest[0] not in ("paper", "ambient"):
             sys.exit("draftpaper margins paper|ambient")
         config.set_value("margins", rest[0])
+    elif c == "audio":
+        audio(rest[0] if rest else "")
     elif c == "picker":
         # the shell's IpcHandler "themes" (qml/shell.qml)
         sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "themes", "toggle"]).returncode)

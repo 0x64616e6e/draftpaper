@@ -15,6 +15,7 @@ THEMES = [HOME / ".config/draftpaper/themes", ROOT / "themes"]
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "draftpaper" / "config.toml"
 CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "draftpaper"
 RUNTIME = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "draftpaper"
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "draftpaper"     # kept across sessions
 THEME_JSON = CACHE / "theme.json"
 PARKED = RUNTIME / "parked.json"
 

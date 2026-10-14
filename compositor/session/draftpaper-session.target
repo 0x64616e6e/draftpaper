@@ -8,3 +8,5 @@ After=graphical-session-pre.target
 Wants=draftpaper-shell.service
 # idle: the displays off, locking (swayidle)
 Wants=draftpaper-idle.service
+# the sound as it was left (logging out mutes it)
+Wants=draftpaper-audio.service
