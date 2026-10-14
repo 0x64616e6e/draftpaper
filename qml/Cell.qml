@@ -9,7 +9,7 @@ Text {
     property var onScroll: null          // called with +1 (up) or -1 (down)
     property real size: 12               // logical px
     textFormat: Text.StyledText
-    font.family: "IBM Plex Mono"
+    font.family: Fonts.mono
     font.pixelSize: size
     anchors.verticalCenter: parent ? parent.verticalCenter : undefined
 

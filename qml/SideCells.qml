@@ -60,7 +60,7 @@ Item {
                         Text {          // the zone letter, at the cell's head
                             anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 1.5 * cells.edge.mm }
                             text: "ABCDEFGHJKLMNPQRSTUVWXYZ"[zone.index % 24]
-                            font.family: "IBM Plex Mono"; font.pixelSize: cells.edge.fontPx * 0.8
+                            font.family: Fonts.mono; font.pixelSize: cells.edge.fontPx * 0.8
                             color: Qt.rgba(cells.ink.r, cells.ink.g, cells.ink.b, 0.8)
                         }
                         Text {          // the window, lettered up the margin
@@ -72,7 +72,7 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
                             text: zone.win ? zone.win.title || zone.win.cls : ""
-                            font.family: "IBM Plex Mono"; font.pixelSize: cells.edge.fontPx
+                            font.family: Fonts.mono; font.pixelSize: cells.edge.fontPx
                             color: cells.ink
                         }
                         Rectangle {     // a hover mark along the inner edge

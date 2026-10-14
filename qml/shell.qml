@@ -155,7 +155,7 @@ ShellRoot {
                                 text: root.spaceLabel(modelData.name)
                                 // focused: bold black; shown on its screen but not focused: bold in the others'
                                 // ink; urgent: bold in the alert red; the rest: regular, lighter
-                                font.family: "IBM Plex Mono"; font.pixelSize: edge.fontPx
+                                font.family: Fonts.mono; font.pixelSize: edge.fontPx
                                 font.bold: modelData.focused || modelData.active || modelData.urgent
                                 color: modelData.urgent ? theme.alert : modelData.focused ? "black"
                                      : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)

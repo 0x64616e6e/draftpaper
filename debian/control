@@ -18,8 +18,9 @@ Depends: ${misc:Depends},
          i3-wm,
          x11-xserver-utils,
          xwallpaper | feh,
-         fonts-ibm-plex
+         fonts-dejavu-core
 Recommends: picom,
+            fonts-ibm-plex,
             network-manager,
             upower,
             power-profiles-daemon,

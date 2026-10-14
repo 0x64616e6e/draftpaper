@@ -46,6 +46,9 @@ window colours and the gaps, and binds the keys below.
 
 A compositor (picom) is recommended: the margins and the title block are transparent windows.
 
+The sheet is lettered in IBM Plex Mono when it is installed, DejaVu Sans Mono otherwise. Plex is in
+Debian's `contrib` section: add `contrib` to your apt sources, then `sudo apt install fonts-ibm-plex`.
+
 ## Keys
 
 | Key | |

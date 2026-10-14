@@ -70,7 +70,7 @@ Item {
                 Text {
                     x: 2 * block.mm; y: 1.2 * block.mm
                     text: modelData[4]
-                    font.family: "IBM Plex Mono"; font.pixelSize: 2.2 * block.mm; font.letterSpacing: 0.3 * block.mm
+                    font.family: Fonts.mono; font.pixelSize: 2.2 * block.mm; font.letterSpacing: 0.3 * block.mm
                     color: block.faint
                 }
                 Text {
@@ -81,7 +81,7 @@ Item {
                     elide: Text.ElideRight
                     fontSizeMode: Text.HorizontalFit      // shrink a long reading before cutting it
                     minimumPixelSize: 2.4 * block.mm
-                    font.family: "IBM Plex Mono"
+                    font.family: Fonts.mono
                     font.pixelSize: (modelData[3] > 12 ? 9 : 3.6) * block.mm
                     color: modelData[8] ? block.theme.alert : block.ink
                 }
