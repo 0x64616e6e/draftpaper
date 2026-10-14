@@ -161,6 +161,8 @@ def apply(name=None):
         "accent": t["windows"]["focused"],
         "title": cfg["title"], "cells": cfg["cell"], "alerts": cfg["alerts"], "commands": cfg["commands"],
         "glyphs": bool(cfg["glyphs"]),
+        # motion in the shell (the theme picker) follows the compositor's [animations]
+        "animations": bool((cfg.get("animations") or {}).get("enabled", True)),
         "themes": sorted(available()),
     }
     tmp = paths.THEME_JSON.with_suffix(".tmp")

@@ -208,7 +208,10 @@ ShellRoot {
     ThemePicker { id: themePicker; shell: root }
     IpcHandler {
         target: "themes"
-        function toggle(): void { themePicker.visible ? themePicker.close() : themePicker.open() }
+        function toggle(): void { themePicker.visible ? themePicker.cancel() : themePicker.open() }
+        function step(n: int): void { if (themePicker.visible) themePicker.pick(themePicker.selected + n) }
+        function keep(): void { if (themePicker.visible) themePicker.keep() }
+        function cancel(): void { if (themePicker.visible) themePicker.cancel() }
     }
 
     property bool volumeLit: false
@@ -447,7 +450,7 @@ ShellRoot {
                         }
                         Cell {      // the theme: left, the picker; right, the next theme
                             size: edge.fontPx; text: theme.label.toUpperCase(); color: edge.ink
-                            onLeft: () => themePicker.visible ? themePicker.close() : themePicker.open()
+                            onLeft: () => themePicker.visible ? themePicker.cancel() : themePicker.open()
                             onRight: () => root.run([root.bin, "theme", "next"])
                         }
                     }

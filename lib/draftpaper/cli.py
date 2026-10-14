@@ -99,7 +99,24 @@ def themes(args):
         name = names[(names.index(current) + 1) % len(names)] if current in names else names[0]
     t = theme.apply(name)
     config.set_theme(name)
+    compositor("reload")          # the sheet at once, not at the compositor's next look at the file
     print(f"{t['label']} applied.")
+
+
+def compositor(action):
+    """Run an action in the compositor over its IPC, when there is one (in a Draftpaper session)."""
+    import json, socket
+    path = os.environ.get("DRAFTPAPER_SOCKET")
+    if not path:
+        return
+    try:
+        with socket.socket(socket.AF_UNIX) as s:
+            s.settimeout(2)
+            s.connect(path)
+            s.sendall((json.dumps({"request": "action", "action": action}) + "\n").encode())
+            s.recv(4096)
+    except OSError:
+        pass
 
 
 def main(argv=None):

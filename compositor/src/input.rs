@@ -281,6 +281,11 @@ impl Draftpaper {
             Action::Unpark(id) => self.unpark(id),
             Action::ParkCycle(d) => self.park_cycle(d),
             Action::Power(on) => crate::tty::set_power(self, on),
+            Action::Reload => {
+                // as if the file had changed
+                self.config_mtime = Some(std::time::UNIX_EPOCH);
+                self.reload_config();
+            }
             Action::Workspace(n) => self.switch_to(n),
             Action::Fullscreen => {
                 if let Some(w) = self.focused_window() {

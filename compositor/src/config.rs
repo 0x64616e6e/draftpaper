@@ -52,6 +52,8 @@ pub enum Action {
     ParkCycle(i32),
     /// the displays' power: off (DPMS, for swayidle) or on; any input turns them on again
     Power(bool),
+    /// read config.toml again now (not at the next check): `draftpaper theme` after switching
+    Reload,
     /// switch to virtual terminal n (TTY only; Ctrl+Alt+F1..F12, not configurable)
     Vt(i32),
 }
@@ -159,6 +161,7 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
         "close" => Action::Close,
         "quit" => Action::Quit,
         "screenshot" => Action::Screenshot,
+        "reload" => Action::Reload,
         "park" => Action::Park,
         "park_at" => {
             let mut parts = arg.split_whitespace();
