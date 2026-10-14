@@ -1,0 +1,6 @@
+draftpaper (0.1.0) unstable; urgency=medium
+
+  * First release: the drafting sheet (paper, frame, zones), live margins and
+    title block, window parking in the side margins, the Soft Glow theme.
+
+ -- 0x64616e6e <daniel@este.systems>  Wed, 14 Oct 2026 17:43:44 +0300

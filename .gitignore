@@ -1,0 +1,6 @@
+debian/.debhelper/
+debian/draftpaper/
+debian/files
+debian/*.substvars
+debian/debhelper-build-stamp
+__pycache__/

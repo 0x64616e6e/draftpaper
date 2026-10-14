@@ -1,0 +1,15 @@
+#!/usr/bin/python3
+"""Launcher: finds the Draftpaper library and shared files, installed or in a checkout."""
+import os, sys
+
+here = os.path.dirname(os.path.realpath(__file__))
+checkout = os.path.dirname(here)
+if os.path.isdir(os.path.join(checkout, "lib", "draftpaper")) and os.path.isdir(os.path.join(checkout, "qml")):
+    sys.path.insert(0, os.path.join(checkout, "lib"))            # running from the repository
+    os.environ.setdefault("DRAFTPAPER_ROOT", checkout)
+else:
+    sys.path.insert(0, "/usr/lib/draftpaper")
+
+from draftpaper.cli import main
+
+main()

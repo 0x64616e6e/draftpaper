@@ -1,0 +1,27 @@
+# Soft Glow: warm greige paper lit by peach-amber blooms, drawn in a brown-grey ink.
+label = "Soft Glow"
+
+paper       = "#C9BDAE"   # the middle of the sheet
+paper_light = "#DAD0C5"   # top left
+paper_shade = "#8C7C6C"   # bottom right
+glow        = "#F6CFA0"   # the blooms
+ink         = "#62574C"   # lines and lettering
+alert       = "#8A140D"   # alert lettering: TrackPoint red, darkened for this paper (5.2:1 on `paper`)
+
+[sheet]                   # how the paper is shaded and how strongly the pattern is drawn
+angle            = 49     # degrees below the horizontal
+midpoint         = 0.23   # where the middle colour sits along the diagonal (0..1)
+blend            = 0.52   # width of the light -> paper -> shade blend (low: a sharper band)
+shading          = 0.81   # how far light and shade sit from the middle colour
+glow_strength    = 2.0
+glow_size        = 1.0
+pattern_strength = 0.84   # dots, frame and ticks (0..1)
+
+[windows]                 # i3 window colours
+focused          = "#E8B374"
+focused_inactive = "#454543"
+unfocused        = "#232424"
+urgent           = "#E0705C"
+text             = "#EDE3D2"
+text_inactive    = "#7D766A"
+background       = "#1E1F1F"
