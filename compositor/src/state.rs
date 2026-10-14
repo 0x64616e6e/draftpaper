@@ -40,6 +40,9 @@ pub struct Draftpaper {
     pub layer_shell_state: smithay::wayland::shell::wlr_layer::WlrLayerShellState,
     pub xdg_decoration_state: smithay::wayland::shell::xdg::decoration::XdgDecorationState,
     pub shm_state: ShmState,
+    /// linux-dmabuf: GPU buffers from clients (the TTY backend creates the global for its GPU)
+    pub dmabuf_state: smithay::wayland::dmabuf::DmabufState,
+    pub dmabuf_global: Option<smithay::wayland::dmabuf::DmabufGlobal>,
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Draftpaper>,
     pub data_device_state: DataDeviceState,
@@ -141,6 +144,8 @@ impl Draftpaper {
             layer_shell_state,
             xdg_decoration_state,
             shm_state,
+            dmabuf_state: smithay::wayland::dmabuf::DmabufState::new(),
+            dmabuf_global: None,
             output_manager_state,
             seat_state,
             data_device_state,

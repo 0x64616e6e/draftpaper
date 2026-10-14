@@ -4,8 +4,11 @@
 //! and the TrackPoint. One GPU only. Displays plugged in or out later are picked up from udev; each has
 //! its own screen (screens.rs), with scale and position from config.toml ([outputs.<name>]).
 //!
+//! Clients render on the GPU: linux-dmabuf is offered with the GPU's render node and formats as its
+//! default feedback (without it Mesa falls back to llvmpipe, rendering on the CPU).
+//!
 //! Follows the structure of anvil's udev.rs (Smithay v0.7.0, MIT), without multi-GPU, leasing and
-//! dmabuf feedback.
+//! per-surface dmabuf feedback.
 
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
@@ -69,6 +72,11 @@ pub struct TtyData {
 }
 
 impl TtyData {
+    /// Whether the renderer takes a client's dmabuf (linux-dmabuf's import check).
+    pub fn import_dmabuf(&mut self, dmabuf: &smithay::backend::allocator::dmabuf::Dmabuf) -> bool {
+        self.renderer.import_dmabuf(dmabuf, None).is_ok()
+    }
+
     /// Tap to click and natural scrolling on every device that has them.
     pub fn configure_devices(&mut self, input: &crate::config::Input) {
         for d in &mut self.devices {
@@ -120,6 +128,14 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     let renderer = unsafe { GlesRenderer::new(context) }.map_err(err("gles renderer"))?;
 
     let render_formats = renderer.dmabuf_formats();
+
+    // linux-dmabuf, so clients render on this GPU (its render node, the formats the renderer imports)
+    let render_node = node.node_with_type(smithay::backend::drm::NodeType::Render).and_then(Result::ok).unwrap_or(node);
+    let feedback = smithay::wayland::dmabuf::DmabufFeedbackBuilder::new(render_node.dev_id(), render_formats.clone())
+        .build()
+        .map_err(err("dmabuf feedback"))?;
+    let global = data.dmabuf_state.create_global_with_default_feedback::<Draftpaper>(&data.display_handle, &feedback);
+    data.dmabuf_global = Some(global);
     let manager = DrmOutputManager::new(
         drm,
         GbmAllocator::new(gbm.clone(), GbmBufferFlags::RENDERING | GbmBufferFlags::SCANOUT),

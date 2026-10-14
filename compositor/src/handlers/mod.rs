@@ -96,3 +96,24 @@ delegate_data_device!(Draftpaper);
 
 impl OutputHandler for Draftpaper {}
 delegate_output!(Draftpaper);
+
+// linux-dmabuf: a client's GPU buffer is accepted when the renderer can import it
+impl smithay::wayland::dmabuf::DmabufHandler for Draftpaper {
+    fn dmabuf_state(&mut self) -> &mut smithay::wayland::dmabuf::DmabufState {
+        &mut self.dmabuf_state
+    }
+
+    fn dmabuf_imported(
+        &mut self,
+        _global: &smithay::wayland::dmabuf::DmabufGlobal,
+        dmabuf: smithay::backend::allocator::dmabuf::Dmabuf,
+        notifier: smithay::wayland::dmabuf::ImportNotifier,
+    ) {
+        if self.tty_data.as_mut().is_some_and(|t| t.import_dmabuf(&dmabuf)) {
+            let _ = notifier.successful::<Draftpaper>();
+        } else {
+            notifier.failed();
+        }
+    }
+}
+smithay::delegate_dmabuf!(Draftpaper);
