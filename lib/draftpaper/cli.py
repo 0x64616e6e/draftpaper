@@ -4,7 +4,9 @@
   draftpaper stop             stop the shell
   draftpaper apply            write the shell's theme file again
   draftpaper theme [list]     list the themes, the current one marked
-  draftpaper theme <name>     switch theme
+  draftpaper theme <name> [--preview]
+                              switch theme; config.toml's [hooks] theme runs after it (the
+                              applications), but not for a --preview (the picker while browsing)
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
   draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
@@ -94,12 +96,19 @@ def themes(args):
         for n in names:
             print(("* " if n == current else "  ") + n)
         return
+    preview = "--preview" in args
+    args = [a for a in args if a != "--preview"]
     name = args[0]
     if name == "next":
         name = names[(names.index(current) + 1) % len(names)] if current in names else names[0]
     t = theme.apply(name)
     config.set_theme(name)
     compositor("reload")          # the sheet at once, not at the compositor's next look at the file
+    hook = (config.load().get("hooks") or {}).get("theme")
+    if hook and not preview:
+        # the applications too (detached: it may take a while, the sheet has switched already)
+        subprocess.Popen([part.replace("{name}", name) for part in hook], stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
     print(f"{t['label']} applied.")
 
 

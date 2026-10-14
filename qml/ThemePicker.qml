@@ -4,7 +4,8 @@
 // (`draftpaper theme json`): the sheet's paper, glow, frame and ticks, the margins lettered (workspaces,
 // a notification, the bottom cells, a parked window), two windows with a terminal and a file list, the
 // title block filled in. Browsing previews live: the desktop behind takes the picked theme a moment
-// after it is picked; Enter keeps it, Escape goes back to the theme it was. Left, right or the wheel
+// after it is picked; Enter keeps it (and runs config.toml's [hooks] theme: the applications), Escape
+// goes back to the theme it was. Left, right or the wheel
 // browse; a click on a side card picks it, on the middle one keeps it.
 import QtQuick
 import Quickshell
@@ -42,13 +43,16 @@ PanelWindow {
         load.running = true
         visible = true
     }
+    // browsing switches the sheet only (`--preview`: no [hooks] theme); keeping switches it all
     function preview(name) {
         if (!name || name === shown) return
         shown = name
-        shell.run([shell.bin, "theme", name])
+        shell.run([shell.bin, "theme", name, "--preview"])
     }
     function keep() {
-        preview(themes[selected] ? themes[selected].name : "")
+        const name = themes[selected] ? themes[selected].name : ""
+        if (name) shell.run([shell.bin, "theme", name])
+        shown = name
         visible = false
     }
     function cancel() {
