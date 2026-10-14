@@ -26,6 +26,9 @@ pub struct Theme {
     pub sheet: Sheet,
     /// millimetres between the screen edge and the frame
     pub margin_mm: f32,
+    /// window borders: the focused window, the others ([windows] focused / unfocused)
+    pub border_focused: [f32; 3],
+    pub border: [f32; 3],
 }
 
 fn rgb(hex: &str) -> Option<[f32; 3]> {
@@ -90,6 +93,8 @@ impl Theme {
                 pattern_strength: num("pattern_strength", 0.5),
             },
             margin_mm,
+            border_focused: table.get("windows").and_then(|w| w.get("focused")).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb("#E8B374").unwrap()),
+            border: table.get("windows").and_then(|w| w.get("unfocused")).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb("#454543").unwrap()),
         }
     }
 }

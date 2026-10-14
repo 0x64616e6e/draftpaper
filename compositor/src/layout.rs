@@ -262,7 +262,8 @@ impl Layout {
     }
 
     /// Place every window on the grid and tell it its size.
-    pub fn arrange(&self, space: &mut Space<Window>, grid: &Grid) {
+    /// `skip` is a fullscreen window, placed by the caller.
+    pub fn arrange(&self, space: &mut Space<Window>, grid: &Grid, skip: Option<&Window>) {
         let mut x0 = 0u32;
         let last_c = self.columns.len().saturating_sub(1);
         for (ci, col) in self.columns.iter().enumerate() {
@@ -279,6 +280,10 @@ impl Layout {
                 let t = if ri == 0 { top } else { top + 1 };
                 let b = if ri == last_r { bottom } else { bottom - 1 };
                 let rect = Rectangle::new((l, t).into(), (r - l, b - t).into());
+                if Some(window) == skip {
+                    y0 = y1;
+                    continue;
+                }
                 if let Some(toplevel) = window.toplevel() {
                     toplevel.with_pending_state(|state| {
                         state.size = Some(rect.size);
@@ -286,6 +291,7 @@ impl Layout {
                         state.states.set(xdg_toplevel::State::TiledRight);
                         state.states.set(xdg_toplevel::State::TiledTop);
                         state.states.set(xdg_toplevel::State::TiledBottom);
+                        state.states.unset(xdg_toplevel::State::Fullscreen);
                     });
                     if toplevel.is_initial_configure_sent() {
                         toplevel.send_pending_configure();

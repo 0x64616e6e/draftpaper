@@ -25,25 +25,41 @@ impl XdgShellHandler for Draftpaper {
     }
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
-        let window = Window::new_wayland_window(surface);
-        if let Some(screen) = self.active_screen() {
-            screen.layout.add(window.clone(), &screen.grid.clone());
-            self.relayout();
-            self.focus(Some(window));
-        } else {
-            self.space.map_element(window, (0, 0), false);
-        }
+        // placed on its first commit, when its parent (if it is a dialog) is known
+        self.pending.push(Window::new_wayland_window(surface));
     }
 
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
+        self.pending.retain(|w| w.toplevel() != Some(&surface));
         let Some(window) = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned() else { return };
         self.space.unmap_elem(&window);
-        if let Some(i) = self.screen_of(&window) {
+        if let Some((i, k)) = self.workspace_of(&window) {
             let grid = self.screens[i].grid;
-            self.screens[i].layout.remove(&window, &grid);
+            let ws = &mut self.screens[i].workspaces[k];
+            ws.floating.retain(|w| w != &window);
+            if ws.fullscreen.as_ref() == Some(&window) {
+                ws.fullscreen = None;
+            }
+            ws.layout.remove(&window, &grid);
             self.relayout();
-            let next = self.screens[i].layout.focused();
-            self.focus(next);
+            if k == self.screens[i].current {
+                let next = self.screens[i].layout().focused();
+                self.focus(next);
+            }
+        }
+    }
+
+    fn fullscreen_request(&mut self, surface: ToplevelSurface, _output: Option<smithay::reexports::wayland_server::protocol::wl_output::WlOutput>) {
+        let window = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned();
+        if let Some(window) = window {
+            self.set_fullscreen(&window, true);
+        }
+    }
+
+    fn unfullscreen_request(&mut self, surface: ToplevelSurface) {
+        let window = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned();
+        if let Some(window) = window {
+            self.set_fullscreen(&window, false);
         }
     }
 

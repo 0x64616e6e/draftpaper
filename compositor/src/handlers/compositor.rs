@@ -34,12 +34,16 @@ impl CompositorHandler for Draftpaper {
             while let Some(parent) = get_parent(&root) {
                 root = parent;
             }
-            if let Some(window) = self
-                .space
-                .elements()
-                .find(|w| w.toplevel().unwrap().wl_surface() == &root)
-            {
+            if let Some(i) = self.pending.iter().position(|w| w.toplevel().unwrap().wl_surface() == &root) {
+                let window = self.pending.remove(i);
+                self.place(window);
+            }
+            let window = self.space.elements().find(|w| w.toplevel().unwrap().wl_surface() == &root).cloned();
+            if let Some(window) = window {
                 window.on_commit();
+                if self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.floating.contains(&window))) {
+                    self.relayout();
+                }
             }
         };
 

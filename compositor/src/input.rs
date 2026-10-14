@@ -25,15 +25,20 @@ pub enum Action {
     Terminal,
     Close,
     Quit,
+    Workspace(u32),
+    Fullscreen,
+    SendTo(u32),
     /// switch to virtual terminal n (TTY only)
     Vt(i32),
 }
 
 /// The bindings, on Super on the TTY and on Alt when nested inside another desktop (whose window manager
 /// keeps Super for itself): arrows (or h/j/k/l) focus, with Shift move the window, with Ctrl resize by a
-/// zone; Return opens a terminal, Shift+q closes the focused window, Shift+e quits Draftpaper.
+/// zone; Return opens a terminal, f toggles fullscreen, Shift+q closes the focused window, Shift+e quits.
 /// Ctrl+Alt+F1..F12 switch virtual terminals on the TTY.
-fn binding(mods: &ModifiersState, sym: Keysym, tty: bool) -> Option<Action> {
+/// Workspaces: 1..9 and 0 (as 10) show a workspace, with Shift send the focused window there. `raw` is
+/// the key's unshifted symbol, so Shift+1 reads as 1 and not as "!".
+fn binding(mods: &ModifiersState, sym: Keysym, raw_sym: Option<Keysym>, tty: bool) -> Option<Action> {
     let raw = sym.raw();
     if tty && (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12).contains(&raw) {
         return Some(Action::Vt((raw - keysyms::KEY_XF86Switch_VT_1 + 1) as i32));
@@ -48,12 +53,21 @@ fn binding(mods: &ModifiersState, sym: Keysym, tty: bool) -> Option<Action> {
         keysyms::KEY_Down | keysyms::KEY_j | keysyms::KEY_J => Some(Direction::Down),
         _ => None,
     };
+    let digit = raw_sym.map(|k| k.raw()).and_then(|k| match k {
+        keysyms::KEY_1..=keysyms::KEY_9 => Some(k - keysyms::KEY_0),
+        keysyms::KEY_0 => Some(10),
+        _ => None,
+    });
+    if let Some(n) = digit {
+        return Some(if mods.shift { Action::SendTo(n) } else { Action::Workspace(n) });
+    }
     match (dir, mods.shift, mods.ctrl) {
         (Some(d), false, false) => Some(Action::Focus(d)),
         (Some(d), true, false) => Some(Action::Move(d)),
         (Some(d), false, true) => Some(Action::Resize(d)),
         _ => match sym.raw() {
             keysyms::KEY_Return => Some(Action::Terminal),
+            keysyms::KEY_f | keysyms::KEY_F if !mods.shift => Some(Action::Fullscreen),
             keysyms::KEY_q | keysyms::KEY_Q if mods.shift => Some(Action::Close),
             keysyms::KEY_e | keysyms::KEY_E if mods.shift => Some(Action::Quit),
             _ => None,
@@ -76,7 +90,7 @@ impl Draftpaper {
                     event.state(),
                     serial,
                     time,
-                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym(), tty)).flatten() {
+                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty)).flatten() {
                         Some(action) => FilterResult::Intercept(action),
                         None => FilterResult::Forward,
                     },
@@ -146,7 +160,7 @@ impl Draftpaper {
                         self.space.raise_element(&window, true);
                         if let Some(i) = self.screen_of(&window) {
                             self.active = i;
-                            self.screens[i].layout.focus_window(&window);
+                            self.screens[i].layout_mut().focus_window(&window);
                         }
                         keyboard.set_focus(
                             self,
@@ -229,43 +243,51 @@ impl Draftpaper {
         match action {
             Action::Focus(d) => {
                 // at the edge of a screen, on to the neighbouring one
-                let w = match self.neighbour(i, d).filter(|_| self.screens[i].layout.at_edge(d)) {
+                let w = match self.neighbour(i, d).filter(|_| self.screens[i].layout().at_edge(d)) {
                     Some(n) => {
                         self.active = n;
-                        self.screens[n].layout.focused()
+                        self.screens[n].layout().focused()
                     }
-                    None => self.screens[i].layout.focus_dir(d),
+                    None => self.screens[i].layout_mut().focus_dir(d),
                 };
                 self.focus(w);
             }
             Action::Move(d) => {
-                let alone = self.screens[i].layout.at_edge(d);
+                let alone = self.screens[i].layout().at_edge(d);
                 match self.neighbour(i, d).filter(|_| alone) {
                     Some(n) => {
                         // to the neighbouring screen, as a new column there
-                        if let Some(w) = self.screens[i].layout.focused() {
+                        if let Some(w) = self.screens[i].layout().focused() {
                             let (g, gn) = (self.screens[i].grid, self.screens[n].grid);
-                            self.screens[i].layout.remove(&w, &g);
-                            self.screens[n].layout.add(w.clone(), &gn);
+                            self.screens[i].layout_mut().remove(&w, &g);
+                            self.screens[n].layout_mut().add(w.clone(), &gn);
                             self.relayout();
                             self.focus(Some(w));
                         }
                     }
                     None => {
                         let grid = self.screens[i].grid;
-                        self.screens[i].layout.move_dir(d, &grid);
+                        self.screens[i].layout_mut().move_dir(d, &grid);
                         self.relayout();
                     }
                 }
             }
             Action::Resize(d) => {
-                self.screens[i].layout.resize(d);
+                self.screens[i].layout_mut().resize(d);
                 self.relayout();
             }
             Action::Terminal => {
                 let _ = std::process::Command::new("alacritty").spawn();
             }
             Action::Quit => self.loop_signal.stop(),
+            Action::Workspace(n) => self.switch_to(n),
+            Action::Fullscreen => {
+                if let Some(w) = self.focused_window() {
+                    let on = self.workspace_of(&w).is_some_and(|(i, k)| self.screens[i].workspaces[k].fullscreen.as_ref() != Some(&w));
+                    self.set_fullscreen(&w, on);
+                }
+            }
+            Action::SendTo(n) => self.send_to(n),
             Action::Vt(n) => {
                 if let Some(session) = self.session.as_mut() {
                     use smithay::backend::session::Session;
@@ -273,7 +295,7 @@ impl Draftpaper {
                 }
             }
             Action::Close => {
-                if let Some(t) = self.screens.get(i).and_then(|s| s.layout.focused()).and_then(|w| w.toplevel().cloned()) {
+                if let Some(t) = self.screens.get(i).and_then(|s| s.layout().focused()).and_then(|w| w.toplevel().cloned()) {
                     t.send_close();
                 }
             }

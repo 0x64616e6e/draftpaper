@@ -1,5 +1,6 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
 mod compositor;
+mod decoration;
 mod xdg_shell;
 
 use crate::Draftpaper;

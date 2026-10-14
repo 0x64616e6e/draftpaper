@@ -23,6 +23,8 @@ use smithay::{
     },
 };
 
+use smithay::reexports::wayland_protocols::xdg::shell::server::xdg_toplevel;
+
 use crate::CalloopData;
 
 pub struct Draftpaper {
@@ -36,6 +38,7 @@ pub struct Draftpaper {
     // Smithay State
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub xdg_decoration_state: smithay::wayland::shell::xdg::decoration::XdgDecorationState,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Draftpaper>,
@@ -46,6 +49,8 @@ pub struct Draftpaper {
 
     // one screen per output: its zone grid and layout (screens.rs); `active` takes new windows
     pub screens: Vec<crate::screens::Screen>,
+    /// new windows, placed on their first commit (dialogs float, the rest tile)
+    pub pending: Vec<Window>,
     pub active: usize,
 
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
@@ -62,6 +67,7 @@ impl Draftpaper {
 
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        let xdg_decoration_state = smithay::wayland::shell::xdg::decoration::XdgDecorationState::new::<Self>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
@@ -101,6 +107,7 @@ impl Draftpaper {
 
             compositor_state,
             xdg_shell_state,
+            xdg_decoration_state,
             shm_state,
             output_manager_state,
             seat_state,
@@ -108,6 +115,7 @@ impl Draftpaper {
             popups,
             seat,
             screens: Vec::new(),
+            pending: Vec::new(),
             active: 0,
             session: None,
             tty: false,
@@ -180,8 +188,60 @@ impl Draftpaper {
     /// Place the windows on their screens' grids again (after a change in a layout or an output).
     pub fn relayout(&mut self) {
         for s in &self.screens {
-            s.layout.arrange(&mut self.space, &s.grid);
+            // windows of workspaces not shown leave the space
+            for (k, w) in s.workspaces.iter().enumerate() {
+                if k != s.current {
+                    for window in w.layout.windows().chain(w.floating.iter()) {
+                        self.space.unmap_elem(window);
+                    }
+                }
+            }
+            let ws = s.workspace();
+            s.layout().arrange(&mut self.space, &s.grid, ws.fullscreen.as_ref());
+            // dialogs: centred inside the frame at their own size, above the tiles
+            for window in &ws.floating {
+                let size = window.geometry().size;
+                let a = s.grid.area;
+                let loc = (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2);
+                self.space.map_element(window.clone(), loc, false);
+                self.space.raise_element(window, false);
+            }
+            // a fullscreen window covers the whole output, sheet and margins included
+            if let (Some(window), Some(geometry)) = (&ws.fullscreen, self.space.output_geometry(&s.output)) {
+                if let Some(t) = window.toplevel() {
+                    t.with_pending_state(|state| {
+                        state.size = Some(geometry.size);
+                        state.states.set(xdg_toplevel::State::Fullscreen);
+                    });
+                    if t.is_initial_configure_sent() {
+                        t.send_pending_configure();
+                    }
+                }
+                self.space.map_element(window.clone(), geometry.loc, false);
+                self.space.raise_element(window, false);
+            }
         }
+    }
+
+    /// The window with the keyboard focus.
+    pub fn focused_window(&self) -> Option<Window> {
+        let surface = self.seat.get_keyboard()?.current_focus()?;
+        self.space.elements().find(|w| w.toplevel().map(|t| t.wl_surface()) == Some(&surface)).cloned()
+    }
+
+    /// Fullscreen on or off for `window` (on its workspace).
+    pub fn set_fullscreen(&mut self, window: &Window, on: bool) {
+        let Some((i, k)) = self.workspace_of(window) else { return };
+        let ws = &mut self.screens[i].workspaces[k];
+        if on {
+            ws.fullscreen = Some(window.clone());
+        } else if ws.fullscreen.as_ref() == Some(window) {
+            ws.fullscreen = None;
+            if let Some(t) = window.toplevel() {
+                t.with_pending_state(|state| state.states.unset(xdg_toplevel::State::Fullscreen));
+            }
+        }
+        self.relayout();
     }
 
     /// Give the keyboard to `window` (or to nobody) and mark it activated.
@@ -190,7 +250,7 @@ impl Draftpaper {
         if let Some(w) = &window {
             if let Some(i) = self.screen_of(w) {
                 self.active = i;
-                self.screens[i].layout.focus_window(w);
+                self.screens[i].layout_mut().focus_window(w);
             }
             self.space.raise_element(w, true);
         }
@@ -204,5 +264,22 @@ impl Draftpaper {
         }
         let keyboard = self.seat.get_keyboard().unwrap();
         keyboard.set_focus(self, window.and_then(|w| w.toplevel().map(|t| t.wl_surface().clone())), serial);
+    }
+
+    /// Place a new window: a dialog (a window with a parent) floats, anything else joins the layout.
+    pub fn place(&mut self, window: Window) {
+        let dialog = window.toplevel().is_some_and(|t| t.parent().is_some());
+        if let Some(screen) = self.active_screen() {
+            let grid = screen.grid;
+            if dialog {
+                screen.workspace_mut().floating.push(window.clone());
+            } else {
+                screen.layout_mut().add(window.clone(), &grid);
+            }
+            self.relayout();
+            self.focus(Some(window));
+        } else {
+            self.space.map_element(window, (0, 0), false);
+        }
     }
 }

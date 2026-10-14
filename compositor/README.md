@@ -16,8 +16,16 @@ Keys (on Alt while nested, because the outer window manager keeps Super):
 | Alt+arrows, Alt+h/j/k/l | Focus the window left, right, above, below |
 | Alt+Shift+arrows | Move the window: left/right into the neighbouring column (or a new column at the edge), up/down within its column |
 | Alt+Ctrl+arrows | Move the boundary beside the focused window one zone that way |
+| Alt+1..9, Alt+0 | Show workspace 1..10 (numbered across all displays, as in i3) |
+| Alt+Shift+1..9, 0 | Send the focused window to that workspace |
+| Alt+f | Fullscreen on or off (covers the sheet) |
 | Alt+Return | Open a terminal |
 | Alt+Shift+q | Close the focused window |
+| Alt+Shift+e | Quit |
+
+On the TTY (`--tty`) the same keys are on **Super**, and Ctrl+Alt+F1..F12 switch virtual terminals.
+Windows draw no title bars of their own (server-side decorations; GTK 3 apps keep theirs) and get a
+1 px border in the theme's window colours; dialogs float, centred in the frame.
 
 A new window opens a column right of the focused one, and the zones are shared out again; with every
 zone across taken, it stacks as a row instead (#12 decides which should be the rule).
