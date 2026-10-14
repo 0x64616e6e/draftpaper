@@ -1,0 +1,13 @@
+#!/bin/sh
+# draftpaper-session: started by the display manager (draftpaper.desktop) or from a text console.
+# Sets the session's environment and runs the compositor on the TTY backend; the compositor starts
+# draftpaper-session.target (graphical-session.target) once its socket is up, and stops it on exit.
+export XDG_CURRENT_DESKTOP=Draftpaper
+export XDG_SESSION_DESKTOP=draftpaper
+export XDG_SESSION_TYPE=wayland
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM="wayland;xcb"
+export GDK_BACKEND="wayland,x11"
+export SDL_VIDEODRIVER=wayland
+export _JAVA_AWT_WM_NONREPARENTING=1
+exec draftpaper-compositor --tty --session "$@"

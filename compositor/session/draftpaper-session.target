@@ -1,0 +1,7 @@
+[Unit]
+Description=Draftpaper session
+Documentation=https://github.com/0x64616e6e/draftpaper
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+# the shell (margins, title block) joins this target once it runs on Wayland (#25)

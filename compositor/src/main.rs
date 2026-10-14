@@ -31,9 +31,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display: Display<Draftpaper> = Display::new()?;
     let mut data = Draftpaper::new(&mut event_loop, display);
 
-    // draftpaper-compositor [--tty] [--command PROGRAM]
+    // draftpaper-compositor [--tty] [--session] [--command PROGRAM]
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let tty = args.iter().any(|a| a == "--tty");
+    // the TTY backend when asked for, or when there is no display to nest in
+    let tty = args.iter().any(|a| a == "--tty")
+        || (std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none());
+    // --session: started as the login session (draftpaper-session): hand the environment to systemd
+    // and D-Bus and start draftpaper-session.target, stopped again on exit
+    let session = args.iter().any(|a| a == "--session");
     let command = args.iter().position(|a| a == "-c" || a == "--command").and_then(|i| args.get(i + 1)).cloned();
 
     if tty {
@@ -44,6 +49,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
     } else {
         crate::winit::init_winit(&mut event_loop, &mut data)?;
+    }
+
+    if session {
+        let vars = "WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE XDG_SESSION_DESKTOP";
+        let _ = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(format!(
+                "systemctl --user import-environment {vars}; dbus-update-activation-environment --systemd {vars}; \
+                 systemctl --user start draftpaper-session.target"
+            ))
+            .status();
     }
 
     // config.toml: read now, and again whenever it changes
@@ -61,6 +77,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.run(None, &mut data, move |_| {
         // Draftpaper is running
     })?;
+
+    if session {
+        let _ = std::process::Command::new("systemctl").args(["--user", "stop", "draftpaper-session.target"]).status();
+    }
 
     Ok(())
 }
