@@ -12,9 +12,10 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
   zone in red, and volume and brightness appear there for a few seconds after they change.
 - **The bottom margin** has Bluetooth, a screenshot command and the theme name (click it for the next
   theme).
-- **The side margins** hold parked windows. Super+Escape parks the focused window in the next cell, its
-  title lettered up the margin. Click a cell to bring the window back. Park every window of a workspace
-  and the whole sheet shows; Super+Escape there brings them all back.
+- **The side margins** hold parked windows. Super+Escape parks the focused window in the first free
+  cell, its title lettered up the margin; clicking an empty cell parks it in that cell. Click a title to
+  bring the window back. Park every window of a workspace and the whole sheet shows; Super+Escape there
+  brings them all back.
 
 Everything is sized in millimetres of the screen (from the physical size xrandr reports), so the sheet
 looks the same on a laptop panel and a 4K monitor.
@@ -44,9 +45,10 @@ A compositor (picom) is recommended: the margins and the title block are transpa
 | Key | |
 |---|---|
 | Super+Escape | Park the focused window in the side margin; on a workspace with every window parked, bring them all back |
-| Super+Right / Super+Left | Bring back the next / previous parked window and park the focused one in its place; with nothing parked, move the focus |
+| Super+Right / Super+Left | Bring back the parked window in the first / last cell and park the focused one in the next free cell; with nothing parked, move the focus |
 
-Clicks: a workspace number switches to it; a parked window's cell brings it back; the profile cell cycles
+Clicks: a workspace number switches to it; an empty side cell parks the focused window there and a
+parked window's title brings it back; the profile cell cycles
 the power profile; volume mutes on click and changes on scroll; the theme name switches theme.
 
 ## Configuration

@@ -1,17 +1,23 @@
 """Parking: windows go to the side margins and come back.
 
-  draftpaper park toggle      the focused window goes to i3's scratchpad, its title to the next margin
-                              cell; on a workspace with no window left showing, every parked window
-                              comes back tiled
+  draftpaper park toggle      the focused window goes to i3's scratchpad, its title to the first free
+                              margin cell; on a workspace with no window left showing, every parked window
+                              comes back
+  draftpaper park at <cell> [<workspace>]
+                              park the focused window in that cell (a click on an empty cell), if it is
+                              free and the focused window is on <workspace>
   draftpaper park show <id>   bring that parked window back to its workspace
-  draftpaper park next|prev   cycle: the focused window is parked at the end (next) or the front (prev)
-                              of the row and the first (last) parked one comes back; with nothing parked
-                              on the workspace these move the focus right or left
+  draftpaper park next|prev   cycle: the parked window in the first (last) cell comes back and the focused
+                              one takes the next free cell after the last (before the first) occupied
+                              one, round the margin; with nothing parked on the workspace these move the
+                              focus right or left
   draftpaper park save        rewrite the state file
 
-A parked window carries the i3 mark "park:<workspace>:<n>" (n orders the cells). After every change the
-parked windows are written to $XDG_RUNTIME_DIR/draftpaper/parked.json, {workspace: [{id, cls, title}]},
-which the shell watches. i3 brings a window back tiled next to the focused one, not into its old split.
+A parked window carries the i3 mark "park:<workspace>:<cell>"; cells count down the left margin, then the
+right, from 0. The shell tells how many cells a screen has in $XDG_RUNTIME_DIR/draftpaper/cells-<output>.
+After every change the parked windows are written to $XDG_RUNTIME_DIR/draftpaper/parked.json,
+{workspace: [{id, cls, title, cell}]}, which the shell watches. i3 brings a window back tiled next to the
+focused one, not into its old split.
 """
 import json, subprocess, sys
 from . import paths
@@ -77,8 +83,8 @@ def parked(t, ws=None):
 
 def save(t=None):
     t = t or tree()
-    state = {ws: [{"id": l["id"], "cls": (l.get("window_properties") or {}).get("class", ""), "title": l.get("name") or ""}
-                  for _, l, _ in rows] for ws, rows in parked(t).items()}
+    state = {ws: [{"id": l["id"], "cls": (l.get("window_properties") or {}).get("class", ""), "title": l.get("name") or "", "cell": n}
+                  for n, l, _ in rows] for ws, rows in parked(t).items()}
     paths.ensure()
     with open(paths.PARKED, "w") as f:  # in place: the shell's file watch follows the file, not the name
         json.dump(state, f)
@@ -105,17 +111,48 @@ def unpark(leaf, mark):
     cmd(f'[con_id={leaf["id"]}] scratchpad show, floating disable, unmark "{mark}", focus')
 
 
+def cells(ws):
+    """How many margin cells the screen showing `ws` has (the margin writes it), 8 if unknown."""
+    try:
+        out = next(w["output"] for w in json.loads(i3("-t", "get_workspaces")) if w["name"] == ws)
+        with open(paths.RUNTIME / f"cells-{out}") as f:
+            return max(1, int(f.read().strip()))
+    except (StopIteration, OSError, ValueError):
+        return 8
+
+
+def free(rows, total, after=-1, step=1):
+    """The first free cell after `after` going `step`, round the margin; past the end if all are taken."""
+    taken = {n for n, _, _ in rows}
+    for k in range(1, total + 1):
+        c = (after + step * k) % total
+        if c not in taken:
+            return c
+    return max(taken | {total - 1}) + 1
+
+
 def toggle():
     t = tree()
     ws, node = focused_ws(t)
     showing = [l for w, l in windows(t) if w == ws]
     rows = parked(t, ws).get(ws, [])
     if showing and node.get("window"):
-        park(node, ws, max([n for n, _, _ in rows], default=-1) + 1)
+        park(node, ws, free(rows, cells(ws)))
     elif not showing:
         for _, leaf, mark in rows:
             unpark(leaf, mark)
     save()
+
+
+def park_at(cell, space=None):
+    """Park the focused window in `cell`, if it is free, and if `space` is given only when the focused
+    window is on that workspace (the click came from that screen's margin)."""
+    t = tree()
+    ws, node = focused_ws(t)
+    rows = parked(t, ws).get(ws, [])
+    if node.get("window") and (space is None or space == ws) and cell not in {n for n, _, _ in rows}:
+        park(node, ws, cell)
+        save()
 
 
 def show(con_id):
@@ -140,10 +177,12 @@ def cycle(d):
     if not rows:
         cmd("focus right" if d > 0 else "focus left")
         return
-    _, leaf, mark = rows[0] if d > 0 else rows[-1]
+    n0, leaf, mark = rows[0] if d > 0 else rows[-1]
     if node.get("window"):
-        n = rows[-1][0] + 1 if d > 0 else rows[0][0] - 1
-        park(node, ws, n)
+        others = [r for r in rows if r[0] != n0]
+        total = cells(ws)
+        cell = free(others, total, rows[-1][0], 1) if d > 0 else free(others, total, rows[0][0], -1)
+        park(node, ws, cell)
     unpark(leaf, mark)
     save()
 
@@ -153,6 +192,8 @@ def main(a):
         sys.exit(__doc__)
     if a[0] == "toggle":
         toggle()
+    elif a[0] == "at":
+        park_at(int(a[1]), a[2] if len(a) > 2 else None)
     elif a[0] == "show":
         show(int(a[1]))
     elif a[0] in ("next", "prev"):

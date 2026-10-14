@@ -3,7 +3,7 @@
 draftpaper \- the i3 desktop drawn as a drafting sheet
 .SH SYNOPSIS
 .B draftpaper
-.RI start | stop | apply | theme " " [ list | next | NAME ] | park " " [ toggle | next | prev | show " " ID ] | readings | version
+.RI start | stop | apply | theme " " [ list | next | NAME ] | park " " [ toggle | at " " CELL | next | prev | show " " ID ] | readings | version
 .SH DESCRIPTION
 Draftpaper replaces the i3 bar with a drafting sheet: a wallpaper with a frame, zone ticks and a dot grid,
 a live title block carrying the readings, lettered margins, and side-margin cells for parked windows.
@@ -26,9 +26,9 @@ Re-render the sheet and the generated i3 and shell files after a change to the c
 .BR theme " [" list "|" next "|" \fINAME\fR]
 List the themes, switch to the next one, or switch to NAME.
 .TP
-.BR park " " toggle "|" next "|" prev "|" show " " \fIID\fR
-Park the focused window in the side margin (or bring every parked window back on a workspace with none
-showing), cycle through the parked windows, or bring one back.
+.BR park " " toggle "|" at " " \fICELL\fR "|" next "|" prev "|" show " " \fIID\fR
+Park the focused window in the first free side-margin cell or in CELL (or bring every parked window back
+on a workspace with none showing), cycle through the parked windows, or bring one back.
 .TP
 .B readings
 Print the readings the shell polls, as JSON.

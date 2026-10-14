@@ -1,7 +1,8 @@
 // The drafting sheet's side margins (shell.qml, one per screen): a cell per zone, down the left margin
-// first, then the right, each lettered with its zone (A, B, ...). The windows parked on the workspace
-// shown on this screen (Super+Escape, draftpaper park) fill the cells in order, titles running up the margin
-// as a drawing letters its side margins; a click brings that window back.
+// first, then the right, each lettered with its zone (A, B, ...). Each window parked on the workspace
+// shown on this screen (`draftpaper park`) keeps its cell, its title running up the margin as a drawing letters
+// its side margins. A click on a title brings that window back; a click on an empty cell parks the
+// focused window of this screen's workspace there.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -14,8 +15,9 @@ Item {
 
     readonly property var theme: shell.theme
     readonly property color ink: theme.ink
-    property var parked: ({})             // `draftpaper park`'s state file: {workspace: [{id, cls, title}]}
+    property var parked: ({})             // `draftpaper park`'s state file: {workspace: [{id, cls, title, cell}]}
     readonly property var windows: parked[space] || []
+    function at(cell) { return windows.find(w => w.cell === cell) || null }
 
     FileView {
         path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/parked.json"
@@ -25,7 +27,16 @@ Item {
         onTextChanged: { try { cells.parked = JSON.parse(text()) } catch (e) { cells.parked = {} } }
     }
 
-    function act(w) { shell.run([Quickshell.env("DRAFTPAPER_BIN"), "park", "show", String(w.id)]) }
+    function act(cell, w) { shell.run(w ? [shell.bin, "park", "show", String(w.id)] : [shell.bin, "park", "at", String(cell), space]) }
+
+    // how many cells this screen has, for `draftpaper park`'s cycling (left and right margins alike)
+    FileView {
+        id: count
+        path: Quickshell.env("DRAFTPAPER_RUNTIME") + "/cells-" + cells.edge.modelData.name
+        printErrors: false
+    }
+    property int total: 0
+    onTotalChanged: if (total > 0) count.setText(String(total))
 
     Repeater {
         model: ["left", "right"]
@@ -35,6 +46,7 @@ Item {
             required property int index
             edge: cells.edge; ink: cells.ink; inkAlpha: cells.theme.inkAlpha
             side: modelData
+            Component.onCompleted: if (index === 0) cells.total = Qt.binding(() => 2 * sideBand.zones)
             Repeater {
                 model: sideBand.zones
                 Item {              // the delegate holds the Zone (whose own `index` is its place in the band)
@@ -44,7 +56,7 @@ Item {
                         id: zone
                         band: sideBand; index: cell.index
                         readonly property int slot: sideBand.index * sideBand.zones + cell.index
-                        readonly property var win: slot < cells.windows.length ? cells.windows[slot] : null
+                        readonly property var win: cells.at(slot)
                         Text {          // the zone letter, at the cell's head
                             anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 1.5 * cells.edge.mm }
                             text: "ABCDEFGHJKLMNPQRSTUVWXYZ"[zone.index % 24]
@@ -63,8 +75,8 @@ Item {
                             font.family: "IBM Plex Mono"; font.pixelSize: cells.edge.fontPx
                             color: cells.ink
                         }
-                        Rectangle {     // a tick between filled cells is the wallpaper's; a hover mark along the inner edge
-                            visible: hover.hovered && zone.win !== null
+                        Rectangle {     // a hover mark along the inner edge
+                            visible: hover.hovered
                             anchors { top: parent.top; bottom: parent.bottom; topMargin: 6 * cells.edge.mm; bottomMargin: 2 * cells.edge.mm }
                             x: sideBand.side === "left" ? parent.width - width : 0
                             width: Math.max(1, 2 / cells.edge.dpr)
@@ -73,9 +85,8 @@ Item {
                         HoverHandler { id: hover }
                         MouseArea {
                             anchors.fill: parent
-                            enabled: zone.win !== null
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: cells.act(zone.win)
+                            onClicked: cells.act(zone.slot, zone.win)
                         }
                     }
                 }
