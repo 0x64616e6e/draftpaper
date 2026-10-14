@@ -3,6 +3,7 @@
 
 mod handlers;
 
+mod config;
 mod cursor;
 mod input;
 mod layout;
@@ -44,6 +45,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         crate::winit::init_winit(&mut event_loop, &mut data)?;
     }
+
+    // config.toml: read now, and again whenever it changes
+    data.reload_config();
+    event_loop.handle().insert_source(
+        smithay::reexports::calloop::timer::Timer::from_duration(std::time::Duration::from_secs(2)),
+        |_, _, data| {
+            data.reload_config();
+            smithay::reexports::calloop::timer::TimeoutAction::ToDuration(std::time::Duration::from_secs(2))
+        },
+    )?;
 
     std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
 

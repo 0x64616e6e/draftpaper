@@ -12,68 +12,9 @@ use smithay::{
     utils::SERIAL_COUNTER,
 };
 
-use smithay::{backend::input::KeyState, input::keyboard::{xkb::keysyms, Keysym, ModifiersState}};
+use smithay::backend::input::KeyState;
 
-use crate::{layout::Direction, state::Draftpaper};
-
-/// What a key binding does.
-#[derive(Debug, Clone, Copy)]
-pub enum Action {
-    Focus(Direction),
-    Move(Direction),
-    Resize(Direction),
-    Terminal,
-    Close,
-    Quit,
-    Workspace(u32),
-    Fullscreen,
-    SendTo(u32),
-    /// switch to virtual terminal n (TTY only)
-    Vt(i32),
-}
-
-/// The bindings, on Super on the TTY and on Alt when nested inside another desktop (whose window manager
-/// keeps Super for itself): arrows (or h/j/k/l) focus, with Shift move the window, with Ctrl resize by a
-/// zone; Return opens a terminal, f toggles fullscreen, Shift+q closes the focused window, Shift+e quits.
-/// Ctrl+Alt+F1..F12 switch virtual terminals on the TTY.
-/// Workspaces: 1..9 and 0 (as 10) show a workspace, with Shift send the focused window there. `raw` is
-/// the key's unshifted symbol, so Shift+1 reads as 1 and not as "!".
-fn binding(mods: &ModifiersState, sym: Keysym, raw_sym: Option<Keysym>, tty: bool) -> Option<Action> {
-    let raw = sym.raw();
-    if tty && (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12).contains(&raw) {
-        return Some(Action::Vt((raw - keysyms::KEY_XF86Switch_VT_1 + 1) as i32));
-    }
-    if !(if tty { mods.logo } else { mods.alt }) {
-        return None;
-    }
-    let dir = match sym.raw() {
-        keysyms::KEY_Left | keysyms::KEY_h | keysyms::KEY_H => Some(Direction::Left),
-        keysyms::KEY_Right | keysyms::KEY_l | keysyms::KEY_L => Some(Direction::Right),
-        keysyms::KEY_Up | keysyms::KEY_k | keysyms::KEY_K => Some(Direction::Up),
-        keysyms::KEY_Down | keysyms::KEY_j | keysyms::KEY_J => Some(Direction::Down),
-        _ => None,
-    };
-    let digit = raw_sym.map(|k| k.raw()).and_then(|k| match k {
-        keysyms::KEY_1..=keysyms::KEY_9 => Some(k - keysyms::KEY_0),
-        keysyms::KEY_0 => Some(10),
-        _ => None,
-    });
-    if let Some(n) = digit {
-        return Some(if mods.shift { Action::SendTo(n) } else { Action::Workspace(n) });
-    }
-    match (dir, mods.shift, mods.ctrl) {
-        (Some(d), false, false) => Some(Action::Focus(d)),
-        (Some(d), true, false) => Some(Action::Move(d)),
-        (Some(d), false, true) => Some(Action::Resize(d)),
-        _ => match sym.raw() {
-            keysyms::KEY_Return => Some(Action::Terminal),
-            keysyms::KEY_f | keysyms::KEY_F if !mods.shift => Some(Action::Fullscreen),
-            keysyms::KEY_q | keysyms::KEY_Q if mods.shift => Some(Action::Close),
-            keysyms::KEY_e | keysyms::KEY_E if mods.shift => Some(Action::Quit),
-            _ => None,
-        },
-    }
-}
+use crate::{config::Action, state::Draftpaper};
 
 impl Draftpaper {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
@@ -93,8 +34,8 @@ impl Draftpaper {
                     event.state(),
                     serial,
                     time,
-                    |_, mods, keysym| match pressed
-                        .then(|| binding(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty))
+                    |state, mods, keysym| match pressed
+                        .then(|| state.config.action(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty))
                         .flatten()
                         .filter(|a| !locked || matches!(a, Action::Vt(_)))
                     {
@@ -283,8 +224,8 @@ impl Draftpaper {
                 self.screens[i].layout_mut().resize(d);
                 self.relayout();
             }
-            Action::Terminal => {
-                let _ = std::process::Command::new("alacritty").spawn();
+            Action::Spawn(command) => {
+                let _ = std::process::Command::new("sh").arg("-c").arg(command).spawn();
             }
             Action::Quit => self.loop_signal.stop(),
             Action::Workspace(n) => self.switch_to(n),

@@ -67,6 +67,9 @@ pub struct Draftpaper {
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
     pub tty: bool,
+    /// settings and bindings from config.toml (config.rs), read again when the file changes
+    pub config: crate::config::Config,
+    pub config_mtime: Option<std::time::SystemTime>,
     /// the TTY backend's devices and outputs (None when nested)
     pub tty_data: Option<crate::tty::TtyData>,
     pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, Draftpaper>,
@@ -151,6 +154,8 @@ impl Draftpaper {
             active: 0,
             session: None,
             tty: false,
+            config: crate::config::Config::default_config(),
+            config_mtime: None,
             tty_data: None,
             loop_handle: event_loop.handle(),
         }

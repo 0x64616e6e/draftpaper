@@ -23,6 +23,11 @@ Keys (on Alt while nested, because the outer window manager keeps Super):
 | Alt+Shift+q | Close the focused window |
 | Alt+Shift+e | Quit |
 
+Keys, keyboard layout, key repeat and touchpad settings come from `~/.config/draftpaper/config.toml`
+(`[input]`, `[bindings]`; see `src/config.rs` for the format), next to the theme and the margin. The
+file is read again within two seconds of a change; a file that does not parse is reported and the
+previous settings stay.
+
 On the TTY (`--tty`) the same keys are on **Super**, and Ctrl+Alt+F1..F12 switch virtual terminals.
 Windows draw no title bars of their own (server-side decorations; GTK 3 apps keep theirs) and get a
 1 px border in the theme's window colours; dialogs float, centred in the frame.

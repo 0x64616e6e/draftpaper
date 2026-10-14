@@ -64,6 +64,22 @@ pub struct TtyData {
     outputs: HashMap<crtc::Handle, (Output, Surface, connector::Handle)>,
     cursor: Cursor,
     libinput: Libinput,
+    /// input devices, for touchpad settings
+    devices: Vec<smithay::reexports::input::Device>,
+}
+
+impl TtyData {
+    /// Tap to click and natural scrolling on every device that has them.
+    pub fn configure_devices(&mut self, input: &crate::config::Input) {
+        for d in &mut self.devices {
+            if d.config_tap_finger_count() > 0 {
+                let _ = d.config_tap_set_enabled(input.tap);
+            }
+            if d.config_scroll_has_natural_scroll() {
+                let _ = d.config_scroll_set_natural_scroll_enabled(input.natural_scroll);
+            }
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -119,11 +135,20 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone() });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new() });
 
     let handle = event_loop.handle();
     handle
-        .insert_source(LibinputInputBackend::new(libinput), |event, _, data| data.process_input_event(event))
+        .insert_source(LibinputInputBackend::new(libinput), |mut event, _, data| {
+            if let smithay::backend::input::InputEvent::DeviceAdded { device } = &mut event {
+                let input = data.config.input.clone();
+                if let Some(tty) = data.tty_data.as_mut() {
+                    tty.devices.push(device.clone());
+                    tty.configure_devices(&input);
+                }
+            }
+            data.process_input_event(event)
+        })
         .map_err(|e| TtyError::Device(e.to_string()))?;
     handle
         .insert_source(drm_notifier, move |event, _, data| match event {

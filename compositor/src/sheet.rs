@@ -99,6 +99,12 @@ impl SheetRenderer {
     }
 
     /// The sheet for an output of `size`, built once and rebuilt when the size changes.
+    /// A new theme: the shader's uniforms are rebuilt on the next frame.
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        self.element = None;
+    }
+
     /// `size` is the output's logical size and `scale` its scale: the shader works in the physical pixels
     /// it draws, so the frame and the zones land on the same pixels as the layout's (logical) grid.
     pub fn element(&mut self, renderer: &mut GlesRenderer, size: Size<i32, Logical>, scale: f64) -> PixelShaderElement {
