@@ -114,8 +114,8 @@ reply per line, in order (`{"ok": true, "reply": ...}` or `{"ok": false, "error"
 - `subscribe` to `workspaces`, `outputs`, `windows`: the current state at once, then the whole new state
   of a kind whenever it changes. Clients replace their model and never apply deltas, so a client that
   joins late or misses nothing to reconcile.
-- To come with parking (#22, #24): `cells`, `parked`, actions `park`, `park_at <cell>`, `unpark <id>`,
-  `park_next`, `park_prev`.
+- Parking (#22, #24): outputs carry their number of `cells`, windows whether they are `parked` and in
+  which `cell`; actions `park`, `park_at <cell> [<workspace>]`, `unpark <id>`, `park_next`, `park_prev`.
 - `draftpaper-compositor msg <request | action...>` is the client for scripts and testing.
 
 Not i3's protocol: an i3-compatible subset would have kept the 0.1 shell's workspace margin unchanged,

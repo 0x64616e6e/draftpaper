@@ -2,8 +2,8 @@
 // first, then the right, each lettered with its zone (A, B, ...). Each window parked on the workspace
 // shown on this screen keeps its cell, its title running up the margin as a drawing letters its side
 // margins. A click on a title brings that window back; a click on an empty cell parks the focused window
-// of this screen's workspace there. (Parking moves into the compositor, #22 and #24: until then no
-// window is parked and the clicks are answered with an error.)
+// there, if it is on this screen's workspace. The parked set and the parking are the compositor's
+// (compositor/src/parking.rs).
 import QtQuick
 import Quickshell
 
@@ -18,7 +18,7 @@ Item {
     readonly property var windows: shell.parked[space] || []
     function at(cell) { return windows.find(w => w.cell === cell) || null }
 
-    function act(cell, w) { Compositor.action(w ? "unpark " + w.id : "park_at " + cell) }
+    function act(cell, w) { Compositor.action(w ? "unpark " + w.id : "park_at " + cell + " " + space) }
 
     Repeater {
         model: ["left", "right"]

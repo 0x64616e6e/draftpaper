@@ -36,6 +36,15 @@ pub enum Action {
     Spawn(String),
     /// every output to ~/Pictures (TTY only)
     Screenshot,
+    /// park the focused window in the first free cell, or, with nothing showing, bring every parked
+    /// window back (parking.rs)
+    Park,
+    /// park the focused window in cell n, if free (and, given a workspace, only if it is on that one)
+    ParkAt(usize, Option<u32>),
+    /// bring back the parked window with this IPC id
+    Unpark(u64),
+    /// cycle through the parked windows (+1 next, -1 previous); with none parked, move the focus
+    ParkCycle(i32),
     /// switch to virtual terminal n (TTY only; Ctrl+Alt+F1..F12, not configurable)
     Vt(i32),
 }
@@ -79,7 +88,8 @@ pub fn path() -> PathBuf {
 
 /// The bindings when the file names none: the same keys as the i3 edition and the prototype so far.
 const DEFAULT_BINDINGS: &[(&str, &str)] = &[
-    ("Mod+Left", "focus left"), ("Mod+Right", "focus right"), ("Mod+Up", "focus up"), ("Mod+Down", "focus down"),
+    // as in the i3 edition: Mod+Left/Right cycle the parked windows, and move the focus when none are
+    ("Mod+Left", "park_prev"), ("Mod+Right", "park_next"), ("Mod+Up", "focus up"), ("Mod+Down", "focus down"),
     ("Mod+h", "focus left"), ("Mod+l", "focus right"), ("Mod+k", "focus up"), ("Mod+j", "focus down"),
     ("Mod+Shift+Left", "move left"), ("Mod+Shift+Right", "move right"), ("Mod+Shift+Up", "move up"), ("Mod+Shift+Down", "move down"),
     ("Mod+Shift+h", "move left"), ("Mod+Shift+l", "move right"), ("Mod+Shift+k", "move up"), ("Mod+Shift+j", "move down"),
@@ -89,6 +99,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+1", "send 1"), ("Mod+Shift+2", "send 2"), ("Mod+Shift+3", "send 3"), ("Mod+Shift+4", "send 4"), ("Mod+Shift+5", "send 5"),
     ("Mod+Shift+6", "send 6"), ("Mod+Shift+7", "send 7"), ("Mod+Shift+8", "send 8"), ("Mod+Shift+9", "send 9"), ("Mod+Shift+0", "send 10"),
     ("Mod+f", "fullscreen"),
+    ("Mod+Escape", "park"),
     ("Mod+Return", "spawn alacritty"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
@@ -119,6 +130,19 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
         "close" => Action::Close,
         "quit" => Action::Quit,
         "screenshot" => Action::Screenshot,
+        "park" => Action::Park,
+        "park_at" => {
+            let mut parts = arg.split_whitespace();
+            let cell = parts.next().and_then(|c| c.parse().ok()).ok_or_else(|| format!("\"{s}\": park_at CELL [WORKSPACE]"))?;
+            let ws = match parts.next() {
+                Some(w) => Some(w.parse().map_err(|_| format!("\"{s}\": the workspace is a number"))?),
+                None => None,
+            };
+            Action::ParkAt(cell, ws)
+        }
+        "unpark" => Action::Unpark(arg.parse().map_err(|_| format!("\"{s}\": unpark WINDOW-ID"))?),
+        "park_next" => Action::ParkCycle(1),
+        "park_prev" => Action::ParkCycle(-1),
         "spawn" if !arg.is_empty() => Action::Spawn(arg.to_string()),
         _ => return Err(format!("\"{s}\": not an action")),
     }))

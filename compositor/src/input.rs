@@ -212,6 +212,10 @@ impl Draftpaper {
             }
             Action::Quit => self.loop_signal.stop(),
             Action::Screenshot => crate::tty::screenshot(self),
+            Action::Park => self.park_toggle(),
+            Action::ParkAt(cell, ws) => self.park_at(cell, ws),
+            Action::Unpark(id) => self.unpark(id),
+            Action::ParkCycle(d) => self.park_cycle(d),
             Action::Workspace(n) => self.switch_to(n),
             Action::Fullscreen => {
                 if let Some(w) = self.focused_window() {

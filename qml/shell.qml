@@ -90,9 +90,17 @@ ShellRoot {
     property bool settled: false
     Timer { interval: 3000; running: true; onTriggered: root.settled = true }
 
-    // the parked windows ({workspace number: [{id, cls, title, cell}]}): from the compositor once it parks
-    // (#22, #24); none until then
-    property var parked: ({})
+    // the parked windows by workspace number ({"2": [{id, cls, title, cell}]}), from the compositor
+    readonly property var parked: {
+        const byWorkspace = {}
+        for (const w of Compositor.windows) {
+            if (!w.parked) continue
+            const k = String(w.workspace)
+            if (!byWorkspace[k]) byWorkspace[k] = []
+            byWorkspace[k].push({ id: w.id, cls: w.app_id, title: w.title, cell: w.cell })
+        }
+        return byWorkspace
+    }
     property bool volumeLit: false
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }

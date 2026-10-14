@@ -22,15 +22,22 @@ pub struct Workspace {
     pub fullscreen: Option<Window>,
     /// dialogs (windows with a parent): centred inside the frame, above the tiles
     pub floating: Vec<Window>,
+    /// parked windows, in the order they were parked (parking.rs)
+    pub parked: Vec<crate::parking::Parked>,
 }
 
 impl Workspace {
     pub fn new(number: u32) -> Workspace {
-        Workspace { number, layout: Layout::default(), fullscreen: None, floating: Vec::new() }
+        Workspace { number, layout: Layout::default(), fullscreen: None, floating: Vec::new(), parked: Vec::new() }
     }
 
     pub fn holds(&self, window: &Window) -> bool {
-        self.layout.contains(window) || self.floating.contains(window)
+        self.layout.contains(window) || self.floating.contains(window) || self.parked.iter().any(|p| &p.window == window)
+    }
+
+    /// Nothing in it, parked windows included: it may go away.
+    pub fn is_empty(&self) -> bool {
+        self.layout.windows().next().is_none() && self.floating.is_empty() && self.fullscreen.is_none() && self.parked.is_empty()
     }
 }
 
@@ -106,7 +113,7 @@ impl Draftpaper {
         let old = s.current;
         s.current = k;
         // an empty workspace that is left behind goes away
-        if old != k && s.workspaces[old].layout.windows().next().is_none() && s.workspaces[old].floating.is_empty() {
+        if old != k && s.workspaces[old].is_empty() {
             s.workspaces.remove(old);
             if old < k {
                 s.current -= 1;

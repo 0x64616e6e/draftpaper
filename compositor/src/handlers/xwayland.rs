@@ -92,6 +92,7 @@ impl Draftpaper {
             let grid = self.screens[i].grid;
             let ws = &mut self.screens[i].workspaces[k];
             ws.floating.retain(|w| w != &window);
+            ws.parked.retain(|p| p.window != window);
             if ws.fullscreen.as_ref() == Some(&window) {
                 ws.fullscreen = None;
             }

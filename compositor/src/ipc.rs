@@ -9,7 +9,8 @@
 //! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
 //! {"event": "workspaces", "workspaces": [...]} (likewise outputs, windows): clients replace their model
-//! and never apply deltas. Outputs carry the sheet's geometry (frame, margin, zones), for the shell.
+//! and never apply deltas. Outputs carry the sheet's geometry (frame, margin, zones, parking cells), for
+//! the shell; windows say whether they are parked, and in which cell.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -56,7 +57,7 @@ pub struct Ipc {
 struct WindowId(u64);
 static NEXT_WINDOW: AtomicU64 = AtomicU64::new(1);
 
-fn window_id(window: &Window) -> u64 {
+pub(crate) fn window_id(window: &Window) -> u64 {
     window.user_data().get_or_insert(|| WindowId(NEXT_WINDOW.fetch_add(1, Ordering::Relaxed))).0
 }
 
@@ -219,6 +220,8 @@ impl Draftpaper {
                         "margin": margin,
                         "frame": { "x": frame.0, "y": frame.1, "width": frame.2, "height": frame.3 },
                         "zones": { "across": s.grid.zones.0, "down": s.grid.zones.1, "width": s.grid.zone.0, "height": s.grid.zone.1 },
+                        // parking cells: down the left margin, then the right, one per zone
+                        "cells": self.cells(i),
                     }))
                 })
                 .collect(),
@@ -238,6 +241,7 @@ impl Draftpaper {
                         "shown": k == s.current,
                         "focused": k == s.current && i == self.active,
                         "windows": w.layout.windows().count() + w.floating.len(),
+                        "parked": w.parked.len(),
                     })
                 })
             })
@@ -251,11 +255,12 @@ impl Draftpaper {
         let mut all = Vec::new();
         for s in &self.screens {
             for (k, w) in s.workspaces.iter().enumerate() {
-                let tiled = w.layout.windows().map(|x| (x, false));
-                let floating = w.floating.iter().map(|x| (x, true));
-                for (window, floats) in tiled.chain(floating) {
+                let tiled = w.layout.windows().map(|x| (x, false, None));
+                let floating = w.floating.iter().map(|x| (x, true, None));
+                let parked = w.parked.iter().map(|p| (&p.window, false, Some(p.cell)));
+                for (window, floats, cell) in tiled.chain(floating).chain(parked) {
                     let (app_id, title, x11) = names(window);
-                    let geometry = self.space.element_location(window).filter(|_| k == s.current).map(|loc| {
+                    let geometry = self.space.element_location(window).filter(|_| k == s.current && cell.is_none()).map(|loc| {
                         let size = window.geometry().size;
                         json!({ "x": loc.x, "y": loc.y, "width": size.w, "height": size.h })
                     });
@@ -269,6 +274,8 @@ impl Draftpaper {
                         "focused": focused.as_ref() == Some(window),
                         "floating": floats,
                         "fullscreen": w.fullscreen.as_ref() == Some(window),
+                        "parked": cell.is_some(),
+                        "cell": cell,
                         "geometry": geometry,
                     }));
                 }

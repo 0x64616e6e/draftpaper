@@ -297,7 +297,7 @@ impl Draftpaper {
         // moved while another workspace was shown)
         for s in &mut self.screens {
             let current = s.workspaces[s.current].number;
-            s.workspaces.retain(|w| w.number == current || w.layout.windows().next().is_some() || !w.floating.is_empty() || w.fullscreen.is_some());
+            s.workspaces.retain(|w| w.number == current || !w.is_empty());
             s.current = s.workspaces.iter().position(|w| w.number == current).unwrap_or(0);
         }
         for s in &self.screens {
@@ -371,11 +371,13 @@ impl Draftpaper {
         }
     }
 
-    /// The first window, mapped or on a workspace not shown, for which `f` holds.
+    /// The first window, mapped, on a workspace not shown or parked, for which `f` holds.
     pub fn window_where(&self, f: impl Fn(&Window) -> bool) -> Option<Window> {
         self.space
             .elements()
-            .chain(self.screens.iter().flat_map(|s| s.workspaces.iter().flat_map(|w| w.layout.windows().chain(w.floating.iter()))))
+            .chain(self.screens.iter().flat_map(|s| {
+                s.workspaces.iter().flat_map(|w| w.layout.windows().chain(w.floating.iter()).chain(w.parked.iter().map(|p| &p.window)))
+            }))
             .find(|w| f(w))
             .cloned()
     }

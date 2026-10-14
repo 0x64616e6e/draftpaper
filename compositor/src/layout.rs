@@ -6,6 +6,10 @@
 //! A new window opens a column to the right of the focused one and the zones are shared out again; once
 //! there are as many columns as zones across, new windows stack as rows in the focused column instead.
 //! (Which of the two a new window should do is issue #12.)
+//!
+//! A parked window leaves the layout and leaves a placeholder (Placeholder): its neighbours and the
+//! layout's sizes then, so it comes back to the same place, and to the same sizes when nothing else
+//! changed meanwhile.
 
 use smithay::{
     desktop::{Space, Window},
@@ -73,6 +77,22 @@ struct Column {
     width: u32,
     /// height of each row in zones down (fractions only when rows outnumber the zones)
     heights: Vec<f64>,
+}
+
+/// Where a parked window was in the layout, to put it back there (Layout::park, Layout::unpark).
+#[derive(Debug, Clone)]
+pub struct Placeholder {
+    /// in a column with other windows: those windows, and its neighbours above and below
+    column: Vec<Window>,
+    above: Option<Window>,
+    below: Option<Window>,
+    /// the windows of the columns left and right of its column (for a column of its own)
+    left: Vec<Window>,
+    right: Vec<Window>,
+    /// its column and row then: the last resort
+    index: (usize, usize),
+    /// the layout before it left; when the layout is that again once it is back, its sizes are too
+    before: Vec<(Vec<Window>, u32, Vec<f64>)>,
 }
 
 #[derive(Debug, Default)]
@@ -165,6 +185,68 @@ impl Layout {
         } else {
             Self::reshare_rows(&mut self.columns[c], grid);
             self.focus = Some((c, r.min(self.columns[c].windows.len() - 1)));
+        }
+    }
+
+    /// The windows column by column, with the columns' widths and the rows' heights.
+    fn snapshot(&self) -> Vec<(Vec<Window>, u32, Vec<f64>)> {
+        self.columns.iter().map(|c| (c.windows.clone(), c.width, c.heights.clone())).collect()
+    }
+
+    /// Take `window` out of the layout, remembering where it was.
+    pub fn park(&mut self, window: &Window, grid: &Grid) -> Option<Placeholder> {
+        let (c, r) = self.find(window)?;
+        let col = &self.columns[c].windows;
+        let others: Vec<Window> = col.iter().filter(|w| *w != window).cloned().collect();
+        let placeholder = Placeholder {
+            above: if others.is_empty() { None } else { r.checked_sub(1).map(|i| col[i].clone()) },
+            below: if others.is_empty() { None } else { col.get(r + 1).cloned() },
+            column: others,
+            left: c.checked_sub(1).map(|i| self.columns[i].windows.clone()).unwrap_or_default(),
+            right: self.columns.get(c + 1).map(|col| col.windows.clone()).unwrap_or_default(),
+            index: (c, r),
+            before: self.snapshot(),
+        };
+        self.remove(window, grid);
+        Some(placeholder)
+    }
+
+    /// Put a parked window back where its placeholder says: into its column between the same
+    /// neighbours, or as its own column between the same columns (at the nearest place when those have
+    /// gone). With the layout as it was before, the sizes are as they were too.
+    pub fn unpark(&mut self, window: Window, placeholder: &Placeholder, grid: &Grid) {
+        let column_of = |ws: &[Window], cols: &[Column]| cols.iter().position(|c| c.windows.iter().any(|w| ws.contains(w)));
+        if let Some(c) = (!placeholder.column.is_empty()).then(|| column_of(&placeholder.column, &self.columns)).flatten() {
+            let col = &self.columns[c].windows;
+            let r = placeholder
+                .above
+                .as_ref()
+                .and_then(|a| col.iter().position(|w| w == a))
+                .map(|i| i + 1)
+                .or_else(|| placeholder.below.as_ref().and_then(|b| col.iter().position(|w| w == b)))
+                .unwrap_or(placeholder.index.1.min(col.len()));
+            self.columns[c].windows.insert(r, window);
+            Self::reshare_rows(&mut self.columns[c], grid);
+            self.focus = Some((c, r));
+        } else if (self.columns.len() as u32) < grid.zones.0 {
+            let c = column_of(&placeholder.left, &self.columns)
+                .map(|i| i + 1)
+                .or_else(|| column_of(&placeholder.right, &self.columns))
+                .unwrap_or(placeholder.index.0.min(self.columns.len()));
+            self.columns.insert(c, Column { windows: vec![window], width: 1, heights: vec![] });
+            Self::reshare_rows(&mut self.columns[c], grid);
+            self.reshare_columns(grid);
+            self.focus = Some((c, 0));
+        } else {
+            // no room for a column of its own: placed like a new window
+            self.add(window, grid);
+        }
+        let windows = |s: &[(Vec<Window>, u32, Vec<f64>)]| s.iter().map(|c| c.0.clone()).collect::<Vec<_>>();
+        if windows(&self.snapshot()) == windows(&placeholder.before) {
+            for (col, (_, width, heights)) in self.columns.iter_mut().zip(&placeholder.before) {
+                col.width = *width;
+                col.heights = heights.clone();
+            }
         }
     }
 
