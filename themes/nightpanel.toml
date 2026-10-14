@@ -1,0 +1,31 @@
+# Night Panel: a black instrument panel, as in Saab's night panel: only what matters is lit, in amber.
+# The sheet's lines and lettering are the warm grey of unlit gauge markings; the focused workspace and
+# window are lit in amber, warnings in red, and the paper keeps only a faint amber glow. Lettering is
+# 7:1 or better against the paper, the lit workspace 9.6:1, alerts 5.9:1.
+label = "Night Panel"
+
+paper       = "#0B0C0E"   # the panel: the middle of the sheet
+paper_light = "#15171B"   # top left
+paper_shade = "#060708"   # bottom right
+glow        = "#3A2A12"   # a faint amber illumination
+ink         = "#A39C89"   # unlit gauge markings
+alert       = "#FF4B3E"   # warnings: red is kept for them
+strong      = "#FFA028"   # the focused workspace, lit in amber
+
+[sheet]
+angle            = 54
+midpoint         = 0.45
+blend            = 1.0
+shading          = 1.0
+glow_strength    = 0.5
+glow_size        = 1.2
+pattern_strength = 0.35    # the markings stay unlit: faint
+
+[windows]
+focused          = "#FFA028"   # amber illumination
+focused_inactive = "#2E333C"
+unfocused        = "#1A1D22"
+urgent           = "#FF4B3E"
+text             = "#E8DFC9"
+text_inactive    = "#77736A"
+background       = "#0B0C0E"

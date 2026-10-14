@@ -108,8 +108,10 @@ Apply changes with `draftpaper apply`.
 
 ## Themes
 
-Two themes ship: **Soft Glow** (warm greige paper, above) and **Blueprint** (a dark sheet: Prussian-blue
-paper drawn in pale blue-white).
+Four themes ship: **Soft Glow** (warm greige paper, above), **Blueprint** (a dark sheet: Prussian-blue
+paper drawn in pale blue-white), **Day Panel** (the CDE workstation palette: steel-blue paper, dark
+lettering, Saab amber as the accent) and **Night Panel** (a black instrument panel: unlit markings, only
+the focused workspace and window lit in amber, warnings in red).
 
 ![The Blueprint theme with two windows parked](docs/blueprint.jpg)
 

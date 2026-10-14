@@ -1,0 +1,31 @@
+# Day Panel: the sheet in the CDE "Default" palette, as a 1990s Unix workstation drew its desktop: the
+# front panel's steel blue for the paper, the backdrop's deeper steel in the shade, dark lettering, and
+# Saab amber as the one accent. Lettering is 6:1 or better against the paper, alerts 4:1 or better
+# (5.4:1; 4.3:1 in the shaded corner).
+label = "Day Panel"
+
+paper       = "#93ABBF"   # CDE front panel: the middle of the sheet
+paper_light = "#A9BDCE"   # top left
+paper_shade = "#8998AA"   # bottom right: the CDE workspace backdrop
+glow        = "#D2DEE9"   # a little daylight on the steel
+ink         = "#1C1F2A"   # lines and lettering
+alert       = "#5E1A1F"   # alert lettering: a deep red that holds on steel blue
+strong      = "#000000"   # the focused workspace
+
+[sheet]
+angle            = 54
+midpoint         = 0.45
+blend            = 1.0
+shading          = 1.0
+glow_strength    = 0.6
+glow_size        = 1.0
+pattern_strength = 0.45
+
+[windows]
+focused          = "#D97B12"   # Saab amber
+focused_inactive = "#999999"   # CDE inactive frame
+unfocused        = "#5D6B7D"
+urgent           = "#A8323A"
+text             = "#1C1F2A"
+text_inactive    = "#3D3A44"
+background       = "#C6B2A8"   # CDE application background
