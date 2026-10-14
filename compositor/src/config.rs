@@ -34,6 +34,8 @@ pub enum Action {
     Close,
     Quit,
     Spawn(String),
+    /// every output to ~/Pictures (TTY only)
+    Screenshot,
     /// switch to virtual terminal n (TTY only; Ctrl+Alt+F1..F12, not configurable)
     Vt(i32),
 }
@@ -90,6 +92,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Return", "spawn alacritty"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
+    ("Print", "screenshot"),
 ];
 
 fn parse_action(s: &str) -> Result<Option<Action>, String> {
@@ -115,6 +118,7 @@ fn parse_action(s: &str) -> Result<Option<Action>, String> {
         "fullscreen" => Action::Fullscreen,
         "close" => Action::Close,
         "quit" => Action::Quit,
+        "screenshot" => Action::Screenshot,
         "spawn" if !arg.is_empty() => Action::Spawn(arg.to_string()),
         _ => return Err(format!("\"{s}\": not an action")),
     }))

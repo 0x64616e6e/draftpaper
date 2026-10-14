@@ -16,6 +16,9 @@ bitflags = "2.2.1"
 toml = "0.8"
 thiserror = "2"
 xcursor = "0.3"
+png = "0.17"
+# signals: SIGTERM ends the session cleanly, SIGUSR1 takes a screenshot
+calloop = { version = "0.14", features = ["signals"] }
 
 [dependencies.smithay]
 version = "=0.7.0"

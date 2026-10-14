@@ -211,6 +211,7 @@ impl Draftpaper {
                 let _ = std::process::Command::new("sh").arg("-c").arg(command).spawn();
             }
             Action::Quit => self.loop_signal.stop(),
+            Action::Screenshot => crate::tty::screenshot(self),
             Action::Workspace(n) => self.switch_to(n),
             Action::Fullscreen => {
                 if let Some(w) = self.focused_window() {

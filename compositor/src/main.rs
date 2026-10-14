@@ -78,6 +78,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
 
+    // SIGTERM, SIGINT, SIGHUP: leave the loop, so Xwayland's lock and sockets and the session target are
+    // cleaned up; SIGUSR1: a screenshot (as the Print key). Children get a clean signal mask (std's Command).
+    use smithay::reexports::calloop::signals::{Signal, Signals};
+    event_loop.handle().insert_source(
+        Signals::new(&[Signal::SIGTERM, Signal::SIGINT, Signal::SIGHUP, Signal::SIGUSR1])?,
+        |event, _, data| match event.signal() {
+            Signal::SIGUSR1 => crate::tty::screenshot(data),
+            _ => data.loop_signal.stop(),
+        },
+    )?;
+
     event_loop.run(None, &mut data, move |_| {
         // Draftpaper is running
     })?;

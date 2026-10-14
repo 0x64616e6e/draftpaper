@@ -1,5 +1,5 @@
 //! The sheet, drawn by the GPU under every window: the same picture as the i3 edition's render.py
-//! (paper gradient and blooms, 5 mm dots, the frame, zone ticks across the margins, crop marks, dither),
+//! (paper gradient and blooms, 5 mm dots, the frame, zone ticks across the margins, dither; the i3 edition also draws crop marks in the corners),
 //! computed per pixel in a fragment shader. Sizes are in the output's pixels per millimetre.
 
 use smithay::{
@@ -29,6 +29,8 @@ uniform vec4 shape;
 uniform vec4 strength;
 // margin (px), zones across, zones down
 uniform vec3 grid;
+// the output in physical pixels (Smithay's `size` is the element's logical size)
+uniform vec2 physical;
 
 float bloom(vec2 uv, vec2 c, float r, float k) {
     vec2 d = vec2((uv.x - c.x) * size.x / size.y, uv.y - c.y);
@@ -41,8 +43,8 @@ float near(float p, float at) { return step(abs(p - at), 0.5); }
 
 void main() {
     vec2 uv = v_coords;
-    vec2 px = floor(v_coords * size);          // pixel, origin top left
-    float w = size.x, h = size.y, mm = strength.w, mg = grid.x;
+    vec2 px = floor(v_coords * physical);      // physical pixel, origin top left
+    float w = physical.x, h = physical.y, mm = strength.w, mg = grid.x;
 
     // the paper: light -> paper -> shade along the angle, smoothstepped, then three blooms of glow
     float ca = cos(shape.x), sa = sin(shape.x);
@@ -57,7 +59,7 @@ void main() {
     c += (glow - c) * bloom(uv, vec2(0.42, 0.88), 0.48, 0.30);
 
     // the pattern, as an alpha mask: dots every 5 mm (counted from the bottom-left corner), the frame
-    // two pixels wide, a tick at every zone boundary across the margins, crop marks in the corners
+    // two pixels wide, a tick at every zone boundary across the margins
     float m = 0.0;
     float stp = floor(5.0 * mm);
     if (mod(px.x, stp) < 1.0 && mod(h - 1.0 - px.y, stp) < 1.0) m = max(m, 0.6);
@@ -69,11 +71,6 @@ void main() {
         m = max(m, 0.6 * near(px.x, mg + floor((px.x - mg) / zw + 0.5) * zw));
     if ((px.x < mg || px.x >= w - mg) && px.y >= mg - 0.5 && px.y <= h - mg + 0.5)
         m = max(m, 0.6 * near(px.y, mg + floor((px.y - mg) / zh + 0.5) * zh));
-    float arm = min(3.0 * mm, mg * 0.45);
-    vec2 cc = vec2(px.x < w / 2.0 ? mg / 2.0 : w - mg / 2.0, px.y < h / 2.0 ? mg / 2.0 : h - mg / 2.0);
-    vec2 pc = px + 0.5;                         // pixel centre: the marks sit on half-pixel positions
-    if ((abs(pc.y - cc.y) <= 0.5 && abs(pc.x - cc.x) <= arm) || (abs(pc.x - cc.x) <= 0.5 && abs(pc.y - cc.y) <= arm))
-        m = max(m, 0.7);
     c += (ink - c) * m * strength.z;
 
     // half a level of noise so the 8-bit steps of the gradient do not band
@@ -118,6 +115,7 @@ impl SheetRenderer {
                 UniformName::new("shape", UniformType::_4f),
                 UniformName::new("strength", UniformType::_4f),
                 UniformName::new("grid", UniformType::_3f),
+                UniformName::new("physical", UniformType::_2f),
             ];
             self.program = Some(renderer.compile_custom_pixel_shader(SHADER, &names).expect("the sheet shader compiles"));
         }
@@ -138,6 +136,7 @@ impl SheetRenderer {
                 Uniform::new("shape", [s.angle.to_radians(), s.midpoint, s.blend, s.shading]),
                 Uniform::new("strength", [s.glow_strength, s.glow_size, s.pattern_strength, self.mm]),
                 Uniform::new("grid", [margin, zones(physical.0), zones(physical.1)]),
+                Uniform::new("physical", [physical.0, physical.1]),
             ];
             self.element = Some(PixelShaderElement::new(
                 self.program.clone().unwrap(),

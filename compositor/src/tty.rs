@@ -354,3 +354,44 @@ fn after_frame(data: &mut Draftpaper, output: &smithay::output::Output, queued: 
         });
     }
 }
+
+/// Every output as drawn (without the pointer), to ~/Pictures/draftpaper-<seconds>-<output>.png.
+pub fn screenshot(data: &mut Draftpaper) {
+    let Some(mut tty) = data.tty_data.take() else { return };
+    let outputs: Vec<Output> = tty.outputs.values().map(|(o, _, _)| o.clone()).collect();
+    let dir = PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join("Pictures");
+    let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    for output in outputs {
+        let path = dir.join(format!("draftpaper-{stamp}-{}.png", output.name()));
+        match capture(data, &mut tty.renderer, &output, &path) {
+            Ok(()) => eprintln!("draftpaper: screenshot {}", path.display()),
+            Err(e) => eprintln!("draftpaper: screenshot of {}: {e}", output.name()),
+        }
+    }
+    data.tty_data = Some(tty);
+}
+
+fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, path: &std::path::Path) -> Result<(), String> {
+    use smithay::backend::renderer::{damage::OutputDamageTracker, gles::GlesTexture, Bind, ExportMem, Offscreen};
+    use smithay::utils::{Rectangle, Size};
+    let mode = output.current_mode().ok_or("no mode")?;
+    let size: Size<i32, smithay::utils::Buffer> = (mode.size.w, mode.size.h).into();
+    let elements = output_elements(data, renderer, output, None);
+    let mut texture: GlesTexture = renderer.create_buffer(Fourcc::Abgr8888, size).map_err(|e| format!("{e:?}"))?;
+    let pixels = {
+        let mut target = renderer.bind(&mut texture).map_err(|e| format!("{e:?}"))?;
+        let mut damage = OutputDamageTracker::from_output(output);
+        damage.render_output(renderer, &mut target, 0, &elements, [0.1, 0.1, 0.1, 1.0]).map_err(|e| format!("{e:?}"))?;
+        let mapping = renderer.copy_framebuffer(&target, Rectangle::from_size(size), Fourcc::Abgr8888).map_err(|e| format!("{e:?}"))?;
+        renderer.map_texture(&mapping).map_err(|e| format!("{e:?}"))?.to_vec()
+    };
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size.w as u32, size.h as u32);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    // opaque: the alpha the renderer leaves is not the picture's
+    let mut rgba = pixels;
+    rgba.chunks_exact_mut(4).for_each(|p| p[3] = 255);
+    encoder.write_header().and_then(|mut w| w.write_image_data(&rgba)).map_err(|e| e.to_string())
+}
