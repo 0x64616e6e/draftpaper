@@ -392,10 +392,12 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|workspaces|windows|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|subscribe KIND...|ACTION");
             return 2;
         }
-        Some(r @ ("version" | "outputs" | "workspaces" | "windows")) => json!({ "request": r }),
+        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output")) => {
+            json!({ "request": if r == "focused-output" { "outputs" } else { r } })
+        }
         Some("subscribe") => json!({ "request": "subscribe", "events": args[1..] }),
         Some(_) => json!({ "request": "action", "action": args.join(" ") }),
     };
@@ -416,6 +418,17 @@ pub fn msg(args: &[String]) -> i32 {
     if reply["ok"] != true {
         eprintln!("draftpaper: {}", reply["error"].as_str().unwrap_or("no reply"));
         return 1;
+    }
+    if args[0] == "focused-output" {
+        // the name alone, for scripts: grim -o "$(draftpaper-compositor msg focused-output)"
+        let name = reply["reply"].as_array().and_then(|o| o.iter().find(|o| o["focused"] == true)).and_then(|o| o["name"].as_str());
+        return match name {
+            Some(n) => {
+                println!("{n}");
+                0
+            }
+            None => 1,
+        };
     }
     if !subscribing {
         if !reply["reply"].is_null() {
