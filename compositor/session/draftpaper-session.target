@@ -6,3 +6,5 @@ Wants=graphical-session-pre.target
 After=graphical-session-pre.target
 # the shell: the margins and the title block
 Wants=draftpaper-shell.service
+# idle: the displays off, locking (swayidle)
+Wants=draftpaper-idle.service

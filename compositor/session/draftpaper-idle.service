@@ -1,0 +1,12 @@
+[Unit]
+Description=Draftpaper idle (displays off, locking; ~/.config/draftpaper/config.toml [idle])
+Documentation=https://github.com/0x64616e6e/draftpaper
+PartOf=draftpaper-session.target
+After=draftpaper-session.target
+
+[Service]
+# the config is written by `draftpaper apply`, which restarts this when it changes
+ExecStartPre=draftpaper apply
+ExecStart=swayidle -w -C %h/.cache/draftpaper/swayidle.conf
+Restart=on-failure
+RestartSec=2

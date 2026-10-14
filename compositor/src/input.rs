@@ -19,6 +19,10 @@ impl Draftpaper {
     pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
         let seat = self.seat.clone();
         self.idle_notifier_state.notify_activity(&seat);
+        // the displays were turned off: any input turns them on (swayidle's resume does too)
+        if self.screens_off {
+            crate::tty::set_power(self, true);
+        }
         match event {
             InputEvent::Keyboard { event, .. } => {
                 let serial = SERIAL_COUNTER.next_serial();
@@ -243,6 +247,7 @@ impl Draftpaper {
             Action::ParkAt(cell, ws) => self.park_at(cell, ws),
             Action::Unpark(id) => self.unpark(id),
             Action::ParkCycle(d) => self.park_cycle(d),
+            Action::Power(on) => crate::tty::set_power(self, on),
             Action::Workspace(n) => self.switch_to(n),
             Action::Fullscreen => {
                 if let Some(w) = self.focused_window() {

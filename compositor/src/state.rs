@@ -51,6 +51,10 @@ pub struct Draftpaper {
     pub idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState<Self>,
     pub idle_inhibit_state: smithay::wayland::idle_inhibit::IdleInhibitManagerState,
     pub locked: bool,
+    /// the displays are off (DPMS; tty::set_power)
+    pub screens_off: bool,
+    /// the lock object of the locker holding the lock (handlers/lock_idle.rs)
+    pub lock_holder: Option<smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1>,
     /// lock surfaces by output name
     pub lock_surfaces: std::collections::HashMap<String, smithay::wayland::session_lock::LockSurface>,
     pub inhibitors: Vec<WlSurface>,
@@ -167,6 +171,8 @@ impl Draftpaper {
             idle_notifier_state,
             idle_inhibit_state,
             locked: false,
+            screens_off: false,
+            lock_holder: None,
             lock_surfaces: Default::default(),
             inhibitors: Vec::new(),
             primary_selection_state,

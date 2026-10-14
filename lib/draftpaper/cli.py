@@ -8,6 +8,8 @@
   draftpaper theme next       the next theme (the shell's theme cell)
   draftpaper park ...         park windows in the side margins (draftpaper park, without arguments, explains)
   draftpaper readings         the readings the shell polls, as JSON
+  draftpaper lock-on-sleep [on|off|toggle]
+                              lock before every suspend (the lid) until turned off or the next login
   draftpaper version
 
 Settings: ~/.config/draftpaper/config.toml (see /usr/share/doc/draftpaper/README.md).
@@ -27,6 +29,22 @@ def start():
     env = dict(os.environ, DRAFTPAPER_BIN=os.path.realpath(sys.argv[0]), DRAFTPAPER_CACHE=str(paths.CACHE),
                DRAFTPAPER_RUNTIME=str(paths.RUNTIME))
     os.execve(qs, ["qs", "-p", str(paths.QML), "-n"], env)
+
+
+def lock_on_sleep(how):
+    """A flag in the runtime directory that the idle service's before-sleep hook looks for."""
+    paths.ensure()
+    flag = paths.RUNTIME / "lock-on-sleep"
+    on = {"on": True, "off": False}.get(how, not flag.exists())
+    if on:
+        flag.touch()
+    else:
+        flag.unlink(missing_ok=True)
+    title = "Lock on lid close: ON" if on else "Lock on lid close: OFF"
+    body = "The screen locks before every suspend" if on else "Suspend and resume without a lock screen"
+    if shutil.which("notify-send"):
+        subprocess.run(["notify-send", "-a", "draftpaper", title, body], capture_output=True)
+    print(title)
 
 
 def stop():
@@ -66,6 +84,8 @@ def main(argv=None):
     elif c == "park":
         from . import park
         park.main(rest)
+    elif c == "lock-on-sleep":
+        lock_on_sleep(rest[0] if rest else "toggle")
     elif c == "readings":
         from . import readings
         readings.main(rest)

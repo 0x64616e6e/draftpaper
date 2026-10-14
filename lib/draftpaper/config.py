@@ -22,6 +22,11 @@
     fan = 5000
     battery = 15                  # percent
 
+    [idle]                        # what happens when you leave the machine
+    screens_off = 15              # minutes until the displays turn off (0: never); any input wakes them
+    lock_after = 0                # minutes until the screen locks (0: never; lock with Mod+Shift+x)
+    lock_on_sleep = false         # lock before every suspend (the lid); Mod+Shift+p toggles it for the day
+
     [commands]
     screenshot = ["sh", "-c", "g=$(slurp) && grim -g \"$g\" - | swappy -f -"]
 """
@@ -35,6 +40,7 @@ DEFAULTS = {
     "title": {},
     "cell": [],
     "alerts": {"cpu": 85, "nvme": 60, "fan": 5000, "battery": 15},
+    "idle": {"screens_off": 15, "lock_after": 0, "lock_on_sleep": False},
     # a region picked with slurp, captured by grim (the compositor's screencopy), annotated in swappy
     "commands": {"screenshot": ["sh", "-c", 'g=$(slurp) && grim -g "$g" - | swappy -f -']},
 }

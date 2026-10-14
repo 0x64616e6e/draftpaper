@@ -342,7 +342,8 @@ fn render(data: &mut Draftpaper, crtc: crtc::Handle) {
 
 /// Draw and queue a frame; None when nothing can be drawn (session inactive, unknown crtc).
 fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> Option<bool> {
-    if !tty.session.is_active() {
+    // inactive (another VT) or the displays off: no frames until set_power or the session comes back
+    if !tty.session.is_active() || data.screens_off {
         return None;
     }
     let (output, surface, _) = tty.outputs.get_mut(&crtc)?;
@@ -447,4 +448,26 @@ pub fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, 
     let mut rgba = pixels;
     rgba.chunks_exact_mut(4).for_each(|p| p[3] = 255);
     encoder.write_header().and_then(|mut w| w.write_image_data(&rgba)).map_err(|e| e.to_string())
+}
+
+/// Turn every display off (DPMS: no signal, planes and the pending frame dropped) or on again (the next
+/// frame re-enables it). Nested there is nothing to do.
+pub fn set_power(data: &mut Draftpaper, on: bool) {
+    if data.screens_off == !on {
+        return;
+    }
+    let Some(tty) = data.tty_data.as_mut() else { return };
+    data.screens_off = !on;
+    let crtcs: Vec<crtc::Handle> = tty.outputs.keys().copied().collect();
+    if on {
+        for crtc in crtcs {
+            render(data, crtc);
+        }
+    } else {
+        for (_, surface, _) in tty.outputs.values() {
+            if let Err(e) = surface.with_compositor(|c| c.clear()) {
+                eprintln!("draftpaper: power off: {e:?}");
+            }
+        }
+    }
 }

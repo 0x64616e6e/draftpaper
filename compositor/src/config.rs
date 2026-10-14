@@ -49,6 +49,8 @@ pub enum Action {
     Unpark(u64),
     /// cycle through the parked windows (+1 next, -1 previous); with none parked, move the focus
     ParkCycle(i32),
+    /// the displays' power: off (DPMS, for swayidle) or on; any input turns them on again
+    Power(bool),
     /// switch to virtual terminal n (TTY only; Ctrl+Alt+F1..F12, not configurable)
     Vt(i32),
 }
@@ -106,6 +108,9 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+6", "send 6"), ("Mod+Shift+7", "send 7"), ("Mod+Shift+8", "send 8"), ("Mod+Shift+9", "send 9"), ("Mod+Shift+0", "send 10"),
     ("Mod+f", "fullscreen"),
     ("Mod+Escape", "park"),
+    // lock now (swaylock, themed by `draftpaper apply`); lock before suspend for the day, or not
+    ("Mod+Shift+x", r#"spawn swaylock -f -C "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/swaylock.conf""#),
+    ("Mod+Shift+p", "spawn draftpaper lock-on-sleep toggle"),
     ("Mod+Return", "spawn alacritty"),
     // the launcher, themed like the sheet by `draftpaper apply`
     ("Mod+d", r#"spawn fuzzel --config "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/fuzzel.ini""#),
@@ -160,6 +165,11 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
             Action::ParkAt(cell, ws)
         }
         "unpark" => Action::Unpark(arg.parse().map_err(|_| format!("\"{s}\": unpark WINDOW-ID"))?),
+        "power" => match arg {
+            "off" => Action::Power(false),
+            "on" => Action::Power(true),
+            _ => return Err(format!("\"{s}\": power on or power off")),
+        },
         "park_next" => Action::ParkCycle(1),
         "park_prev" => Action::ParkCycle(-1),
         "spawn" if !arg.is_empty() => Action::Spawn(arg.to_string()),
