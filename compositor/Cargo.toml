@@ -1,0 +1,20 @@
+[package]
+name = "draftpaper-compositor"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+description = "Draftpaper as a Wayland compositor (milestone M0: nested prototype)"
+repository = "https://github.com/0x64616e6e/draftpaper"
+
+[[bin]]
+name = "draftpaper-compositor"
+path = "src/main.rs"
+
+[dependencies]
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+bitflags = "2.2.1"
+
+[dependencies.smithay]
+version = "=0.7.0"
+default-features = false
+features = ["backend_winit", "wayland_frontend", "desktop"]
