@@ -12,6 +12,7 @@ Item {
     readonly property color ink: data.ink || "#62574C"
     readonly property real inkAlpha: data.inkAlpha !== undefined ? data.inkAlpha : 0.8
     readonly property color alert: data.alert || "#E2231A"
+    readonly property color strong: data.strong || "#000000"     // the focused workspace
     readonly property color accent: data.accent || "#E8B374"
     readonly property real marginPx: data.marginPx || 37
     readonly property var title: data.title || ({})

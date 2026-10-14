@@ -183,11 +183,11 @@ ShellRoot {
                                 fontSizeMode: Text.HorizontalFit
                                 minimumPixelSize: edge.fontPx * 0.6
                                 text: root.spaceLabel(modelData.name)
-                                // focused: bold black; shown on its screen but not focused: bold in the others'
+                                // focused: bold in the theme's strong ink; shown on its screen but not focused: bold in the others'
                                 // ink; urgent: bold in the alert red; the rest: regular, lighter
                                 font.family: Fonts.mono; font.pixelSize: edge.fontPx
                                 font.bold: modelData.focused || modelData.active || modelData.urgent
-                                color: modelData.urgent ? theme.alert : modelData.focused ? "black"
+                                color: modelData.urgent ? theme.alert : modelData.focused ? theme.strong
                                      : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
                             }
                             Rectangle {     // separator: the full height of the margin, like the zone ticks

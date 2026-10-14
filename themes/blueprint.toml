@@ -1,0 +1,29 @@
+# Blueprint: a dark sheet, deep Prussian-blue paper drawn in pale blue-white, as drawings looked when
+# copied by the cyanotype process. Lettering is 6:1 or better against the paper, alerts 4:1 or better.
+label = "Blueprint"
+
+paper       = "#1F3A5A"   # the middle of the sheet
+paper_light = "#2B4A6E"   # top left
+paper_shade = "#152A42"   # bottom right
+glow        = "#4A7AA8"   # the blooms: a little light on the paper
+ink         = "#C8D7E6"   # lines and lettering
+alert       = "#FF8C7F"   # alert lettering: a light red that holds on dark blue
+strong      = "#FFFFFF"   # the focused workspace
+
+[sheet]
+angle            = 54
+midpoint         = 0.45
+blend            = 1.0
+shading          = 1.0
+glow_strength    = 0.7
+glow_size        = 1.0
+pattern_strength = 0.5    # pale lines on dark paper read stronger than dark on light
+
+[windows]
+focused          = "#8FC1F0"
+focused_inactive = "#3A5470"
+unfocused        = "#1A2B3D"
+urgent           = "#FF8C7F"
+text             = "#E6EEF5"
+text_inactive    = "#7D91A6"
+background       = "#152A42"

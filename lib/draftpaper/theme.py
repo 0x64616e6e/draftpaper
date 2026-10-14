@@ -84,6 +84,7 @@ def apply(name=None, render_sheets=True):
     shell = {
         "name": t["name"], "label": t["label"],
         "paper": t["paper"], "ink": t["ink"], "inkAlpha": t["sheet"]["pattern_strength"], "alert": t["alert"],
+        "strong": t.get("strong", "#000000"),
         "accent": t["windows"]["focused"],
         "marginPx": margin_px,
         "mm": {n: mm for n, _, _, mm in outs}, "mmDefault": mm_main,

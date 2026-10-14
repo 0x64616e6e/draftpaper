@@ -104,8 +104,15 @@ Apply changes with `draftpaper apply`.
 
 ## Themes
 
-`draftpaper theme` lists them; `draftpaper theme <name>` switches. A theme is a TOML file naming the paper,
-the ink and the window colours (see `/usr/share/draftpaper/themes/softglow.toml`); your own go in
+Two themes ship: **Soft Glow** (warm greige paper, above) and **Blueprint** (a dark sheet: Prussian-blue
+paper drawn in pale blue-white).
+
+![The Blueprint theme with two windows parked](docs/blueprint.jpg)
+
+`draftpaper theme` lists them; `draftpaper theme <name>` switches; clicking the theme name in the bottom
+margin moves to the next. A theme is a TOML file naming the paper,
+the ink, the focused workspace's colour (`strong`) and the window colours (see
+`/usr/share/draftpaper/themes/softglow.toml`); your own go in
 `~/.config/draftpaper/themes/`.
 
 ## How it works
