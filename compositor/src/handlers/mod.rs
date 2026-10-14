@@ -4,6 +4,7 @@ mod decoration;
 pub mod layer_shell;
 mod lock_idle;
 mod selection;
+mod xwayland;
 mod xdg_shell;
 
 use crate::Draftpaper;
@@ -23,8 +24,8 @@ use smithay::wayland::selection::SelectionHandler;
 use smithay::{delegate_data_device, delegate_output, delegate_seat};
 
 impl SeatHandler for Draftpaper {
-    type KeyboardFocus = WlSurface;
-    type PointerFocus = WlSurface;
+    type KeyboardFocus = crate::focus::KeyboardFocusTarget;
+    type PointerFocus = crate::focus::PointerFocusTarget;
     type TouchFocus = WlSurface;
 
     fn seat_state(&mut self) -> &mut SeatState<Draftpaper> {
@@ -33,9 +34,10 @@ impl SeatHandler for Draftpaper {
 
     fn cursor_image(&mut self, _seat: &Seat<Self>, _image: smithay::input::pointer::CursorImageStatus) {}
 
-    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
+    fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&crate::focus::KeyboardFocusTarget>) {
+        use smithay::wayland::seat::WaylandFocus;
         let dh = &self.display_handle;
-        let client = focused.and_then(|s| dh.get_client(s.id()).ok());
+        let client = focused.and_then(|f| f.wl_surface()).and_then(|s| dh.get_client(s.id()).ok());
         set_data_device_focus(dh, seat, client.clone());
         smithay::wayland::selection::primary_selection::set_primary_focus(dh, seat, client);
     }
@@ -49,6 +51,32 @@ delegate_seat!(Draftpaper);
 
 impl SelectionHandler for Draftpaper {
     type SelectionUserData = ();
+
+    // a Wayland client's clipboard or primary selection, offered to X11 clients
+    fn new_selection(
+        &mut self,
+        ty: smithay::wayland::selection::SelectionTarget,
+        source: Option<smithay::wayland::selection::SelectionSource>,
+        _seat: Seat<Self>,
+    ) {
+        if let Some(xwm) = self.xwm.as_mut() {
+            let _ = xwm.new_selection(ty, source.map(|s| s.mime_types()));
+        }
+    }
+
+    fn send_selection(
+        &mut self,
+        ty: smithay::wayland::selection::SelectionTarget,
+        mime_type: String,
+        fd: std::os::fd::OwnedFd,
+        _seat: Seat<Self>,
+        _user_data: &(),
+    ) {
+        let handle = self.loop_handle.clone();
+        if let Some(xwm) = self.xwm.as_mut() {
+            let _ = xwm.send_selection(ty, mime_type, fd, handle);
+        }
+    }
 }
 
 impl DataDeviceHandler for Draftpaper {

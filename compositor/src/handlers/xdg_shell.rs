@@ -92,7 +92,7 @@ pub fn handle_commit(popups: &mut PopupManager, space: &Space<Window>, surface: 
     // Handle toplevel commits.
     if let Some(window) = space
         .elements()
-        .find(|w| w.toplevel().unwrap().wl_surface() == surface)
+        .find(|w| w.toplevel().map(|t| t.wl_surface()) == Some(surface))
         .cloned()
     {
         let initial_configure_sent = with_states(surface, |states| {
@@ -106,7 +106,9 @@ pub fn handle_commit(popups: &mut PopupManager, space: &Space<Window>, surface: 
         });
 
         if !initial_configure_sent {
-            window.toplevel().unwrap().send_configure();
+            if let Some(t) = window.toplevel() {
+                t.send_configure();
+            }
         }
     }
 
@@ -134,7 +136,7 @@ impl Draftpaper {
         let Some(window) = self
             .space
             .elements()
-            .find(|w| w.toplevel().unwrap().wl_surface() == &root)
+            .find(|w| w.toplevel().map(|t| t.wl_surface()) == Some(&root))
         else {
             return;
         };

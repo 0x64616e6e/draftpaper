@@ -25,4 +25,6 @@ features = [
     # the TTY backend
     "backend_drm", "backend_gbm", "backend_egl", "backend_libinput", "backend_udev",
     "backend_session_libseat", "renderer_gl", "use_system_lib",
+    # X11 applications through Xwayland
+    "xwayland",
 ]

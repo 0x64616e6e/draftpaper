@@ -8,7 +8,6 @@ use smithay::{
         keyboard::FilterResult,
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
     },
-    reexports::wayland_server::protocol::wl_surface::WlSurface,
     utils::SERIAL_COUNTER,
 };
 
@@ -100,30 +99,14 @@ impl Draftpaper {
                 let button_state = event.state();
 
                 if ButtonState::Pressed == button_state && !pointer.is_grabbed() {
+                    // a click focuses the window under the pointer; on the paper it keeps the focus
+                    let _ = (&keyboard, serial);
                     if let Some((window, _loc)) = self
                         .space
                         .element_under(pointer.current_location())
                         .map(|(w, l)| (w.clone(), l))
                     {
-                        self.space.raise_element(&window, true);
-                        if let Some(i) = self.screen_of(&window) {
-                            self.active = i;
-                            self.screens[i].layout_mut().focus_window(&window);
-                        }
-                        keyboard.set_focus(
-                            self,
-                            Some(window.toplevel().unwrap().wl_surface().clone()),
-                            serial,
-                        );
-                        self.space.elements().for_each(|window| {
-                            window.toplevel().unwrap().send_pending_configure();
-                        });
-                    } else {
-                        self.space.elements().for_each(|window| {
-                            window.set_activated(false);
-                            window.toplevel().unwrap().send_pending_configure();
-                        });
-                        keyboard.set_focus(self, Option::<WlSurface>::None, serial);
+                        self.focus(Some(window));
                     }
                 };
 
@@ -243,8 +226,12 @@ impl Draftpaper {
                 }
             }
             Action::Close => {
-                if let Some(t) = self.screens.get(i).and_then(|s| s.layout().focused()).and_then(|w| w.toplevel().cloned()) {
-                    t.send_close();
+                if let Some(w) = self.focused_window() {
+                    if let Some(t) = w.toplevel() {
+                        t.send_close();
+                    } else if let Some(x) = w.x11_surface() {
+                        let _ = x.close();
+                    }
                 }
             }
         }

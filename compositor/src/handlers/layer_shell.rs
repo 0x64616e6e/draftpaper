@@ -73,7 +73,7 @@ pub fn handle_commit(state: &mut Draftpaper, surface: &WlSurface) -> bool {
     } else if layer.cached_state().keyboard_interactivity == KeyboardInteractivity::Exclusive {
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         let keyboard = state.seat.get_keyboard().unwrap();
-        keyboard.set_focus(state, Some(surface.clone()), serial);
+        keyboard.set_focus(state, Some(crate::focus::KeyboardFocusTarget::Surface(surface.clone())), serial);
     }
     // exclusive zones may have changed the windows' room
     state.relayout();

@@ -40,7 +40,7 @@ impl SessionLockHandler for Draftpaper {
         surface.with_pending_state(|state| state.size = Some((geometry.size.w as u32, geometry.size.h as u32).into()));
         surface.send_configure();
         let keyboard = self.seat.get_keyboard().unwrap();
-        keyboard.set_focus(self, Some(surface.wl_surface().clone()), SERIAL_COUNTER.next_serial());
+        keyboard.set_focus(self, Some(crate::focus::KeyboardFocusTarget::Surface(surface.wl_surface().clone())), SERIAL_COUNTER.next_serial());
         self.lock_surfaces.insert(output.name(), surface);
     }
 }

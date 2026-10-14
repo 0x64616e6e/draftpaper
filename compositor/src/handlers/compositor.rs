@@ -1,5 +1,6 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
 use crate::{state::ClientState, Draftpaper};
+use smithay::wayland::seat::WaylandFocus;
 use smithay::{
     backend::renderer::utils::on_commit_buffer_handler,
     delegate_compositor, delegate_shm,
@@ -24,6 +25,10 @@ impl CompositorHandler for Draftpaper {
     }
 
     fn client_compositor_state<'a>(&self, client: &'a Client) -> &'a CompositorClientState {
+        // Xwayland is a client Smithay created, with its own client data
+        if let Some(state) = client.get_data::<smithay::xwayland::XWaylandClientData>() {
+            return &state.compositor_state;
+        }
         &client.get_data::<ClientState>().unwrap().compositor_state
     }
 
@@ -38,7 +43,7 @@ impl CompositorHandler for Draftpaper {
                 let window = self.pending.remove(i);
                 self.place(window);
             }
-            let window = self.space.elements().find(|w| w.toplevel().unwrap().wl_surface() == &root).cloned();
+            let window = self.space.elements().find(|w| w.wl_surface().as_deref() == Some(&root)).cloned();
             if let Some(window) = window {
                 window.on_commit();
                 if self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.floating.contains(&window))) {

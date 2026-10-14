@@ -67,6 +67,9 @@ pub struct Draftpaper {
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
     pub tty: bool,
+    /// the X11 window manager, once Xwayland is up (handlers/xwayland.rs)
+    pub xwm: Option<smithay::xwayland::X11Wm>,
+    pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
     /// settings and bindings from config.toml (config.rs), read again when the file changes
     pub config: crate::config::Config,
     pub config_mtime: Option<std::time::SystemTime>,
@@ -83,6 +86,7 @@ impl Draftpaper {
 
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
         let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
         let xdg_decoration_state = smithay::wayland::shell::xdg::decoration::XdgDecorationState::new::<Self>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
@@ -154,6 +158,8 @@ impl Draftpaper {
             active: 0,
             session: None,
             tty: false,
+            xwm: None,
+            xwayland_shell_state,
             config: crate::config::Config::default_config(),
             config_mtime: None,
             tty_data: None,
@@ -205,13 +211,14 @@ impl Draftpaper {
 
     /// The surface under `pos`: overlay and top layer surfaces, then windows, then bottom and
     /// background layer surfaces (Draftpaper's margins and title block live on the bottom layer).
-    pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
+    pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(crate::focus::PointerFocusTarget, Point<f64, Logical>)> {
+        use crate::focus::PointerFocusTarget as T;
         use smithay::{desktop::layer_map_for_output, wayland::shell::wlr_layer::Layer};
         let output = self.space.outputs().find(|o| self.space.output_geometry(o).is_some_and(|g| g.to_f64().contains(pos)))?;
         let og = self.space.output_geometry(output)?;
         if self.locked {
             let lock = self.lock_surfaces.get(&output.name())?;
-            return Some((lock.wl_surface().clone(), og.loc.to_f64()));
+            return Some((T::Surface(lock.wl_surface().clone()), og.loc.to_f64()));
         }
         let map = layer_map_for_output(output);
         let layer_under = |layers: &[Layer]| {
@@ -220,15 +227,19 @@ impl Draftpaper {
                 let lg = map.layer_geometry(layer)?;
                 layer
                     .surface_under(pos - og.loc.to_f64() - lg.loc.to_f64(), WindowSurfaceType::ALL)
-                    .map(|(s, p)| (s, (p + lg.loc + og.loc).to_f64()))
+                    .map(|(s, p)| (T::Surface(s), (p + lg.loc + og.loc).to_f64()))
             })
         };
         layer_under(&[Layer::Overlay, Layer::Top])
             .or_else(|| {
                 self.space.element_under(pos).and_then(|(window, location)| {
+                    // an X11 window takes the pointer whole; a Wayland window by the surface under it
+                    if let Some(x) = window.x11_surface() {
+                        return Some((T::X11(x.clone()), location.to_f64()));
+                    }
                     window
                         .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
-                        .map(|(s, p)| (s, (p + location).to_f64()))
+                        .map(|(s, p)| (T::Surface(s), (p + location).to_f64()))
                 })
             })
             .or_else(|| layer_under(&[Layer::Bottom, Layer::Background]))
@@ -272,6 +283,11 @@ impl Draftpaper {
             for window in &ws.floating {
                 let size = window.geometry().size;
                 let a = s.grid.area;
+                if let Some(x11) = window.x11_surface() {
+                    let loc = (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2);
+                    let _ = x11.configure(smithay::utils::Rectangle::new(loc.into(), size));
+                }
+                let a = s.grid.area;
                 let loc = (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2);
                 self.space.map_element(window.clone(), loc, false);
                 self.space.raise_element(window, false);
@@ -286,6 +302,9 @@ impl Draftpaper {
                     if t.is_initial_configure_sent() {
                         t.send_pending_configure();
                     }
+                } else if let Some(x11) = window.x11_surface() {
+                    let _ = x11.set_fullscreen(true);
+                    let _ = x11.configure(geometry);
                 }
                 self.space.map_element(window.clone(), geometry.loc, false);
                 self.space.raise_element(window, false);
@@ -295,8 +314,10 @@ impl Draftpaper {
 
     /// The window with the keyboard focus.
     pub fn focused_window(&self) -> Option<Window> {
-        let surface = self.seat.get_keyboard()?.current_focus()?;
-        self.space.elements().find(|w| w.toplevel().map(|t| t.wl_surface()) == Some(&surface)).cloned()
+        match self.seat.get_keyboard()?.current_focus()? {
+            crate::focus::KeyboardFocusTarget::Window(w) => Some(w),
+            _ => None,
+        }
     }
 
     /// Fullscreen on or off for `window` (on its workspace).
@@ -336,12 +357,17 @@ impl Draftpaper {
             }
         }
         let keyboard = self.seat.get_keyboard().unwrap();
-        keyboard.set_focus(self, window.and_then(|w| w.toplevel().map(|t| t.wl_surface().clone())), serial);
+        keyboard.set_focus(self, window.map(crate::focus::KeyboardFocusTarget::Window), serial);
     }
 
-    /// Place a new window: a dialog (a window with a parent) floats, anything else joins the layout.
+    /// Place a new Wayland window: a dialog (a window with a parent) floats, anything else joins the layout.
     pub fn place(&mut self, window: Window) {
         let dialog = window.toplevel().is_some_and(|t| t.parent().is_some());
+        self.place_as(window, dialog);
+    }
+
+    /// Place a new window, floating (`dialog`) or in the layout of the active screen.
+    pub fn place_as(&mut self, window: Window, dialog: bool) {
         if let Some(screen) = self.active_screen() {
             let grid = screen.grid;
             if dialog {

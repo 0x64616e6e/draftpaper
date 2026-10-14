@@ -5,6 +5,7 @@ mod handlers;
 
 mod config;
 mod cursor;
+mod focus;
 mod input;
 mod layout;
 mod render;
@@ -61,6 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ))
             .status();
     }
+
+    // X11 applications
+    data.start_xwayland();
 
     // config.toml: read now, and again whenever it changes
     data.reload_config();

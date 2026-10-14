@@ -67,7 +67,7 @@ i3 add-on find the same desktop.
 | river + a layout program | Smallest amount of code | The layout protocol cannot express parking with exact restore or the sheet as a surface; Draftpaper would be a client of someone else's model again |
 
 **Choice: Smithay.** niri is the closest prior art: a Smithay compositor with an opinionated layout model,
-its own IPC, configuration in a text file, XWayland through xwayland-satellite, and a GNOME-portal
+its own IPC, configuration in a text file, XWayland (through xwayland-satellite; Draftpaper uses Smithay's built-in X11 window manager instead, see Plumbing), and a GNOME-portal
 integration for screencasting. Its source is the reference for every piece of plumbing below; Draftpaper
 differs in the layout model and the sheet, not in the plumbing.
 
@@ -77,7 +77,7 @@ differs in the layout model and the sheet, not in the plumbing.
             ┌───────────────────────── draftpaper (compositor process) ─────────────────────────┐
  libinput ─▶│ input ─▶ bindings ─▶ actions ─▶ layout (per output: workspaces, tiles, parked)  │
  DRM/KMS ◀─▶│ outputs, scale ◀── render: sheet (shader) ▸ background layers ▸ windows ▸ top/overlay │
-            │ xdg-shell, layer-shell, xwayland-satellite, session-lock, idle, data-device, ...    │
+            │ xdg-shell, layer-shell, Xwayland + X11 WM, session-lock, idle, data-device, ...    │
             │ IPC: i3-compatible subset + draftpaper extension (Unix socket, JSON)                │
             └──────────────────────────────────────────┬──────────────────────────────────────────┘
                                                        │
@@ -182,7 +182,7 @@ covers panels that report nonsense.
 | Session, devices | libseat (logind or seatd), udev, DRM/KMS with atomic modesetting; GBM + EGL/GLES renderer from Smithay |
 | Input | libinput: keyboards with xkb layouts, touchpad (tap, natural scroll, two-finger gestures for workspaces), TrackPoint |
 | Clients | xdg-shell, xdg-decoration (server-side: a 1 px border, no titles), wlr-layer-shell, xdg-output, viewporter, fractional-scale-v1, presentation-time, linux-dmabuf, single-pixel-buffer, cursor-shape |
-| X11 apps | xwayland-satellite, started on demand (niri's approach: XWayland as a rootless client, no X11 window management in the compositor) |
+| X11 apps | Xwayland (Debian's `xwayland`) started with the compositor as a rootless client, and Smithay's built-in X11 window manager: X11 windows tile like Wayland ones, transient windows and dialogs float, menus and tooltips place themselves; clipboard and primary selection bridged both ways, X11 clients reading them only while an X11 window has the keyboard. Chosen over niri's xwayland-satellite, which is neither in Debian nor on crates.io and would be a second program to ship in the one package |
 | Clipboard | wl_data_device, primary selection, data-control (for clipboard managers) |
 | Lock and idle | ext-session-lock (swaylock), ext-idle-notify (swayidle), idle-inhibit (video players) |
 | Screens | wlr-screencopy for grim and flameshot; screencasting through xdg-desktop-portal (the GNOME backend with Mutter's screencast D-Bus API, as niri does, or xdg-desktop-portal-wlr) |
@@ -218,7 +218,7 @@ front of the plumbing.
 |---|---|
 | Screencasting (video calls, recording) is the hardest piece to get right | Follow niri's portal integration closely; until it works, keep the i3 edition for calls |
 | Smithay API churn | Pin a release; follow niri's upgrades, which track Smithay closely |
-| XWayland edge cases (old apps, games, Java) | xwayland-satellite isolates them; keep the i3 edition as the fallback session |
+| XWayland edge cases (old apps, games, Java) | Smithay's X11 window manager handles the common cases (anvil and cosmic-comp use it); keep the i3 edition as the fallback session |
 | One maintainer for a compositor | Keep the compositor small: text, readings and theming stay in the shell and Python; scope stays at the non-goals above |
 | Quickshell's I3 module expecting more of the i3 protocol than the subset | Implement against Quickshell's source, test with it from M2 |
 

@@ -296,6 +296,9 @@ impl Layout {
                     if toplevel.is_initial_configure_sent() {
                         toplevel.send_pending_configure();
                     }
+                } else if let Some(x11) = window.x11_surface() {
+                    // an X11 window is told its place and size directly (in the space's coordinates)
+                    let _ = x11.configure(rect);
                 }
                 space.map_element(window.clone(), rect.loc, false);
                 y0 = y1;
