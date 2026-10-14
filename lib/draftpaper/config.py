@@ -30,6 +30,11 @@
     lock_after = 0                # minutes until the screen locks (0: never; lock with Mod+Shift+x)
     lock_on_sleep = false         # lock before every suspend (the lid); Mod+Shift+p toggles it for the day
 
+    [apps]                        # the applications in the theme's colours (draftpaper apply)
+    theme = true                  # false: leave them alone
+    skip = ["emacs"]              # or some: alacritty foot tmux neovim emacs gtk qt firefox x11
+    firefox_text = 80             # optional: Firefox's text, percent; firefox_ui_pt: its interface's, points
+
     [hooks]                       # optional: commands run after a theme switch ({name}: the theme)
     theme = ["theme", "set", "{name}"]   # e.g. theme the applications (terminal, editor, GTK, Qt) too
 

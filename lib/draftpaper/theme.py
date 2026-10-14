@@ -12,6 +12,7 @@ theme named in config.toml itself (the sheet and the window borders, again whene
                                     typing, the alert colour for a wrong password
   ~/.cache/draftpaper/swayidle.conf idle (config.toml [idle]): the displays off, a lock, a lock before
                                     sleep; draftpaper-idle.service runs it and is restarted on apply
+  and the applications, from the theme's [apps] palette (apps.py)
 
 The sheet's geometry (margin, px/mm, zones per output) is the compositor's, over its IPC.
 """
@@ -150,7 +151,7 @@ def swayidle_conf(cfg):
     return "\n".join(lines) + "\n"
 
 
-def apply(name=None):
+def apply(name=None, apps_too=True):
     cfg = config.load()
     t = load(name or cfg["theme"])
     paths.ensure()
@@ -169,6 +170,9 @@ def apply(name=None):
     tmp.write_text(json.dumps(shell, indent=1))
     tmp.replace(paths.THEME_JSON)
     (paths.CACHE / "fuzzel.ini").write_text(fuzzel_ini(t))
+    if apps_too:
+        from . import apps
+        apps.apply(t, cfg)
     (paths.CACHE / "swaylock.conf").write_text(swaylock_conf(t))
     idle = paths.CACHE / "swayidle.conf"
     text = swayidle_conf(cfg)

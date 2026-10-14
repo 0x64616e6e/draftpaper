@@ -73,6 +73,14 @@ impl Draftpaper {
                     data.xwm = Some(wm);
                     std::env::set_var("DISPLAY", format!(":{display_number}"));
                     eprintln!("draftpaper: Xwayland on :{display_number}");
+                    // the session's services see it (the theme's X resources, X11 applications started by
+                    // them), and X11 applications get the theme's colours (draftpaper apply writes them)
+                    let _ = std::process::Command::new("sh")
+                        .arg("-c")
+                        .arg("systemctl --user import-environment DISPLAY 2>/dev/null; \
+                              dbus-update-activation-environment DISPLAY 2>/dev/null; \
+                              r=\"${XDG_CONFIG_HOME:-$HOME/.config}/draftpaper/Xresources\"; [ -r \"$r\" ] && xrdb -merge \"$r\"")
+                        .spawn();
                 }
                 Err(e) => eprintln!("draftpaper: X11 window manager: {e}"),
             },

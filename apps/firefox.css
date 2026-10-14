@@ -1,0 +1,38 @@
+/* the theme {{label}}: Firefox's interface colours */
+:root {
+  --toolbar-bgcolor: {{bg}} !important;
+  --toolbar-color: {{fg}} !important;
+  --toolbarbutton-icon-fill: {{fg}} !important;
+  --toolbarbutton-hover-background: {{surface_alt}} !important;
+  --toolbarbutton-active-background: {{sel_bg}} !important;
+  --lwt-accent-color: {{bg_alt}} !important;
+  --lwt-text-color: {{fg}} !important;
+  --tab-selected-bgcolor: {{bg}} !important;
+  --tab-selected-textcolor: {{fg}} !important;
+  --tab-selected-outline-color: {{accent}} !important;
+  --tab-hover-background-color: {{surface_alt}} !important;
+  --toolbar-field-background-color: {{field}} !important;
+  --toolbar-field-color: {{field_fg}} !important;
+  --toolbar-field-focus-background-color: {{field}} !important;
+  --toolbar-field-focus-color: {{field_fg}} !important;
+  --toolbar-field-focus-border-color: {{accent}} !important;
+  --urlbarView-highlight-background: {{sel_bg}} !important;
+  --urlbarView-highlight-color: {{sel_fg}} !important;
+  --arrowpanel-background: {{surface_alt}} !important;
+  --arrowpanel-color: {{fg}} !important;
+  --arrowpanel-border-color: {{border}} !important;
+  --panel-separator-color: {{border}} !important;
+  --sidebar-background-color: {{bg_alt}} !important;
+  --sidebar-text-color: {{fg}} !important;
+  --lwt-sidebar-background-color: {{bg_alt}} !important;
+  --lwt-sidebar-text-color: {{fg}} !important;
+  --focus-outline-color: {{accent}} !important;
+  --button-primary-bgcolor: {{accent}} !important;
+  --button-primary-color: {{on_accent}} !important;
+  --chrome-content-separator-color: {{border}} !important;
+}
+#TabsToolbar, #navigator-toolbox { background-color: {{bg_alt}} !important; }
+#nav-bar { border-top: 1px solid {{border}} !important; }
+
+/* the interface's text size: [apps] firefox_ui_pt in config.toml (empty when unset) */
+{{firefox_ui_css}}

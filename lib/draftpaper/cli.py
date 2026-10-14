@@ -101,7 +101,7 @@ def themes(args):
     name = args[0]
     if name == "next":
         name = names[(names.index(current) + 1) % len(names)] if current in names else names[0]
-    t = theme.apply(name)
+    t = theme.apply(name, apps_too=not preview)     # a preview (the picker browsing) leaves the applications
     config.set_theme(name)
     compositor("reload")          # the sheet at once, not at the compositor's next look at the file
     hook = (config.load().get("hooks") or {}).get("theme")
