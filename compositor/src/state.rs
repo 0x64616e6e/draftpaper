@@ -47,10 +47,15 @@ pub struct Draftpaper {
     // the Draftpaper layout on the (one, nested) output: columns and rows on the zone grid
     pub layout: crate::layout::Layout,
     pub grid: Option<crate::layout::Grid>,
+
+    /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
+    pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
+    pub tty: bool,
+    pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, CalloopData>,
 }
 
 impl Draftpaper {
-    pub fn new(event_loop: &mut EventLoop<CalloopData>, display: Display<Self>) -> Self {
+    pub fn new(event_loop: &mut EventLoop<'static, CalloopData>, display: Display<Self>) -> Self {
         let start_time = std::time::Instant::now();
 
         let dh = display.handle();
@@ -104,6 +109,9 @@ impl Draftpaper {
             seat,
             layout: Default::default(),
             grid: None,
+            session: None,
+            tty: false,
+            loop_handle: event_loop.handle(),
         }
     }
 

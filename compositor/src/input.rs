@@ -1,7 +1,7 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent, PointerMotionEvent,
         KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
     },
     input::{
@@ -24,13 +24,21 @@ pub enum Action {
     Resize(Direction),
     Terminal,
     Close,
+    Quit,
+    /// switch to virtual terminal n (TTY only)
+    Vt(i32),
 }
 
-/// The bindings. Nested inside another desktop, whose window manager keeps Super for itself, they sit
-/// on Alt: Alt+arrows (or h/j/k/l) focus, with Shift move the window, with Ctrl resize by a zone;
-/// Alt+Return opens a terminal, Alt+Shift+q closes the focused window.
-fn binding(mods: &ModifiersState, sym: Keysym) -> Option<Action> {
-    if !mods.alt {
+/// The bindings, on Super on the TTY and on Alt when nested inside another desktop (whose window manager
+/// keeps Super for itself): arrows (or h/j/k/l) focus, with Shift move the window, with Ctrl resize by a
+/// zone; Return opens a terminal, Shift+q closes the focused window, Shift+e quits Draftpaper.
+/// Ctrl+Alt+F1..F12 switch virtual terminals on the TTY.
+fn binding(mods: &ModifiersState, sym: Keysym, tty: bool) -> Option<Action> {
+    let raw = sym.raw();
+    if tty && (keysyms::KEY_XF86Switch_VT_1..=keysyms::KEY_XF86Switch_VT_12).contains(&raw) {
+        return Some(Action::Vt((raw - keysyms::KEY_XF86Switch_VT_1 + 1) as i32));
+    }
+    if !(if tty { mods.logo } else { mods.alt }) {
         return None;
     }
     let dir = match sym.raw() {
@@ -47,6 +55,7 @@ fn binding(mods: &ModifiersState, sym: Keysym) -> Option<Action> {
         _ => match sym.raw() {
             keysyms::KEY_Return => Some(Action::Terminal),
             keysyms::KEY_q | keysyms::KEY_Q if mods.shift => Some(Action::Close),
+            keysyms::KEY_e | keysyms::KEY_E if mods.shift => Some(Action::Quit),
             _ => None,
         },
     }
@@ -59,6 +68,7 @@ impl Draftpaper {
                 let serial = SERIAL_COUNTER.next_serial();
                 let time = Event::time_msec(&event);
                 let pressed = event.state() == KeyState::Pressed;
+                let tty = self.tty;
 
                 let action = self.seat.get_keyboard().unwrap().input::<Action, _>(
                     self,
@@ -66,7 +76,7 @@ impl Draftpaper {
                     event.state(),
                     serial,
                     time,
-                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym())).flatten() {
+                    |_, mods, keysym| match pressed.then(|| binding(mods, keysym.modified_sym(), tty)).flatten() {
                         Some(action) => FilterResult::Intercept(action),
                         None => FilterResult::Forward,
                     },
@@ -75,7 +85,24 @@ impl Draftpaper {
                     self.act(action);
                 }
             }
-            InputEvent::PointerMotion { .. } => {}
+            InputEvent::PointerMotion { event, .. } => {
+                // mice, touchpads and the TrackPoint move by deltas: keep the pointer on the outputs
+                let pointer = self.seat.get_pointer().unwrap();
+                let mut pos = pointer.current_location() + event.delta();
+                let bounds = self
+                    .space
+                    .outputs()
+                    .filter_map(|o| self.space.output_geometry(o))
+                    .reduce(|a, b| a.merge(b));
+                if let Some(b) = bounds {
+                    pos.x = pos.x.clamp(b.loc.x as f64, (b.loc.x + b.size.w - 1) as f64);
+                    pos.y = pos.y.clamp(b.loc.y as f64, (b.loc.y + b.size.h - 1) as f64);
+                }
+                let under = self.surface_under(pos);
+                let serial = SERIAL_COUNTER.next_serial();
+                pointer.motion(self, under, &MotionEvent { location: pos, serial, time: event.time_msec() });
+                pointer.frame(self);
+            }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let output = self.space.outputs().next().unwrap();
 
@@ -192,13 +219,14 @@ impl Draftpaper {
 
 impl Draftpaper {
     pub fn act(&mut self, action: Action) {
-        let Some(grid) = self.grid else { return };
+        let grid = self.grid;
         match action {
             Action::Focus(d) => {
                 let w = self.layout.focus_dir(d);
                 self.focus(w);
             }
             Action::Move(d) => {
+                let Some(grid) = grid else { return };
                 self.layout.move_dir(d, &grid);
                 self.relayout();
             }
@@ -208,6 +236,13 @@ impl Draftpaper {
             }
             Action::Terminal => {
                 let _ = std::process::Command::new("alacritty").spawn();
+            }
+            Action::Quit => self.loop_signal.stop(),
+            Action::Vt(n) => {
+                if let Some(session) = self.session.as_mut() {
+                    use smithay::backend::session::Session;
+                    let _ = session.change_vt(n);
+                }
             }
             Action::Close => {
                 if let Some(t) = self.layout.focused().and_then(|w| w.toplevel().cloned()) {

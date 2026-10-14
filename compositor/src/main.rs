@@ -3,11 +3,14 @@
 
 mod handlers;
 
+mod cursor;
 mod input;
 mod layout;
+mod render;
 mod sheet;
 mod state;
 mod theme;
+mod tty;
 mod winit;
 
 use smithay::reexports::{
@@ -19,6 +22,8 @@ pub use state::Draftpaper;
 pub struct CalloopData {
     state: Draftpaper,
     display_handle: DisplayHandle,
+    /// the TTY backend's devices and outputs (None when nested)
+    tty: Option<tty::TtyData>,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -34,25 +39,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display_handle = display.handle();
     let state = Draftpaper::new(&mut event_loop, display);
 
-    let mut data = CalloopData {
-        state,
-        display_handle,
-    };
+    let mut data = CalloopData { state, display_handle, tty: None };
 
-    crate::winit::init_winit(&mut event_loop, &mut data)?;
+    // draftpaper-compositor [--tty] [--command PROGRAM]
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let tty = args.iter().any(|a| a == "--tty");
+    let command = args.iter().position(|a| a == "-c" || a == "--command").and_then(|i| args.get(i + 1)).cloned();
 
-    let mut args = std::env::args().skip(1);
-    let flag = args.next();
-    let arg = args.next();
-
-    match (flag.as_deref(), arg) {
-        (Some("-c") | Some("--command"), Some(command)) => {
-            std::process::Command::new(command).spawn().ok();
+    if tty {
+        if let Err(e) = crate::tty::init_tty(&mut event_loop, &mut data) {
+            eprintln!("draftpaper: {e}");
+            std::process::exit(1);
         }
-        _ => {
-            std::process::Command::new("alacritty").spawn().ok();
-        }
+        std::env::set_var("WAYLAND_DISPLAY", &data.state.socket_name);
+    } else {
+        crate::winit::init_winit(&mut event_loop, &mut data)?;
     }
+
+    std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
 
     event_loop.run(None, &mut data, move |_| {
         // Draftpaper is running

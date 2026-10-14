@@ -3,27 +3,20 @@ use std::time::Duration;
 
 use smithay::{
     backend::{
-        renderer::{
-            damage::OutputDamageTracker,
-            element::{render_elements, surface::WaylandSurfaceRenderElement},
-            gles::{element::PixelShaderElement, GlesRenderer},
-        },
+        renderer::damage::OutputDamageTracker,
         winit::{self, WinitEvent},
     },
-    desktop::space::{space_render_elements, SpaceRenderElements},
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
     utils::{Rectangle, Transform},
 };
 
-use crate::{layout::Grid, sheet::SheetRenderer, theme::Theme, CalloopData, Draftpaper};
-
-render_elements! {
-    /// What an output shows: the windows (and layer surfaces), and the sheet under them.
-    pub OutputElements<=GlesRenderer>;
-    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
-    Sheet=PixelShaderElement,
-}
+use crate::{
+    layout::Grid,
+    render::{attach_sheet, output_elements},
+    theme::Theme,
+    CalloopData, Draftpaper,
+};
 
 /// Pixels per millimetre for the nested window: DRAFTPAPER_MM, else about 160 PPI (the i3 edition's fallback)
 fn nested_mm() -> f32 {
@@ -63,7 +56,7 @@ pub fn init_winit(
     let theme = Theme::load();
     eprintln!("draftpaper: sheet in theme {}, margin {} mm, {} px/mm", theme.name, theme.margin_mm, nested_mm());
     let margin_mm = theme.margin_mm as f64;
-    let mut sheet = SheetRenderer::new(theme, nested_mm());
+    attach_sheet(&output, theme, nested_mm());
     state.grid = Some(Grid::new(mode.size.to_logical(1), nested_mm() as f64, margin_mm));
 
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
@@ -93,14 +86,8 @@ pub fn init_winit(
 
                 {
                     let (renderer, mut framebuffer) = backend.bind().unwrap();
-                    // front to back: the windows, then the sheet at the bottom
-                    let mut elements: Vec<OutputElements> = space_render_elements(renderer, [&state.space], &output, 1.0)
-                        .unwrap()
-                        .into_iter()
-                        .map(OutputElements::Space)
-                        .collect();
-                    let logical = size.to_logical(1);
-                    elements.push(OutputElements::Sheet(sheet.element(renderer, logical)));
+                    // the host desktop draws the pointer
+                    let elements = output_elements(state, renderer, &output, None);
                     damage_tracker
                         .render_output(renderer, &mut framebuffer, 0, &elements, [0.1, 0.1, 0.1, 1.0])
                         .unwrap();
