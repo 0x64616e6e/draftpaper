@@ -2,8 +2,8 @@
 // Draftpaper's shell: the lettering on the sheet the compositor draws. There is no bar. The title block
 // (TitleBlock.qml) carries the readings; the top and bottom margins letter what it does not (workspaces,
 // notifications, alerts, volume and brightness while they change, the tray, Bluetooth, screenshot,
-// theme); the side
-// margins hold parked windows (SideCells.qml). Park every window of a workspace and the whole sheet shows.
+// theme); the side margins hold parked windows (SideCells.qml). Park every window of a workspace and the
+// whole sheet shows.
 // The margins and the title block are layer-shell surfaces on the bottom layer, under every window, so
 // fullscreen windows cover them; their geometry and the workspaces come from the compositor's IPC
 // (Compositor.qml). Started by `draftpaper start` (draftpaper-shell.service, with the session), which
