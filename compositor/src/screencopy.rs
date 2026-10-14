@@ -1,12 +1,17 @@
-//! wlr-screencopy (v3): a client (grim, a region picked with slurp, the wlroots screenshot portal) copies
-//! an output, or a region of it, into a buffer of its own. Each copy is drawn offscreen as the Print
-//! screenshot is (tty::render_pixels), with the pointer if asked for, at the backend's next frame, and
-//! written into the client's shm buffer; dmabuf frames are not offered.
+//! wlr-screencopy (v3): a client (grim, a region picked with slurp, xdg-desktop-portal-wlr sharing a
+//! screen in a call) copies an output, or a region of it, into a buffer of its own, at the backend's next
+//! frame, with the pointer if asked for. Two kinds of buffer: shm, drawn offscreen as the Print
+//! screenshot is (tty::render_pixels) and written into the client's memory; and, for a whole output, a
+//! dmabuf the output is drawn straight into on the GPU (screen sharing: no readback, and
+//! xdg-desktop-portal-wlr will not share without it).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use smithay::{
-    backend::renderer::{element::memory::MemoryRenderBuffer, gles::GlesRenderer},
+    backend::{
+        allocator::{dmabuf::Dmabuf, Buffer, Fourcc},
+        renderer::{damage::OutputDamageTracker, element::memory::MemoryRenderBuffer, gles::GlesRenderer, Bind},
+    },
     output::Output,
     reexports::{
         wayland_protocols_wlr::screencopy::v1::server::{
@@ -19,7 +24,10 @@ use smithay::{
         },
     },
     utils::{Logical, Physical, Point, Rectangle},
-    wayland::shm::{with_buffer_contents, with_buffer_contents_mut},
+    wayland::{
+        dmabuf::get_dmabuf,
+        shm::{with_buffer_contents, with_buffer_contents_mut},
+    },
 };
 
 use crate::Draftpaper;
@@ -40,6 +48,8 @@ pub struct PendingCopy {
     region: Rectangle<i32, Physical>,
     cursor: bool,
     damage: bool,
+    /// a dmabuf to draw the whole output into, rather than shm
+    dmabuf: Option<Dmabuf>,
 }
 
 pub fn init(dh: &DisplayHandle) {
@@ -81,11 +91,16 @@ impl Dispatch<ZwlrScreencopyManagerV1, ()> for Draftpaper {
             }
         });
         let state = FrameState { output: output.clone(), region: region.unwrap_or_default(), cursor: cursor != 0, used: AtomicBool::new(false) };
+        let whole = output.as_ref().and_then(|o| o.current_mode()).map(|m| (m.size.w, m.size.h));
         let frame = init.init(frame, state);
         match region.filter(|r| !r.is_empty()) {
             Some(r) => {
                 frame.buffer(wl_shm::Format::Xrgb8888, r.size.w as u32, r.size.h as u32, r.size.w as u32 * 4);
                 if frame.version() >= 3 {
+                    // a dmabuf for a whole output only
+                    if r.loc == (0, 0).into() && Some((r.size.w, r.size.h)) == whole {
+                        frame.linux_dmabuf(Fourcc::Xrgb8888 as u32, r.size.w as u32, r.size.h as u32);
+                    }
                     frame.buffer_done();
                 }
             }
@@ -118,16 +133,24 @@ impl Dispatch<ZwlrScreencopyFrameV1, FrameState> for Draftpaper {
             frame.failed();
             return;
         };
-        // a shm buffer of the size and a format offered
+        // a buffer of the size and a format offered: shm, or for a whole output a dmabuf
         let (w, h) = (data.region.size.w, data.region.size.h);
-        let fits = with_buffer_contents(&buffer, |_, _, b| {
-            b.width == w && b.height == h && b.stride >= w * 4 && matches!(b.format, wl_shm::Format::Xrgb8888 | wl_shm::Format::Argb8888)
-        });
-        if !matches!(fits, Ok(true)) {
-            frame.post_error(zwlr_screencopy_frame_v1::Error::InvalidBuffer, "the buffer is not the shm buffer offered");
+        let dmabuf = get_dmabuf(&buffer).ok().cloned();
+        let fits = match &dmabuf {
+            Some(d) => {
+                let whole = output.current_mode().is_some_and(|m| data.region == Rectangle::from_size((m.size.w, m.size.h).into()));
+                whole && d.size() == (w, h).into() && matches!(d.format().code, Fourcc::Xrgb8888 | Fourcc::Argb8888)
+            }
+            None => with_buffer_contents(&buffer, |_, _, b| {
+                b.width == w && b.height == h && b.stride >= w * 4 && matches!(b.format, wl_shm::Format::Xrgb8888 | wl_shm::Format::Argb8888)
+            })
+            .unwrap_or(false),
+        };
+        if !fits {
+            frame.post_error(zwlr_screencopy_frame_v1::Error::InvalidBuffer, "the buffer is not one offered");
             return;
         }
-        state.screencopies.push(PendingCopy { frame: frame.clone(), buffer, output, region: data.region, cursor: data.cursor, damage });
+        state.screencopies.push(PendingCopy { frame: frame.clone(), buffer, output, region: data.region, cursor: data.cursor, damage, dmabuf });
     }
 }
 
@@ -138,7 +161,24 @@ pub fn finish(data: &mut Draftpaper, renderer: &mut GlesRenderer, pointer: Optio
         if !copy.frame.is_alive() {
             continue;
         }
-        let drawn = crate::tty::render_pixels(data, renderer, &copy.output, pointer.filter(|_| copy.cursor), false);
+        let pointer = pointer.filter(|_| copy.cursor);
+        if let Some(mut dmabuf) = copy.dmabuf.clone() {
+            // the whole output, drawn into the client's dmabuf as it scans out
+            let elements = crate::render::output_elements(data, renderer, &copy.output, pointer);
+            let size = (copy.region.size.w, copy.region.size.h);
+            let drawn = renderer.bind(&mut dmabuf).map_err(|e| format!("{e:?}")).and_then(|mut target| {
+                let mut damage = OutputDamageTracker::new(size, copy.output.current_scale().fractional_scale(), copy.output.current_transform());
+                let result = damage.render_output(renderer, &mut target, 0, &elements, [0.1, 0.1, 0.1, 1.0]).map_err(|e| format!("{e:?}"))?;
+                result.sync.wait().map_err(|_| "interrupted".to_string())
+            });
+            if drawn.is_err() {
+                copy.frame.failed();
+                continue;
+            }
+            ready(&copy);
+            continue;
+        }
+        let drawn = crate::tty::render_pixels(data, renderer, &copy.output, pointer, false);
         let Ok((pixels, width, _)) = drawn else {
             copy.frame.failed();
             continue;
@@ -160,11 +200,17 @@ pub fn finish(data: &mut Draftpaper, renderer: &mut GlesRenderer, pointer: Optio
             copy.frame.failed();
             continue;
         }
-        copy.frame.flags(zwlr_screencopy_frame_v1::Flags::empty());
-        if copy.damage {
-            copy.frame.damage(0, 0, r.size.w as u32, r.size.h as u32);
-        }
-        let now = std::time::Duration::from(smithay::utils::Clock::<smithay::utils::Monotonic>::new().now());
-        copy.frame.ready((now.as_secs() >> 32) as u32, now.as_secs() as u32, now.subsec_nanos());
+        ready(&copy);
     }
+}
+
+/// The copy is in the client's buffer: say so, with the whole frame damaged and the time.
+fn ready(copy: &PendingCopy) {
+    let r = copy.region;
+    copy.frame.flags(zwlr_screencopy_frame_v1::Flags::empty());
+    if copy.damage {
+        copy.frame.damage(0, 0, r.size.w as u32, r.size.h as u32);
+    }
+    let now = std::time::Duration::from(smithay::utils::Clock::<smithay::utils::Monotonic>::new().now());
+    copy.frame.ready((now.as_secs() >> 32) as u32, now.as_secs() as u32, now.subsec_nanos());
 }
