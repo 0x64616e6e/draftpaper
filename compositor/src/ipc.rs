@@ -242,6 +242,8 @@ impl Draftpaper {
                         "zones": { "across": s.grid.zones.0, "down": s.grid.zones.1, "width": s.grid.zone.0, "height": s.grid.zone.1 },
                         // parking cells: down the left margin, then the right, one per zone
                         "cells": self.cells(i),
+                        // with ambient margins (wallpaper.rs), the ink their lettering reads in
+                        "margin_ink": margin_ink(&s.output),
                     }))
                 })
                 .collect(),
@@ -387,6 +389,16 @@ fn request_kinds(line: &str) -> Option<Vec<&'static str>> {
     let kinds: Vec<&'static str> = KINDS.into_iter().filter(|k| asked.iter().any(|a| a.as_str() == Some(k))).collect();
     // only a subscribe that succeeded: every name known
     (kinds.len() == asked.len()).then_some(kinds)
+}
+
+/// The margins' ink when the output's wallpaper has ambient margins, as "#rrggbb".
+fn margin_ink(output: &smithay::output::Output) -> Value {
+    let cache = output.user_data().get::<crate::wallpaper::WallpaperCache>();
+    let ink = cache.and_then(|c| c.0.borrow().as_ref().and_then(|w| w.margin_ink));
+    match ink {
+        Some(c) => json!(format!("#{:02x}{:02x}{:02x}", (c[0] * 255.0) as u8, (c[1] * 255.0) as u8, (c[2] * 255.0) as u8)),
+        None => Value::Null,
+    }
 }
 
 /// app_id (X11: the class), title, and whether it is an X11 window.

@@ -238,6 +238,10 @@ ShellRoot {
             readonly property int zonesAcross: output ? output.zones.across : Math.max(2, Math.round((width - 2 * margin) / (50 * mm)))
             readonly property int zonesDown: output ? output.zones.down : Math.max(2, Math.round((height - 2 * margin) / (50 * mm)))
             readonly property real fontPx: Math.min(margin * 0.5, 3.2 * mm)
+            // the margins' lettering: the theme's ink, or with a wallpaper's ambient margins whichever ink
+            // the compositor found to read on them (and the focused workspace in it, bold)
+            readonly property color ink: output && output.margin_ink ? output.margin_ink : root.ink
+            readonly property color strong: output && output.margin_ink ? ink : theme.strong
 
             // this screen's workspaces, by number (the compositor sends them sorted)
             readonly property var spaces: Compositor.workspaces.filter(w => w.output === modelData.name)
@@ -260,7 +264,7 @@ ShellRoot {
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----
             Margin {
                 id: topMargin
-                edge: edge; ink: root.ink; inkAlpha: theme.inkAlpha
+                edge: edge; ink: edge.ink; inkAlpha: theme.inkAlpha
                 side: "top"
                 Zone {          // one workspace: centred; up to five: the zone divided equally, a tick between
                                 // each; more: fixed slots of a fifth of a zone, running on into the next zones
@@ -289,7 +293,7 @@ ShellRoot {
                                 // ink; the rest: regular, lighter
                                 font.family: Fonts.mono; font.pixelSize: edge.fontPx
                                 font.bold: modelData.focused || modelData.shown
-                                color: modelData.focused ? theme.strong : Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
+                                color: modelData.focused ? edge.strong : Qt.rgba(edge.ink.r, edge.ink.g, edge.ink.b, 0.6)
                             }
                             Rectangle {     // separator: the full height of the margin, like the zone ticks (whose
                                             // own ticks a cell of several zones leaves out)
@@ -323,7 +327,7 @@ ShellRoot {
                         visible: root.noticeList.length > 1
                         text: "+" + (root.noticeList.length - 1)
                         font.family: Fonts.mono; font.pixelSize: edge.fontPx * 0.8
-                        color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
+                        color: Qt.rgba(edge.ink.r, edge.ink.g, edge.ink.b, 0.6)
                     }
                     Text {
                         anchors { left: parent.left; leftMargin: noticeZone.pad; right: countText.visible ? countText.left : parent.right
@@ -333,7 +337,7 @@ ShellRoot {
                         elide: Text.ElideRight
                         horizontalAlignment: noticeZone.span < noticeZone.room ? Text.AlignHCenter : Text.AlignLeft
                         font.family: Fonts.mono; font.pixelSize: edge.fontPx
-                        color: root.notice && root.notice.urgency === NotificationUrgency.Critical ? theme.alert : root.ink
+                        color: root.notice && root.notice.urgency === NotificationUrgency.Critical ? theme.alert : edge.ink
                     }
                     MouseArea {     // left: the notification's default action, then gone; right: gone
                         anchors.fill: parent
@@ -355,7 +359,7 @@ ShellRoot {
                             size: edge.fontPx
                             text: !a ? "" : root.glyphs ? (a.muted ? root.g("󰝟") + "muted" : root.g(root.ramp(a.volume, ["󰕿", "󰖀", "󰕾"])) + Math.round(a.volume * 100) + "%")
                                 : a.muted ? "VOL muted" : "VOL " + Math.round(a.volume * 100) + "%"
-                            color: root.ink
+                            color: edge.ink
                             onLeft: () => a.muted = !a.muted
                             onScroll: d => a.volume = Math.max(0, Math.min(1.5, a.volume + d * 0.05))
                         }
@@ -363,7 +367,7 @@ ShellRoot {
                             visible: root.brightness >= 0 && root.brightnessLit
                             size: edge.fontPx
                             text: (root.glyphs ? root.g(root.ramp(root.brightness, ["󰃞", "󰃟", "󰃠"])) : "BRT ") + Math.round(root.brightness * 100) + "%"
-                            color: root.ink
+                            color: edge.ink
                         }
                         Row {
                             anchors.verticalCenter: parent.verticalCenter
@@ -391,7 +395,7 @@ ShellRoot {
             //      screenshot, theme in the last ----
             Margin {
                 id: bottomMargin
-                edge: edge; ink: root.ink; inkAlpha: theme.inkAlpha
+                edge: edge; ink: edge.ink; inkAlpha: theme.inkAlpha
                 side: "bottom"
                 Zone {
                     band: bottomMargin; index: 0
@@ -401,7 +405,7 @@ ShellRoot {
                         readonly property var devices: root.readings.bt || []
                         text: root.glyphs ? root.g(devices.length ? "󰂱" : "󰂯") + devices.join(", ")
                             : "BT " + (devices.length ? devices.join(", ") : "-")
-                        color: root.ink
+                        color: edge.ink
                         onLeft: () => root.run(["blueman-manager"])
                     }
                 }
@@ -424,7 +428,7 @@ ShellRoot {
                                 visible: extraPoll.output !== ""
                                 size: edge.fontPx
                                 text: (extra.modelData.label ? extra.modelData.label + " " : "") + extraPoll.output.split("\n")[0]
-                                color: root.ink
+                                color: edge.ink
                                 onLeft: extra.modelData.left ? () => root.run(extra.modelData.left) : null
                                 onRight: extra.modelData.right ? () => root.run(extra.modelData.right) : null
                             }
@@ -438,11 +442,11 @@ ShellRoot {
                         spacing: 4 * edge.mm
                         Cell {
                             visible: (theme.commands.screenshot || []).length > 0
-                            size: edge.fontPx; text: root.glyphs ? root.g("󰹑").trim() : "SHOT"; color: root.ink
+                            size: edge.fontPx; text: root.glyphs ? root.g("󰹑").trim() : "SHOT"; color: edge.ink
                             onLeft: () => root.run(theme.commands.screenshot)
                         }
                         Cell {      // the theme: left, the picker; right, the next theme
-                            size: edge.fontPx; text: theme.label.toUpperCase(); color: root.ink
+                            size: edge.fontPx; text: theme.label.toUpperCase(); color: edge.ink
                             onLeft: () => themePicker.visible ? themePicker.close() : themePicker.open()
                             onRight: () => root.run([root.bin, "theme", "next"])
                         }

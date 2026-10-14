@@ -29,7 +29,8 @@ use crate::{sheet::SheetRenderer, state::Draftpaper, theme::Theme};
 
 render_elements! {
     pub OutputElements<=GlesRenderer>;
-    Pointer=MemoryRenderBufferRenderElement<GlesRenderer>,
+    /// the pointer, and the wallpaper's textures
+    Buffer=MemoryRenderBufferRenderElement<GlesRenderer>,
     Window=CropRenderElement<RelocateRenderElement<RescaleRenderElement<WaylandSurfaceRenderElement<GlesRenderer>>>>,
     Border=SolidColorRenderElement,
     /// the lock surface, and the low layers' menus drawn above the windows
@@ -86,7 +87,7 @@ pub fn output_elements(
             if let Ok(element) =
                 MemoryRenderBufferRenderElement::from_buffer(renderer, loc, buffer, None, None, None, Kind::Cursor)
             {
-                elements.push(OutputElements::Pointer(element));
+                elements.push(OutputElements::Buffer(element));
             }
         }
     }
@@ -245,10 +246,46 @@ pub fn output_elements(
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
         let size: Size<i32, Logical> = geometry.size;
         let scale = output.current_scale().fractional_scale();
-        let hidden = state.screens.iter().find(|s| &s.output == output).map(|s| s.hidden_ticks).unwrap_or_default();
+        let screen = state.screens.iter().find(|s| &s.output == output);
+        let hidden = screen.map(|s| s.hidden_ticks).unwrap_or_default();
         let mut sheet = sheet.0.borrow_mut();
         sheet.set_hidden(hidden);
+        // the wallpaper, prepared for this output (wallpaper.rs): the picture in the frame, the ambient
+        // margins, the frosted title block, under the sheet's lines
+        output.user_data().insert_if_missing(crate::wallpaper::WallpaperCache::default);
+        let cache = output.user_data().get::<crate::wallpaper::WallpaperCache>().unwrap();
+        let physical = (size.w as f64 * scale).round() as i32;
+        let physical = (physical, (size.h as f64 * scale).round() as i32);
+        let wall = screen.is_some_and(|s| {
+            // the margin as the shader rounds it: whole logical pixels, scaled
+            let margin = ((s.margin_mm * s.mm).round() * scale).round() as i32;
+            crate::wallpaper::prepare(cache, &sheet.theme, physical, margin, s.grid.zones, sheet.mm)
+        });
+        let prepared = cache.0.borrow();
+        let wallpaper = prepared.as_ref().filter(|_| wall);
+        let mode = match wallpaper {
+            None => 0,
+            Some(w) if w.ambient.is_some() => 2,
+            Some(_) => 1,
+        };
+        let ink = wallpaper.and_then(|w| w.margin_ink).unwrap_or(sheet.theme.ink);
+        sheet.set_wall(mode, ink);
         elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale)));
+        if let Some(w) = wallpaper {
+            let logical = |r: Rectangle<i32, smithay::utils::Physical>| {
+                Size::<i32, Logical>::from(((r.size.w as f64 / scale).round() as i32, (r.size.h as f64 / scale).round() as i32))
+            };
+            let mut draw = |buffer: &MemoryRenderBuffer, r: Rectangle<i32, smithay::utils::Physical>| {
+                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(renderer, r.loc.to_f64(), buffer, None, None, Some(logical(r)), Kind::Unspecified) {
+                    elements.push(OutputElements::Buffer(e));
+                }
+            };
+            draw(&w.frosted, w.title);
+            draw(&w.picture, w.interior);
+            if let Some(ambient) = &w.ambient {
+                draw(ambient, Rectangle::from_size(physical.into()));
+            }
+        }
     }
     elements
 }

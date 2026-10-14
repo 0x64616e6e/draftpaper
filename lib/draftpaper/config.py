@@ -3,6 +3,9 @@
     theme = "softglow"            # a file in ~/.config/draftpaper/themes or /usr/share/draftpaper/themes
     margin = 6                    # millimetres between the screen edge and the frame (3 to 20)
     glyphs = true                 # Nerd Font glyphs before the readings, when a Nerd Font is installed
+    wallpaper = "~/Pictures/x.jpg"  # optional: a picture in the frame (draftpaper wallpaper FILE | none)
+    margins = "paper"             # with a wallpaper: "paper", or "ambient" (the picture's colours)
+    title_tint = 0.7              # with a wallpaper: how much paper tints the title block's blurred picture
 
     [title]                       # the title block's fixed cells
     project = "my-host"           # default: the host name
@@ -60,6 +63,27 @@ def load():
     cfg["title"].setdefault("project", socket.gethostname().upper())
     cfg["title"].setdefault("drawn", getpass.getuser())
     return cfg
+
+
+def set_value(key, value):
+    """Write key = value (a TOML string, or removed when None) into config.toml, keeping the rest."""
+    import re
+    paths.CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    text = paths.CONFIG.read_text() if paths.CONFIG.exists() else ""
+    pattern = rf'^{key}\s*=.*\n?'
+    if value is None:
+        text = re.sub(pattern, "", text, count=1, flags=re.M)
+    else:
+        line = f'{key} = "{value}"'
+        # top-level keys go before the first [table]
+        if re.search(pattern, text, flags=re.M):
+            text = re.sub(rf'^{key}\s*=.*$', line, text, count=1, flags=re.M)
+        else:
+            m = re.search(r'^\[', text, flags=re.M)
+            at = m.start() if m else len(text)
+            before = text[:at].rstrip("\n")
+            text = (before + "\n" if before else "") + line + "\n" + ("\n" + text[at:] if m else "")
+    paths.CONFIG.write_text(re.sub(r'\n{3,}', "\n\n", text))
 
 
 def set_theme(name):

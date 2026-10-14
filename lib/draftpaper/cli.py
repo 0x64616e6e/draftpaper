@@ -8,6 +8,10 @@
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
   draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
+  draftpaper wallpaper [FILE | none]
+                              a picture in the frame, or none (the compositor picks it up at once)
+  draftpaper margins paper|ambient
+                              with a wallpaper: the margins the theme's paper or the picture's colours
   draftpaper park ...         park windows in the side margins (draftpaper park, without arguments, explains)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper lock-on-sleep [on|off|toggle]
@@ -87,6 +91,20 @@ def main(argv=None):
         print(f"{t['label']} applied.")
     elif c == "theme":
         themes(rest)
+    elif c == "wallpaper":
+        if not rest:
+            print(config.load().get("wallpaper") or "none")
+        elif rest[0] == "none":
+            config.set_value("wallpaper", None)
+        else:
+            path = os.path.abspath(os.path.expanduser(rest[0]))
+            if not os.path.isfile(path):
+                sys.exit(f"draftpaper: no such file {path}")
+            config.set_value("wallpaper", path)
+    elif c == "margins":
+        if not rest or rest[0] not in ("paper", "ambient"):
+            sys.exit("draftpaper margins paper|ambient")
+        config.set_value("margins", rest[0])
     elif c == "picker":
         # the shell's IpcHandler "themes" (qml/shell.qml)
         sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "themes", "toggle"]).returncode)

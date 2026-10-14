@@ -35,6 +35,10 @@ uniform vec4 strength;
 uniform vec3 grid;
 // the boundaries not ticked, per side (top, bottom, left, right): bit k is boundary k
 uniform vec4 hidden;
+// a wallpaper (wallpaper.rs): 0 none; 1 a picture in the frame, paper margins; 2 ambient margins (only the
+// lines are drawn here, in margin_ink, over the picture's colours)
+uniform float wall;
+uniform vec3 margin_ink;
 // the output in physical pixels (Smithay's `size` is the element's logical size)
 uniform vec2 physical;
 
@@ -86,6 +90,18 @@ void main() {
         float off = bit(px.x < mg ? hidden.z : hidden.w, k);
         m = max(m, 0.6 * near(px.y, mg + k * zh) * (1.0 - off));
     }
+    if (wall > 0.5) {
+        // the picture shows in the frame's interior (no dots over it)
+        if (px.x >= mg + 2.0 && px.x < w - mg - 2.0 && px.y >= mg + 2.0 && px.y < h - mg - 2.0) {
+            gl_FragColor = vec4(0.0);
+            return;
+        }
+        if (wall > 1.5) {
+            float a = clamp(m * strength.z * 1.6, 0.0, 1.0);
+            gl_FragColor = vec4(margin_ink * a, a) * alpha;
+            return;
+        }
+    }
     c += (ink - c) * m * strength.z;
 
     // half a level of noise so the 8-bit steps of the gradient do not band
@@ -105,11 +121,13 @@ pub struct SheetRenderer {
     pub mm: f32,
     /// the ticks not drawn, per side (top, bottom, left, right): see the module's comment
     hidden: [u32; 4],
+    /// with a wallpaper: the mode (see the shader) and the margins' ink
+    wall: (u32, [u32; 3]),
 }
 
 impl SheetRenderer {
     pub fn new(theme: Theme, mm: f32) -> Self {
-        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm, hidden: [0; 4] }
+        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm, hidden: [0; 4], wall: (0, [0; 3]) }
     }
 
     /// The sheet for an output of `size`, built once and rebuilt when the size changes.
@@ -123,6 +141,15 @@ impl SheetRenderer {
     pub fn set_hidden(&mut self, hidden: [u32; 4]) {
         if self.hidden != hidden {
             self.hidden = hidden;
+            self.element = None;
+        }
+    }
+
+    /// The wallpaper's mode (0 none, 1 paper margins, 2 ambient margins) and the margins' ink.
+    pub fn set_wall(&mut self, mode: u32, ink: [f32; 3]) {
+        let wall = (mode, ink.map(f32::to_bits));
+        if self.wall != wall {
+            self.wall = wall;
             self.element = None;
         }
     }
@@ -142,6 +169,8 @@ impl SheetRenderer {
                 UniformName::new("grid", UniformType::_3f),
                 UniformName::new("physical", UniformType::_2f),
                 UniformName::new("hidden", UniformType::_4f),
+                UniformName::new("wall", UniformType::_1f),
+                UniformName::new("margin_ink", UniformType::_3f),
             ];
             self.program = Some(renderer.compile_custom_pixel_shader(SHADER, &names).expect("the sheet shader compiles"));
         }
@@ -164,11 +193,14 @@ impl SheetRenderer {
                 Uniform::new("grid", [margin, zones(physical.0), zones(physical.1)]),
                 Uniform::new("physical", [physical.0, physical.1]),
                 Uniform::new("hidden", self.hidden.map(|m| m as f32)),
+                Uniform::new("wall", self.wall.0 as f32),
+                Uniform::new("margin_ink", self.wall.1.map(f32::from_bits)),
             ];
             self.element = Some(PixelShaderElement::new(
                 self.program.clone().unwrap(),
                 Rectangle::from_size(size),
-                Some(vec![Rectangle::from_size(size)]),
+                // opaque, unless a wallpaper shows through
+                (self.wall.0 == 0).then(|| vec![Rectangle::from_size(size)]),
                 1.0,
                 uniforms,
                 Kind::Unspecified,

@@ -29,6 +29,12 @@ pub struct Theme {
     /// window borders: the focused window, the others ([windows] focused / unfocused)
     pub border_focused: [f32; 3],
     pub border: [f32; 3],
+    /// a picture in the frame's interior (config.toml `wallpaper`), with the margins the theme's paper or
+    /// the picture's ambient colours (`margins = "paper" | "ambient"`) and the title block frosted, its
+    /// blur tinted with the paper by `title_tint` (wallpaper.rs)
+    pub wallpaper: Option<PathBuf>,
+    pub ambient: bool,
+    pub title_tint: f32,
 }
 
 fn rgb(hex: &str) -> Option<[f32; 3]> {
@@ -95,6 +101,11 @@ impl Theme {
             margin_mm,
             border_focused: table.get("windows").and_then(|w| w.get("focused")).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb("#E8B374").unwrap()),
             border: table.get("windows").and_then(|w| w.get("unfocused")).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb("#454543").unwrap()),
+            wallpaper: config.get("wallpaper").and_then(|v| v.as_str()).filter(|p| !p.is_empty()).map(|p| {
+                p.strip_prefix("~/").map(|rest| home().join(rest)).unwrap_or_else(|| PathBuf::from(p))
+            }),
+            ambient: config.get("margins").and_then(|v| v.as_str()) == Some("ambient"),
+            title_tint: config.get("title_tint").and_then(|v| v.as_float()).unwrap_or(0.7).clamp(0.0, 1.0) as f32,
         }
     }
 }

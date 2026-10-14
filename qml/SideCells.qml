@@ -14,7 +14,7 @@ Item {
     property string space: ""             // the workspace shown on this screen
 
     readonly property var theme: shell.theme
-    readonly property color ink: theme.ink
+    readonly property color ink: edge.ink        // the theme's, or the one reading on ambient margins
     readonly property var windows: shell.parked[space] || []
     function at(cell) { return windows.find(w => w.cell === cell) || null }
 
