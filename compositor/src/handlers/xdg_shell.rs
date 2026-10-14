@@ -165,28 +165,35 @@ pub fn handle_commit(popups: &mut PopupManager, space: &Space<Window>, surface: 
 }
 
 impl Draftpaper {
+    /// Keep a popup (a menu) on the output its parent is on: a window's, or a layer surface's (the shell's
+    /// tray menu). It is moved or flipped, as its positioner allows, to stay inside that output.
     fn unconstrain_popup(&self, popup: &PopupSurface) {
+        use smithay::{desktop::{layer_map_for_output, WindowSurfaceType}, wayland::seat::WaylandFocus};
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
         };
-        let Some(window) = self
-            .space
-            .elements()
-            .find(|w| w.toplevel().map(|t| t.wl_surface()) == Some(&root))
-        else {
-            return;
+        // the parent's place (global) and the output it is on
+        let window = self.space.elements().find(|w| w.wl_surface().as_deref() == Some(&root)).cloned();
+        let placed = match window {
+            Some(window) => self.space.element_geometry(&window).and_then(|geometry| {
+                let output = self.space.outputs_for_element(&window).into_iter().next().or_else(|| {
+                    let centre = geometry.loc + geometry.size.downscale(2).to_point();
+                    self.space.outputs().find(|o| self.space.output_geometry(o).is_some_and(|g| g.contains(centre))).cloned()
+                })?;
+                Some((geometry.loc, self.space.output_geometry(&output)?))
+            }),
+            None => self.space.outputs().find_map(|output| {
+                let map = layer_map_for_output(output);
+                let layer = map.layer_for_surface(&root, WindowSurfaceType::TOPLEVEL)?;
+                let og = self.space.output_geometry(output)?;
+                Some((og.loc + map.layer_geometry(layer)?.loc, og))
+            }),
         };
-
-        let output = self.space.outputs().next().unwrap();
-        let output_geo = self.space.output_geometry(output).unwrap();
-        let window_geo = self.space.element_geometry(window).unwrap();
-
-        // The target geometry for the positioner should be relative to its parent's geometry, so
-        // we will compute that here.
-        let mut target = output_geo;
+        let Some((parent, output)) = placed else { return };
+        // the target, relative to the parent's geometry
+        let mut target = output;
         target.loc -= get_popup_toplevel_coords(&PopupKind::Xdg(popup.clone()));
-        target.loc -= window_geo.loc;
-
+        target.loc -= parent;
         popup.with_pending_state(|state| {
             state.geometry = state.positioner.get_unconstrained_geometry(target);
         });
