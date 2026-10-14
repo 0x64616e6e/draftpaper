@@ -89,6 +89,8 @@ pub struct Draftpaper {
     pub anim: crate::animation::Animations,
     /// nested: a screenshot of the next frame (tty::screenshot)
     pub screenshot_requested: bool,
+    /// the window and the screen the pointer was last over (focus follows mouse, input.rs)
+    pub pointer_over: (Option<Window>, Option<usize>),
     /// the timer repeating a held binding (input.rs)
     pub key_repeat: Option<smithay::reexports::calloop::RegistrationToken>,
     /// screencopy frames waiting for the backend's next frame (screencopy.rs)
@@ -195,6 +197,7 @@ impl Draftpaper {
             anim: Default::default(),
             screenshot_requested: false,
             key_repeat: None,
+            pointer_over: (None, None),
             screencopies: Vec::new(),
         }
     }

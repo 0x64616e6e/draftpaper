@@ -80,6 +80,7 @@ impl Draftpaper {
                 let serial = SERIAL_COUNTER.next_serial();
                 pointer.motion(self, under, &MotionEvent { location: pos, serial, time: event.time_msec() });
                 pointer.frame(self);
+                self.follow_mouse(pos);
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let output = self.space.outputs().next().unwrap();
@@ -104,6 +105,7 @@ impl Draftpaper {
                     },
                 );
                 pointer.frame(self);
+                self.follow_mouse(pos);
             }
             InputEvent::PointerButton { event, .. } => {
                 let pointer = self.seat.get_pointer().unwrap();
@@ -183,6 +185,37 @@ impl Draftpaper {
 }
 
 impl Draftpaper {
+    /// Focus follows the mouse, as in i3: the window the pointer enters takes the focus; moving onto
+    /// another screen's paper makes that screen active, with its own focused window. Only on entering
+    /// (moving within the focused window, or after a new window took the focus, changes nothing), and
+    /// not while a menu or a drag holds the pointer, a layer surface (the launcher) or the lock has the
+    /// keyboard, or for unmanaged X11 windows (menus, tooltips).
+    fn follow_mouse(&mut self, pos: smithay::utils::Point<f64, smithay::utils::Logical>) {
+        let window = self.space.element_under(pos).map(|(w, _)| w.clone()).filter(|w| self.workspace_of(w).is_some());
+        let screen = self.screen_at(pos);
+        let entered_window = window.is_some() && window != self.pointer_over.0;
+        let entered_screen = window.is_none() && screen.is_some() && screen != self.pointer_over.1;
+        self.pointer_over = (window.clone(), screen);
+        if !self.config.input.focus_follows_mouse || self.locked || self.seat.get_pointer().is_some_and(|p| p.is_grabbed()) {
+            return;
+        }
+        if matches!(self.seat.get_keyboard().and_then(|k| k.current_focus()), Some(crate::focus::KeyboardFocusTarget::Surface(s)) if smithay::utils::IsAlive::alive(&s)) {
+            return;
+        }
+        if entered_window {
+            if self.focused_window() != window {
+                self.focus(window);
+            }
+        } else if entered_screen {
+            let i = screen.unwrap();
+            if i != self.active {
+                self.active = i;
+                let w = self.screens[i].layout().focused();
+                self.focus(w);
+            }
+        }
+    }
+
     /// Run `action` again while its key is held: after the keyboard's repeat delay, then at its rate.
     fn repeat(&mut self, action: Action) {
         use smithay::reexports::calloop::timer::{TimeoutAction, Timer};

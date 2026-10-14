@@ -8,6 +8,7 @@
 //!     repeat_rate = 25                 # per second
 //!     tap = true                       # touchpad: tap to click
 //!     natural_scroll = true            # touchpad: content follows the fingers
+//!     focus_follows_mouse = true       # the window, and the screen, the pointer enters take the focus
 //!
 //!     [animations]                     # parking, unparking, switching workspaces
 //!     enabled = true                   # false: reduced motion, every change at once
@@ -79,6 +80,8 @@ pub struct Input {
     pub repeat_delay: i32,
     pub repeat_rate: i32,
     pub tap: bool,
+    /// the window (and screen) the pointer enters takes the focus, as i3's focus_follows_mouse
+    pub focus_follows_mouse: bool,
     pub natural_scroll: bool,
 }
 
@@ -224,6 +227,7 @@ impl Config {
             repeat_rate: i("repeat_rate", 25),
             tap: b("tap", true),
             natural_scroll: b("natural_scroll", false),
+            focus_follows_mouse: b("focus_follows_mouse", true),
         };
 
         let mut bindings: Vec<Binding> = Vec::new();
