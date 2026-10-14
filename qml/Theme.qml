@@ -18,6 +18,7 @@ Item {
     readonly property var cells: data.cells || []
     readonly property var alerts: data.alerts || ({ battery: 15 })
     readonly property var commands: data.commands || ({})
+    readonly property bool glyphs: data.glyphs !== false        // config.toml: glyphs = false for words only
 
     FileView {
         path: Quickshell.env("DRAFTPAPER_CACHE") + "/theme.json"

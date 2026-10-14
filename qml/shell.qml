@@ -30,10 +30,22 @@ ShellRoot {
     }
     function spaceLabel(space) { return space ? String(space.number) : "" }
 
+    // ---- glyphs: Nerd Font symbols before a reading, when a Nerd Font is installed and config.toml does not
+    //      say glyphs = false; otherwise words. g() is the glyph in its own face (so it keeps its width),
+    //      then a space; ramp() picks one of `gs` by v in 0..1.
+    readonly property bool glyphs: theme.glyphs && Fonts.glyph !== ""
+    function g(c) { return glyphs ? "<font face='" + Fonts.glyph + "'>" + c + "</font> " : "" }
+    function ramp(v, gs) { return gs[Math.min(gs.length - 1, Math.max(0, Math.floor(v * gs.length)))] }
+    // a temperature's label as a glyph (CPU, SSD, memory, fan), or the label itself
+    function tempLabel(label) {
+        const k = { CPU: "󰘚", NVME: "󰋊", SSD: "󰋊", RAM: "󰍛", FAN: "󰈐" }[label]
+        return glyphs && k ? g(k) : label + " "
+    }
+
     // ---- readings ----
     Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 5000 }
     readonly property var readings: { try { return JSON.parse(readingsPoll.output) } catch (e) { return { temps: [], hot: false, power: null, profile: "", bt: [] } } }
-    Poll { id: wifi; command: ["sh", "-c", "command -v nmcli >/dev/null && nmcli -t -f IN-USE,SSID dev wifi list --rescan no | grep '^\\*' | head -1"]; interval: 5000 }
+    Poll { id: wifi; command: ["sh", "-c", "command -v nmcli >/dev/null && nmcli -t -f IN-USE,SIGNAL,SSID dev wifi list --rescan no | grep '^\\*' | head -1"]; interval: 5000 }
     Poll { id: eth; command: ["sh", "-c", "command -v nmcli >/dev/null || exit 0; d=$(nmcli -t -f DEVICE,TYPE,STATE dev | awk -F: '$2==\"ethernet\" && $3==\"connected\"{print $1; exit}'); [ -n \"$d\" ] && ip -4 -o addr show dev \"$d\" | awk '{print $4}' | cut -d/ -f1"]; interval: 5000 }
     Poll { id: meminfo; command: ["sh", "-c", "grep -E '^(MemTotal|MemAvailable):' /proc/meminfo"]; interval: 5000 }
     Poll { id: stat; command: ["head", "-1", "/proc/stat"]; interval: 2000 }
@@ -72,18 +84,30 @@ ShellRoot {
     readonly property var battery: UPower.displayDevice
     readonly property bool batteryLow: battery.isLaptopBattery && battery.percentage * 100 < (theme.alerts.battery || 15)
         && battery.state !== UPowerDeviceState.Charging
+    readonly property bool charging: battery.state === UPowerDeviceState.Charging
     readonly property string batteryText: !battery.isLaptopBattery ? "-"
-        : Math.round(battery.percentage * 100) + "%" + (battery.state === UPowerDeviceState.Charging ? " charging" : "")
-    readonly property string powerText: readings.power !== null && readings.power !== undefined ? readings.power + " W" : "mains"
-    readonly property string profileText: readings.profile || ""
-    readonly property string loadText: (cpuBusy >= 0 ? Math.round(cpuBusy * 100) + "%" : "-") + " / " + (memUsed >= 0 ? Math.round(memUsed * 100) + "%" : "-")
-    readonly property string networkText: {
-        const p = wifi.output.split(":")
-        if (p.length >= 2 && p.slice(1).join(":") !== "") return p.slice(1).join(":").replace(/\\:/g, ":")
-        return eth.output !== "" ? "wired " + eth.output : "offline"
+        : glyphs ? g(charging ? "󰂄" : ramp(battery.percentage, ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"])) + Math.round(battery.percentage * 100) + "%"
+        : Math.round(battery.percentage * 100) + "%" + (charging ? " charging" : "")
+    readonly property string powerText: g("󱐋") + (readings.power !== null && readings.power !== undefined ? readings.power + " W" : "mains")
+    // with its glyph the cell holds a shorter word: "power-saver" and "performance" do not fit beside it
+    readonly property string profileText: !readings.profile ? ""
+        : !glyphs ? readings.profile
+        : g({ "power-saver": "󰌪", balanced: "󰾅", performance: "󰓅" }[readings.profile] || "󰾅")
+          + ({ "power-saver": "saver", performance: "perf" }[readings.profile] || readings.profile)
+    readonly property string loadText: {
+        const cpu = cpuBusy >= 0 ? Math.round(cpuBusy * 100) + "%" : "-", mem = memUsed >= 0 ? Math.round(memUsed * 100) + "%" : "-"
+        return glyphs ? g("󰻠") + cpu + "  " + g("󰍛") + mem : cpu + " / " + mem
     }
+    // the Wi-Fi in use: "*:SIGNAL:SSID" (an SSID may hold escaped colons)
+    readonly property var wifiNow: {
+        const p = wifi.output.split(":")
+        return p.length >= 3 && p.slice(2).join(":") !== "" ? { signal: Number(p[1]) / 100, ssid: p.slice(2).join(":").replace(/\\:/g, ":") } : null
+    }
+    readonly property string networkText: wifiNow ? g(ramp(wifiNow.signal, ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"])) + wifiNow.ssid
+        : eth.output !== "" ? (glyphs ? g("󰈁") : "wired ") + eth.output
+        : (glyphs ? g("󰤮") : "") + "offline"
     readonly property bool tempHot: readings.hot === true
-    readonly property string tempText: (readings.temps || []).map(t => t.label + " " + t.value).join("  ")
+    readonly property string tempText: (readings.temps || []).map(t => tempLabel(t.label) + t.value).join("  ")
     readonly property string customText: customPoll.output.split("\n")[0]
 
     // volume and brightness are lettered for a few seconds after they change (volume stays while muted)
@@ -184,12 +208,13 @@ ShellRoot {
                         anchors.centerIn: parent
                         spacing: 4 * edge.mm
                         Cell { visible: root.tempHot; size: edge.fontPx; text: root.tempText; color: theme.alert }
-                        Cell { visible: root.batteryLow; size: edge.fontPx; text: "BAT " + Math.round(root.battery.percentage * 100) + "%"; color: theme.alert }
+                        Cell { visible: root.batteryLow; size: edge.fontPx; text: (root.glyphs ? root.g("󰂃") : "BAT ") + Math.round(root.battery.percentage * 100) + "%"; color: theme.alert }
                         Cell {
                             readonly property var a: root.audio
                             visible: a !== null && (root.volumeLit || a.muted)
                             size: edge.fontPx
-                            text: !a ? "" : a.muted ? "VOL muted" : "VOL " + Math.round(a.volume * 100) + "%"
+                            text: !a ? "" : root.glyphs ? (a.muted ? root.g("󰝟") + "muted" : root.g(root.ramp(a.volume, ["󰕿", "󰖀", "󰕾"])) + Math.round(a.volume * 100) + "%")
+                                : a.muted ? "VOL muted" : "VOL " + Math.round(a.volume * 100) + "%"
                             color: root.ink
                             onLeft: () => a.muted = !a.muted
                             onScroll: d => a.volume = Math.max(0, Math.min(1.5, a.volume + d * 0.05))
@@ -197,7 +222,7 @@ ShellRoot {
                         Cell {
                             visible: root.brightness >= 0 && root.brightnessLit
                             size: edge.fontPx
-                            text: "BRT " + Math.round(root.brightness * 100) + "%"
+                            text: (root.glyphs ? root.g(root.ramp(root.brightness, ["󰃞", "󰃟", "󰃠"])) : "BRT ") + Math.round(root.brightness * 100) + "%"
                             color: root.ink
                         }
                         Row {
@@ -233,7 +258,9 @@ ShellRoot {
                     Cell {
                         anchors.centerIn: parent
                         size: edge.fontPx
-                        text: "BT " + ((root.readings.bt || []).length ? root.readings.bt.join(", ") : "-")
+                        readonly property var devices: root.readings.bt || []
+                        text: root.glyphs ? root.g(devices.length ? "󰂱" : "󰂯") + devices.join(", ")
+                            : "BT " + (devices.length ? devices.join(", ") : "-")
                         color: root.ink
                         onLeft: () => root.run(["blueman-manager"])
                     }
@@ -271,7 +298,7 @@ ShellRoot {
                         spacing: 4 * edge.mm
                         Cell {
                             visible: (theme.commands.screenshot || []).length > 0
-                            size: edge.fontPx; text: "SHOT"; color: root.ink
+                            size: edge.fontPx; text: root.glyphs ? root.g("󰹑").trim() : "SHOT"; color: root.ink
                             onLeft: () => root.run(theme.commands.screenshot)
                         }
                         Cell {      // the next theme

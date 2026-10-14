@@ -2,6 +2,7 @@
 
     theme = "softglow"            # a file in ~/.config/draftpaper/themes or /usr/share/draftpaper/themes
     margin = 6                    # millimetres between the screen edge and the frame (3 to 20)
+    glyphs = true                 # Nerd Font glyphs before the readings, when a Nerd Font is installed
 
     [title]                       # the title block's fixed cells
     project = "my-host"           # default: the host name
@@ -30,6 +31,7 @@ from . import paths
 DEFAULTS = {
     "theme": "softglow",
     "margin": 6.0,
+    "glyphs": True,
     "title": {},
     "cell": [],
     "alerts": {"cpu": 85, "nvme": 60, "fan": 5000, "battery": 15},

@@ -53,6 +53,7 @@ def apply(name=None):
         "strong": t.get("strong", "#000000"),
         "accent": t["windows"]["focused"],
         "title": cfg["title"], "cells": cfg["cell"], "alerts": cfg["alerts"], "commands": cfg["commands"],
+        "glyphs": bool(cfg["glyphs"]),
         "themes": sorted(available()),
     }
     tmp = paths.THEME_JSON.with_suffix(".tmp")
