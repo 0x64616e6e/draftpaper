@@ -20,7 +20,13 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
 Everything is sized in millimetres of the screen (from the physical size xrandr reports), so the sheet
 looks the same on a laptop panel and a 4K monitor.
 
-<!-- screenshots: docs/ -->
+![A window open on the sheet, two more parked in the left margin](docs/parked.png)
+
+*One window open; `build.log` and `notes.md` parked in the left margin's cells B and C.*
+
+![Every window parked: the whole sheet with its title block](docs/sheet.jpg)
+
+*Every window of the workspace parked: the sheet, the three parked titles, and the title block.*
 
 ## Install
 
