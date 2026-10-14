@@ -38,6 +38,7 @@ pub struct Draftpaper {
     // Smithay State
     pub compositor_state: CompositorState,
     pub xdg_shell_state: XdgShellState,
+    pub layer_shell_state: smithay::wayland::shell::wlr_layer::WlrLayerShellState,
     pub xdg_decoration_state: smithay::wayland::shell::xdg::decoration::XdgDecorationState,
     pub shm_state: ShmState,
     pub output_manager_state: OutputManagerState,
@@ -67,6 +68,7 @@ impl Draftpaper {
 
         let compositor_state = CompositorState::new::<Self>(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
+        let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
         let xdg_decoration_state = smithay::wayland::shell::xdg::decoration::XdgDecorationState::new::<Self>(&dh);
         let shm_state = ShmState::new::<Self>(&dh, vec![]);
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
@@ -107,6 +109,7 @@ impl Draftpaper {
 
             compositor_state,
             xdg_shell_state,
+            layer_shell_state,
             xdg_decoration_state,
             shm_state,
             output_manager_state,
@@ -165,12 +168,31 @@ impl Draftpaper {
         socket_name
     }
 
+    /// The surface under `pos`: overlay and top layer surfaces, then windows, then bottom and
+    /// background layer surfaces (Draftpaper's margins and title block live on the bottom layer).
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(WlSurface, Point<f64, Logical>)> {
-        self.space.element_under(pos).and_then(|(window, location)| {
-            window
-                .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
-                .map(|(s, p)| (s, (p + location).to_f64()))
-        })
+        use smithay::{desktop::layer_map_for_output, wayland::shell::wlr_layer::Layer};
+        let output = self.space.outputs().find(|o| self.space.output_geometry(o).is_some_and(|g| g.to_f64().contains(pos)))?;
+        let og = self.space.output_geometry(output)?;
+        let map = layer_map_for_output(output);
+        let layer_under = |layers: &[Layer]| {
+            layers.iter().find_map(|l| {
+                let layer = map.layer_under(*l, pos - og.loc.to_f64())?;
+                let lg = map.layer_geometry(layer)?;
+                layer
+                    .surface_under(pos - og.loc.to_f64() - lg.loc.to_f64(), WindowSurfaceType::ALL)
+                    .map(|(s, p)| (s, (p + lg.loc + og.loc).to_f64()))
+            })
+        };
+        layer_under(&[Layer::Overlay, Layer::Top])
+            .or_else(|| {
+                self.space.element_under(pos).and_then(|(window, location)| {
+                    window
+                        .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
+                        .map(|(s, p)| (s, (p + location).to_f64()))
+                })
+            })
+            .or_else(|| layer_under(&[Layer::Bottom, Layer::Background]))
     }
 }
 
@@ -197,7 +219,16 @@ impl Draftpaper {
                 }
             }
             let ws = s.workspace();
-            s.layout().arrange(&mut self.space, &s.grid, ws.fullscreen.as_ref());
+            // panels with an exclusive zone (a foreign bar) take their room from the frame's interior
+            let mut grid = s.grid;
+            if let Some(og) = self.space.output_geometry(&s.output) {
+                let mut zone = smithay::desktop::layer_map_for_output(&s.output).non_exclusive_zone();
+                zone.loc += og.loc;
+                if let Some(area) = grid.area.intersection(zone) {
+                    grid.area = area;
+                }
+            }
+            s.layout().arrange(&mut self.space, &grid, ws.fullscreen.as_ref());
             // dialogs: centred inside the frame at their own size, above the tiles
             for window in &ws.floating {
                 let size = window.geometry().size;

@@ -47,6 +47,9 @@ impl CompositorHandler for Draftpaper {
             }
         };
 
+        if super::layer_shell::handle_commit(self, surface) {
+            return;
+        }
         xdg_shell::handle_commit(&mut self.popups, &self.space, surface);
     }
 }
