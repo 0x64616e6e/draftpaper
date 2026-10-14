@@ -44,6 +44,9 @@ pub struct Draftpaper {
     pub output_manager_state: OutputManagerState,
     pub seat_state: SeatState<Draftpaper>,
     pub data_device_state: DataDeviceState,
+    pub primary_selection_state: smithay::wayland::selection::primary_selection::PrimarySelectionState,
+    pub wlr_data_control_state: smithay::wayland::selection::wlr_data_control::DataControlState,
+    pub ext_data_control_state: smithay::wayland::selection::ext_data_control::DataControlState,
     pub popups: PopupManager,
 
     pub seat: Seat<Self>,
@@ -74,6 +77,11 @@ impl Draftpaper {
         let output_manager_state = OutputManagerState::new_with_xdg_output::<Self>(&dh);
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&dh);
+        let primary_selection_state = smithay::wayland::selection::primary_selection::PrimarySelectionState::new::<Self>(&dh);
+        let wlr_data_control_state =
+            smithay::wayland::selection::wlr_data_control::DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
+        let ext_data_control_state =
+            smithay::wayland::selection::ext_data_control::DataControlState::new::<Self, _>(&dh, Some(&primary_selection_state), |_| true);
         let popups = PopupManager::default();
 
         // A seat is a group of keyboards, pointer and touch devices.
@@ -115,6 +123,9 @@ impl Draftpaper {
             output_manager_state,
             seat_state,
             data_device_state,
+            primary_selection_state,
+            wlr_data_control_state,
+            ext_data_control_state,
             popups,
             seat,
             screens: Vec::new(),

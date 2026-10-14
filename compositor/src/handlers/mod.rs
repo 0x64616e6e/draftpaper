@@ -2,6 +2,7 @@
 mod compositor;
 mod decoration;
 pub mod layer_shell;
+mod selection;
 mod xdg_shell;
 
 use crate::Draftpaper;
@@ -34,7 +35,8 @@ impl SeatHandler for Draftpaper {
     fn focus_changed(&mut self, seat: &Seat<Self>, focused: Option<&WlSurface>) {
         let dh = &self.display_handle;
         let client = focused.and_then(|s| dh.get_client(s.id()).ok());
-        set_data_device_focus(dh, seat, client);
+        set_data_device_focus(dh, seat, client.clone());
+        smithay::wayland::selection::primary_selection::set_primary_focus(dh, seat, client);
     }
 }
 
