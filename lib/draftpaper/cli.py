@@ -5,7 +5,9 @@
   draftpaper apply            write the shell's theme file again
   draftpaper theme [list]     list the themes, the current one marked
   draftpaper theme <name>     switch theme
-  draftpaper theme next       the next theme (the shell's theme cell)
+  draftpaper theme next       the next theme (the shell's theme cell, right click)
+  draftpaper theme json       every theme's values, for the theme picker
+  draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
   draftpaper park ...         park windows in the side margins (draftpaper park, without arguments, explains)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper lock-on-sleep [on|off|toggle]
@@ -54,6 +56,10 @@ def stop():
 def themes(args):
     current = config.load()["theme"]
     names = sorted(theme.available())
+    if args and args[0] == "json":
+        import json
+        print(json.dumps([dict(theme.load(n), current=(n == current)) for n in names]))
+        return
     if not args or args[0] == "list":
         for n in names:
             print(("* " if n == current else "  ") + n)
@@ -81,6 +87,9 @@ def main(argv=None):
         print(f"{t['label']} applied.")
     elif c == "theme":
         themes(rest)
+    elif c == "picker":
+        # the shell's IpcHandler "themes" (qml/shell.qml)
+        sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "themes", "toggle"]).returncode)
     elif c == "park":
         from . import park
         park.main(rest)

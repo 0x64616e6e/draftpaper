@@ -204,6 +204,13 @@ ShellRoot {
         n.dismiss()
     }
 
+    // the theme picker (Mod+t: `draftpaper picker`, which calls this handler; or the theme cell)
+    ThemePicker { id: themePicker; shell: root }
+    IpcHandler {
+        target: "themes"
+        function toggle(): void { themePicker.visible ? themePicker.close() : themePicker.open() }
+    }
+
     property bool volumeLit: false
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }
@@ -434,9 +441,10 @@ ShellRoot {
                             size: edge.fontPx; text: root.glyphs ? root.g("󰹑").trim() : "SHOT"; color: root.ink
                             onLeft: () => root.run(theme.commands.screenshot)
                         }
-                        Cell {      // the next theme
+                        Cell {      // the theme: left, the picker; right, the next theme
                             size: edge.fontPx; text: theme.label.toUpperCase(); color: root.ink
-                            onLeft: () => root.run([root.bin, "theme", "next"])
+                            onLeft: () => themePicker.visible ? themePicker.close() : themePicker.open()
+                            onRight: () => root.run([root.bin, "theme", "next"])
                         }
                     }
                 }
