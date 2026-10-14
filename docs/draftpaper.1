@@ -1,0 +1,47 @@
+.TH DRAFTPAPER 1 "2026-10-14" "draftpaper 0.1.0" "User Commands"
+.SH NAME
+draftpaper \- the i3 desktop drawn as a drafting sheet
+.SH SYNOPSIS
+.B draftpaper
+.RI start | stop | apply | theme " " [ list | next | NAME ] | park " " [ toggle | next | prev | show " " ID ] | readings | version
+.SH DESCRIPTION
+Draftpaper replaces the i3 bar with a drafting sheet: a wallpaper with a frame, zone ticks and a dot grid,
+a live title block carrying the readings, lettered margins, and side-margin cells for parked windows.
+Include
+.I /usr/share/draftpaper/i3/draftpaper.conf
+from the i3 configuration; it runs
+.B draftpaper start
+and binds Super+Escape (park) and Super+Left/Right (cycle parked windows).
+.SH COMMANDS
+.TP
+.B start
+Apply the theme and start the shell.
+.TP
+.B stop
+Stop the shell.
+.TP
+.B apply
+Re-render the sheet and the generated i3 and shell files after a change to the configuration.
+.TP
+.BR theme " [" list "|" next "|" \fINAME\fR]
+List the themes, switch to the next one, or switch to NAME.
+.TP
+.BR park " " toggle "|" next "|" prev "|" show " " \fIID\fR
+Park the focused window in the side margin (or bring every parked window back on a workspace with none
+showing), cycle through the parked windows, or bring one back.
+.TP
+.B readings
+Print the readings the shell polls, as JSON.
+.SH FILES
+.TP
+.I ~/.config/draftpaper/config.toml
+Settings: theme, margin, title block, a custom cell, alert thresholds, commands.
+.TP
+.I ~/.config/draftpaper/themes/
+Themes of your own.
+.TP
+.I ~/.cache/draftpaper/
+Generated sheets, theme.json and i3.conf.
+.SH SEE ALSO
+.BR i3 (1),
+.BR qs (1)
