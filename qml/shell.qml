@@ -1,7 +1,8 @@
 //@ pragma UseQApplication
 // Draftpaper's shell: the lettering on the sheet the compositor draws. There is no bar. The title block
 // (TitleBlock.qml) carries the readings; the top and bottom margins letter what it does not (workspaces,
-// alerts, volume and brightness while they change, the tray, Bluetooth, screenshot, theme); the side
+// notifications, alerts, volume and brightness while they change, the tray, Bluetooth, screenshot,
+// theme); the side
 // margins hold parked windows (SideCells.qml). Park every window of a workspace and the whole sheet shows.
 // The margins and the title block are layer-shell surfaces on the bottom layer, under every window, so
 // fullscreen windows cover them; their geometry and the workspaces come from the compositor's IPC
@@ -14,6 +15,7 @@ import Quickshell.Widgets
 import Quickshell.Services.UPower
 import Quickshell.Services.Pipewire
 import Quickshell.Services.SystemTray
+import Quickshell.Services.Notifications
 
 ShellRoot {
     id: root
@@ -167,6 +169,41 @@ ShellRoot {
         }
         return byWorkspace
     }
+    // ---- notifications: the shell is the notification daemon; each is lettered in the top margin of the
+    //      focused screen (see the notice zone), the newest first, the others waiting behind a count ----
+    NotificationServer {
+        id: notices
+        keepOnReload: false
+        bodySupported: true
+        actionsSupported: true
+        onNotification: n => { n.tracked = true }
+    }
+    readonly property var noticeList: notices.trackedNotifications.values
+    readonly property var notice: noticeList.length ? noticeList[noticeList.length - 1] : null
+    // one line: the app's glyph (or name), the summary, the body without markup or line breaks
+    function noticeText(n) {
+        if (!n) return ""
+        const plain = s => (s || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+        const app = glyphs ? g(appGlyph(n.desktopEntry || n.appName)) : (n.appName ? n.appName + " · " : "")
+        const body = plain(n.body)
+        return app + plain(n.summary) + (body ? " — " + body : "")
+    }
+    // the shown one goes after its timeout (the app's, or 5 s); a critical one stays until clicked
+    Timer {
+        id: noticeTimer
+        interval: root.notice && root.notice.expireTimeout > 0 ? root.notice.expireTimeout * 1000 : 5000
+        running: root.notice !== null && root.notice.urgency !== NotificationUrgency.Critical
+        onTriggered: if (root.notice) root.notice.expire()
+    }
+    onNoticeChanged: if (notice) noticeTimer.restart()
+    function noticeClicked(left) {
+        const n = root.notice
+        if (!n) return
+        const action = left ? n.actions.find(a => a.identifier === "default") : null
+        if (action) action.invoke()
+        n.dismiss()
+    }
+
     property bool volumeLit: false
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }
@@ -243,6 +280,47 @@ ShellRoot {
                             }
                             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Compositor.action("workspace " + modelData.number) }
                         }
+                    }
+                }
+                Zone {          // a notification: the zone before the last, growing leftwards as far as the
+                                // workspaces' zones; one line, cut with … when it is longer still
+                    id: noticeZone
+                    band: topMargin; index: -2
+                    readonly property bool here: root.notice !== null && (!edge.output || edge.output.focused)
+                    readonly property int room: Math.max(1, topMargin.zones - 1 - spacesZone.span)
+                    readonly property real pad: 3 * edge.mm
+                    span: Math.min(room, Math.max(1, Math.ceil((noticeMeasure.implicitWidth + countText.implicitWidth + 2 * pad) / topMargin.zoneLength)))
+                    visible: here
+                    Text {          // the text at its full length, to size the zone
+                        id: noticeMeasure
+                        visible: false
+                        text: root.noticeText(root.notice)
+                        textFormat: Text.StyledText
+                        font.family: Fonts.mono; font.pixelSize: edge.fontPx
+                    }
+                    Text {          // "+2": notifications waiting behind this one
+                        id: countText
+                        anchors { right: parent.right; rightMargin: noticeZone.pad; verticalCenter: parent.verticalCenter }
+                        visible: root.noticeList.length > 1
+                        text: "+" + (root.noticeList.length - 1)
+                        font.family: Fonts.mono; font.pixelSize: edge.fontPx * 0.8
+                        color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.6)
+                    }
+                    Text {
+                        anchors { left: parent.left; leftMargin: noticeZone.pad; right: countText.visible ? countText.left : parent.right
+                                  rightMargin: noticeZone.pad; verticalCenter: parent.verticalCenter }
+                        text: noticeMeasure.text
+                        textFormat: Text.StyledText
+                        elide: Text.ElideRight
+                        horizontalAlignment: noticeZone.span < noticeZone.room ? Text.AlignHCenter : Text.AlignLeft
+                        font.family: Fonts.mono; font.pixelSize: edge.fontPx
+                        color: root.notice && root.notice.urgency === NotificationUrgency.Critical ? theme.alert : root.ink
+                    }
+                    MouseArea {     // left: the notification's default action, then gone; right: gone
+                        anchors.fill: parent
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: e => root.noticeClicked(e.button === Qt.LeftButton)
                     }
                 }
                 Zone {
