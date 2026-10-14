@@ -1,6 +1,6 @@
 //! What an output shows, for every backend: the pointer (on the TTY, where nobody else draws it), the
-//! windows and layer surfaces, their 1 px borders (in the gutters between tiles, so they never cover
-//! content), and the sheet at the bottom, in front-to-back order.
+//! low layers' menus, the windows and layer surfaces, their 1 px borders (in the gutters between tiles,
+//! so they never cover content), and the sheet at the bottom, in front-to-back order.
 
 use std::cell::RefCell;
 
@@ -27,7 +27,8 @@ render_elements! {
     Pointer=MemoryRenderBufferRenderElement<GlesRenderer>,
     Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
     Border=SolidColorRenderElement,
-    Lock=WaylandSurfaceRenderElement<GlesRenderer>,
+    /// the lock surface, and the low layers' menus drawn above the windows
+    Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Sheet=PixelShaderElement,
 }
 
@@ -61,7 +62,7 @@ pub fn output_elements(
                 smithay::backend::renderer::element::surface::render_elements_from_surface_tree(
                     renderer, lock.wl_surface(), (0, 0), scale, 1.0, Kind::Unspecified,
                 );
-            elements.extend(lock_elements.into_iter().map(OutputElements::Lock));
+            elements.extend(lock_elements.into_iter().map(OutputElements::Surface));
         }
         elements.push(OutputElements::Border(SolidColorRenderElement::new(
             smithay::backend::renderer::element::Id::new(),
@@ -83,6 +84,17 @@ pub fn output_elements(
                 elements.push(OutputElements::Pointer(element));
             }
         }
+    }
+
+    // menus of the bottom and background layers (the shell's tray menu), in front of the windows
+    let scale = output.current_scale().fractional_scale();
+    for (popup, loc) in state.low_layer_popups(output).into_iter().rev() {
+        let at = (loc - geometry.loc).to_physical_precise_round(scale);
+        let popup_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> =
+            smithay::backend::renderer::element::surface::render_elements_from_surface_tree(
+                renderer, popup.wl_surface(), at, scale, 1.0, Kind::Unspecified,
+            );
+        elements.extend(popup_elements.into_iter().map(OutputElements::Surface));
     }
 
     elements.extend(

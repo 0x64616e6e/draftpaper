@@ -37,6 +37,25 @@ pub enum PointerFocusTarget {
     X11(X11Surface),
 }
 
+// popup grabs (xdg_shell.rs): the popup takes the keyboard, the pointer follows the keyboard's target
+impl From<smithay::desktop::PopupKind> for KeyboardFocusTarget {
+    fn from(popup: smithay::desktop::PopupKind) -> Self {
+        KeyboardFocusTarget::Surface(popup.wl_surface().clone())
+    }
+}
+
+impl From<KeyboardFocusTarget> for PointerFocusTarget {
+    fn from(target: KeyboardFocusTarget) -> Self {
+        match target {
+            KeyboardFocusTarget::Window(w) => match w.underlying_surface() {
+                WindowSurface::Wayland(t) => PointerFocusTarget::Surface(t.wl_surface().clone()),
+                WindowSurface::X11(x) => PointerFocusTarget::X11(x.clone()),
+            },
+            KeyboardFocusTarget::Surface(s) => PointerFocusTarget::Surface(s),
+        }
+    }
+}
+
 impl IsAlive for KeyboardFocusTarget {
     fn alive(&self) -> bool {
         match self {

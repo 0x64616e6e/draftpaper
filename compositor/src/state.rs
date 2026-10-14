@@ -217,8 +217,26 @@ impl Draftpaper {
         socket_name
     }
 
-    /// The surface under `pos`: overlay and top layer surfaces, then windows, then bottom and
-    /// background layer surfaces (Draftpaper's margins and title block live on the bottom layer).
+    /// The popups (menus) of the bottom and background layer surfaces on `output`, parents first, each
+    /// with the global position of its surface. A menu opens above every window, whatever layer its
+    /// parent is on (the shell's tray menu belongs to a margin, under the windows).
+    pub fn low_layer_popups(&self, output: &smithay::output::Output) -> Vec<(smithay::desktop::PopupKind, Point<i32, Logical>)> {
+        use smithay::{desktop::{layer_map_for_output, PopupManager}, wayland::shell::wlr_layer::Layer};
+        let Some(og) = self.space.output_geometry(output) else { return Vec::new() };
+        let map = layer_map_for_output(output);
+        let mut popups = Vec::new();
+        for layer in map.layers().filter(|l| matches!(l.layer(), Layer::Bottom | Layer::Background)) {
+            let Some(lg) = map.layer_geometry(layer) else { continue };
+            for (popup, offset) in PopupManager::popups_for_surface(layer.wl_surface()) {
+                popups.push((popup.clone(), og.loc + lg.loc + offset - popup.geometry().loc));
+            }
+        }
+        popups
+    }
+
+    /// The surface under `pos`: popups of the low layers, overlay and top layer surfaces, then windows,
+    /// then bottom and background layer surfaces (Draftpaper's margins and title block live on the
+    /// bottom layer).
     pub fn surface_under(&self, pos: Point<f64, Logical>) -> Option<(crate::focus::PointerFocusTarget, Point<f64, Logical>)> {
         use crate::focus::PointerFocusTarget as T;
         use smithay::{desktop::layer_map_for_output, wayland::shell::wlr_layer::Layer};
@@ -227,6 +245,14 @@ impl Draftpaper {
         if self.locked {
             let lock = self.lock_surfaces.get(&output.name())?;
             return Some((T::Surface(lock.wl_surface().clone()), og.loc.to_f64()));
+        }
+        // a low layer's menu, above everything (the last popup is the innermost)
+        let popup = self.low_layer_popups(output).into_iter().rev().find_map(|(popup, loc)| {
+            smithay::desktop::utils::under_from_surface_tree(popup.wl_surface(), pos, loc, WindowSurfaceType::ALL)
+                .map(|(s, p)| (T::Surface(s), p.to_f64()))
+        });
+        if popup.is_some() {
+            return popup;
         }
         let map = layer_map_for_output(output);
         let layer_under = |layers: &[Layer]| {
