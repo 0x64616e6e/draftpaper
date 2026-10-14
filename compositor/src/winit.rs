@@ -4,16 +4,31 @@ use std::time::Duration;
 use smithay::{
     backend::{
         renderer::{
-            damage::OutputDamageTracker, element::surface::WaylandSurfaceRenderElement, gles::GlesRenderer,
+            damage::OutputDamageTracker,
+            element::{render_elements, surface::WaylandSurfaceRenderElement},
+            gles::{element::PixelShaderElement, GlesRenderer},
         },
         winit::{self, WinitEvent},
     },
+    desktop::space::{space_render_elements, SpaceRenderElements},
     output::{Mode, Output, PhysicalProperties, Subpixel},
     reexports::calloop::EventLoop,
     utils::{Rectangle, Transform},
 };
 
-use crate::{CalloopData, Draftpaper};
+use crate::{sheet::SheetRenderer, theme::Theme, CalloopData, Draftpaper};
+
+render_elements! {
+    /// What an output shows: the windows (and layer surfaces), and the sheet under them.
+    pub OutputElements<=GlesRenderer>;
+    Space=SpaceRenderElements<GlesRenderer, WaylandSurfaceRenderElement<GlesRenderer>>,
+    Sheet=PixelShaderElement,
+}
+
+/// Pixels per millimetre for the nested window: DRAFTPAPER_MM, else about 160 PPI (the i3 edition's fallback)
+fn nested_mm() -> f32 {
+    std::env::var("DRAFTPAPER_MM").ok().and_then(|v| v.parse().ok()).unwrap_or(6.2)
+}
 
 pub fn init_winit(
     event_loop: &mut EventLoop<CalloopData>,
@@ -45,6 +60,9 @@ pub fn init_winit(
     state.space.map_output(&output, (0, 0));
 
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
+    let theme = Theme::load();
+    eprintln!("draftpaper: sheet in theme {}, margin {} mm, {} px/mm", theme.name, theme.margin_mm, nested_mm());
+    let mut sheet = SheetRenderer::new(theme, nested_mm());
 
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
@@ -71,23 +89,17 @@ pub fn init_winit(
 
                 {
                     let (renderer, mut framebuffer) = backend.bind().unwrap();
-                    smithay::desktop::space::render_output::<
-                        _,
-                        WaylandSurfaceRenderElement<GlesRenderer>,
-                        _,
-                        _,
-                    >(
-                        &output,
-                        renderer,
-                        &mut framebuffer,
-                        1.0,
-                        0,
-                        [&state.space],
-                        &[],
-                        &mut damage_tracker,
-                        [0.1, 0.1, 0.1, 1.0],
-                    )
-                    .unwrap();
+                    // front to back: the windows, then the sheet at the bottom
+                    let mut elements: Vec<OutputElements> = space_render_elements(renderer, [&state.space], &output, 1.0)
+                        .unwrap()
+                        .into_iter()
+                        .map(OutputElements::Space)
+                        .collect();
+                    let logical = size.to_logical(1);
+                    elements.push(OutputElements::Sheet(sheet.element(renderer, logical)));
+                    damage_tracker
+                        .render_output(renderer, &mut framebuffer, 0, &elements, [0.1, 0.1, 0.1, 1.0])
+                        .unwrap();
                 }
                 backend.submit(Some(&[damage])).unwrap();
 

@@ -5,7 +5,9 @@ mod handlers;
 
 mod grabs;
 mod input;
+mod sheet;
 mod state;
+mod theme;
 mod winit;
 
 use smithay::reexports::{
