@@ -24,22 +24,23 @@ pub struct Grid {
 }
 
 impl Grid {
-    /// For an output of `size` logical pixels at `mm` logical pixels per millimetre, with a margin of
+    /// For an output at `at` of `size` logical pixels at `mm` logical pixels per millimetre, with a margin of
     /// `margin_mm`: the same arithmetic as the shader and render.py (margin rounded to whole pixels,
     /// zones of about 50 mm, at least two).
-    pub fn new(size: Size<i32, Logical>, mm: f64, margin_mm: f64) -> Grid {
+    pub fn new(at: Point<i32, Logical>, size: Size<i32, Logical>, mm: f64, margin_mm: f64) -> Grid {
         let mg = (margin_mm * mm).round();
         let (w, h) = (size.w as f64, size.h as f64);
+        let (ox, oy) = (at.x as f64, at.y as f64);
         let nx = ((w - 2.0 * mg) / (50.0 * mm)).round().max(2.0);
         let ny = ((h - 2.0 * mg) / (50.0 * mm)).round().max(2.0);
         // windows sit inside the 2 px frame line
         let inner = 2.0;
         Grid {
             area: Rectangle::new(
-                ((mg + inner) as i32, (mg + inner) as i32).into(),
+                ((ox + mg + inner) as i32, (oy + mg + inner) as i32).into(),
                 ((w - 2.0 * (mg + inner)) as i32, (h - 2.0 * (mg + inner)) as i32).into(),
             ),
-            origin: (mg, mg).into(),
+            origin: (ox + mg, oy + mg).into(),
             zone: ((w - 2.0 * mg) / nx, (h - 2.0 * mg) / ny),
             zones: (nx as u32, ny as u32),
         }
@@ -88,6 +89,24 @@ fn share(total: u32, n: usize) -> Vec<u32> {
 }
 
 impl Layout {
+    pub fn windows(&self) -> impl Iterator<Item = &Window> {
+        self.columns.iter().flat_map(|c| c.windows.iter())
+    }
+
+    pub fn contains(&self, window: &Window) -> bool {
+        self.find(window).is_some()
+    }
+
+    /// Whether the focus is already as far as it goes towards `dir` (the next step leaves the screen).
+    pub fn at_edge(&self, dir: Direction) -> bool {
+        match (self.focus, dir) {
+            (None, _) => true,
+            (Some((c, _)), Direction::Left) => c == 0,
+            (Some((c, _)), Direction::Right) => c + 1 >= self.columns.len(),
+            _ => false,
+        }
+    }
+
     pub fn focused(&self) -> Option<Window> {
         self.focus.and_then(|(c, r)| self.columns.get(c)?.windows.get(r).cloned())
     }

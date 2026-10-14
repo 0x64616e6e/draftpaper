@@ -7,6 +7,7 @@ mod cursor;
 mod input;
 mod layout;
 mod render;
+mod screens;
 mod sheet;
 mod state;
 mod theme;

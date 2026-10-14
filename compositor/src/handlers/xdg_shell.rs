@@ -26,8 +26,8 @@ impl XdgShellHandler for Draftpaper {
 
     fn new_toplevel(&mut self, surface: ToplevelSurface) {
         let window = Window::new_wayland_window(surface);
-        if let Some(grid) = self.grid {
-            self.layout.add(window.clone(), &grid);
+        if let Some(screen) = self.active_screen() {
+            screen.layout.add(window.clone(), &screen.grid.clone());
             self.relayout();
             self.focus(Some(window));
         } else {
@@ -38,10 +38,12 @@ impl XdgShellHandler for Draftpaper {
     fn toplevel_destroyed(&mut self, surface: ToplevelSurface) {
         let Some(window) = self.space.elements().find(|w| w.toplevel() == Some(&surface)).cloned() else { return };
         self.space.unmap_elem(&window);
-        if let Some(grid) = self.grid {
-            self.layout.remove(&window, &grid);
+        if let Some(i) = self.screen_of(&window) {
+            let grid = self.screens[i].grid;
+            self.screens[i].layout.remove(&window, &grid);
             self.relayout();
-            self.focus(self.layout.focused());
+            let next = self.screens[i].layout.focused();
+            self.focus(next);
         }
     }
 

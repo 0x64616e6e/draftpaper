@@ -144,7 +144,10 @@ impl Draftpaper {
                         .map(|(w, l)| (w.clone(), l))
                     {
                         self.space.raise_element(&window, true);
-                        self.layout.focus_window(&window);
+                        if let Some(i) = self.screen_of(&window) {
+                            self.active = i;
+                            self.screens[i].layout.focus_window(&window);
+                        }
                         keyboard.set_focus(
                             self,
                             Some(window.toplevel().unwrap().wl_surface().clone()),
@@ -219,19 +222,44 @@ impl Draftpaper {
 
 impl Draftpaper {
     pub fn act(&mut self, action: Action) {
-        let grid = self.grid;
+        let i = self.active;
+        if i >= self.screens.len() && matches!(action, Action::Focus(_) | Action::Move(_) | Action::Resize(_)) {
+            return;
+        }
         match action {
             Action::Focus(d) => {
-                let w = self.layout.focus_dir(d);
+                // at the edge of a screen, on to the neighbouring one
+                let w = match self.neighbour(i, d).filter(|_| self.screens[i].layout.at_edge(d)) {
+                    Some(n) => {
+                        self.active = n;
+                        self.screens[n].layout.focused()
+                    }
+                    None => self.screens[i].layout.focus_dir(d),
+                };
                 self.focus(w);
             }
             Action::Move(d) => {
-                let Some(grid) = grid else { return };
-                self.layout.move_dir(d, &grid);
-                self.relayout();
+                let alone = self.screens[i].layout.at_edge(d);
+                match self.neighbour(i, d).filter(|_| alone) {
+                    Some(n) => {
+                        // to the neighbouring screen, as a new column there
+                        if let Some(w) = self.screens[i].layout.focused() {
+                            let (g, gn) = (self.screens[i].grid, self.screens[n].grid);
+                            self.screens[i].layout.remove(&w, &g);
+                            self.screens[n].layout.add(w.clone(), &gn);
+                            self.relayout();
+                            self.focus(Some(w));
+                        }
+                    }
+                    None => {
+                        let grid = self.screens[i].grid;
+                        self.screens[i].layout.move_dir(d, &grid);
+                        self.relayout();
+                    }
+                }
             }
             Action::Resize(d) => {
-                self.layout.resize(d);
+                self.screens[i].layout.resize(d);
                 self.relayout();
             }
             Action::Terminal => {
@@ -245,7 +273,7 @@ impl Draftpaper {
                 }
             }
             Action::Close => {
-                if let Some(t) = self.layout.focused().and_then(|w| w.toplevel().cloned()) {
+                if let Some(t) = self.screens.get(i).and_then(|s| s.layout.focused()).and_then(|w| w.toplevel().cloned()) {
                     t.send_close();
                 }
             }

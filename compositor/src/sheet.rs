@@ -87,18 +87,21 @@ pub struct SheetRenderer {
     program: Option<GlesPixelProgram>,
     element: Option<PixelShaderElement>,
     size: Size<i32, Logical>,
+    scale: f64,
     pub theme: Theme,
-    /// pixels per millimetre of the output (from its physical size, or the 160 PPI fallback)
+    /// physical pixels per millimetre of the output (from its physical size, or the 160 PPI fallback)
     pub mm: f32,
 }
 
 impl SheetRenderer {
     pub fn new(theme: Theme, mm: f32) -> Self {
-        SheetRenderer { program: None, element: None, size: (0, 0).into(), theme, mm }
+        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm }
     }
 
     /// The sheet for an output of `size`, built once and rebuilt when the size changes.
-    pub fn element(&mut self, renderer: &mut GlesRenderer, size: Size<i32, Logical>) -> PixelShaderElement {
+    /// `size` is the output's logical size and `scale` its scale: the shader works in the physical pixels
+    /// it draws, so the frame and the zones land on the same pixels as the layout's (logical) grid.
+    pub fn element(&mut self, renderer: &mut GlesRenderer, size: Size<i32, Logical>, scale: f64) -> PixelShaderElement {
         if self.program.is_none() {
             let names = [
                 UniformName::new("paper", UniformType::_3f),
@@ -112,11 +115,14 @@ impl SheetRenderer {
             ];
             self.program = Some(renderer.compile_custom_pixel_shader(SHADER, &names).expect("the sheet shader compiles"));
         }
-        if self.element.is_none() || self.size != size {
+        if self.element.is_none() || self.size != size || self.scale != scale {
             let t = &self.theme;
             let s = &t.sheet;
-            let margin = (t.margin_mm * self.mm).round();
+            // the layout rounds the margin in logical pixels; the shader takes the same edge, scaled
+            let logical_mm = self.mm / scale as f32;
+            let margin = (t.margin_mm * logical_mm).round() * scale as f32;
             let zones = |len: f32| ((len - 2.0 * margin) / (50.0 * self.mm)).round().max(2.0);
+            let physical = (size.w as f32 * scale as f32, size.h as f32 * scale as f32);
             let uniforms = vec![
                 Uniform::new("paper", t.paper),
                 Uniform::new("paper_light", t.paper_light),
@@ -125,7 +131,7 @@ impl SheetRenderer {
                 Uniform::new("ink", t.ink),
                 Uniform::new("shape", [s.angle.to_radians(), s.midpoint, s.blend, s.shading]),
                 Uniform::new("strength", [s.glow_strength, s.glow_size, s.pattern_strength, self.mm]),
-                Uniform::new("grid", [margin, zones(size.w as f32), zones(size.h as f32)]),
+                Uniform::new("grid", [margin, zones(physical.0), zones(physical.1)]),
             ];
             self.element = Some(PixelShaderElement::new(
                 self.program.clone().unwrap(),
@@ -136,6 +142,7 @@ impl SheetRenderer {
                 Kind::Unspecified,
             ));
             self.size = size;
+            self.scale = scale;
         }
         self.element.clone().unwrap()
     }

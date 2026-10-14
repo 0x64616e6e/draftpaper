@@ -93,3 +93,27 @@ impl Theme {
         }
     }
 }
+
+/// Per-output settings from config.toml, `[outputs.<name>]`: `scale` (1, 1.5, 2...), `position` (logical
+/// x and y, `[x, y]`), and `mm` (physical pixels per millimetre, for panels that report a wrong size).
+#[derive(Debug, Clone, Default)]
+pub struct OutputSettings {
+    pub scale: Option<f64>,
+    pub position: Option<(i32, i32)>,
+    pub mm: Option<f32>,
+}
+
+pub fn output_settings(name: &str) -> OutputSettings {
+    let config = read(&home().join(".config/draftpaper/config.toml")).unwrap_or_default();
+    let Some(o) = config.get("outputs").and_then(|v| v.get(name)).and_then(|v| v.as_table()) else {
+        return OutputSettings::default();
+    };
+    let num = |v: &toml::Value| v.as_float().or_else(|| v.as_integer().map(|i| i as f64));
+    OutputSettings {
+        scale: o.get("scale").and_then(num).filter(|s| *s >= 0.5 && *s <= 4.0),
+        position: o.get("position").and_then(|v| v.as_array()).and_then(|a| {
+            Some((a.first().and_then(num)? as i32, a.get(1).and_then(num)? as i32))
+        }),
+        mm: o.get("mm").and_then(num).map(|m| m as f32),
+    }
+}

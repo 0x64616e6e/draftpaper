@@ -30,7 +30,7 @@ render_elements! {
 /// The sheet of one output, kept with the output.
 pub struct OutputSheet(pub RefCell<SheetRenderer>);
 
-/// Give `output` its sheet, at `mm` pixels per millimetre.
+/// Give `output` its sheet, at `mm` physical pixels per millimetre.
 pub fn attach_sheet(output: &Output, theme: Theme, mm: f32) {
     output.user_data().insert_if_missing(|| OutputSheet(RefCell::new(SheetRenderer::new(theme, mm))));
 }
@@ -49,7 +49,7 @@ pub fn output_elements(
     if let Some((buffer, hotspot)) = pointer {
         let at = state.seat.get_pointer().unwrap().current_location();
         if geometry.to_f64().contains(at) {
-            let loc = (at - geometry.loc.to_f64() - hotspot.to_f64()).to_physical(1.0);
+            let loc = (at - geometry.loc.to_f64()).to_physical(output.current_scale().fractional_scale()) - hotspot.to_f64().to_physical(1.0);
             if let Ok(element) =
                 MemoryRenderBufferRenderElement::from_buffer(renderer, loc, buffer, None, None, None, Kind::Cursor)
             {
@@ -67,7 +67,8 @@ pub fn output_elements(
 
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
         let size: Size<i32, Logical> = geometry.size;
-        elements.push(OutputElements::Sheet(sheet.0.borrow_mut().element(renderer, size)));
+        let scale = output.current_scale().fractional_scale();
+        elements.push(OutputElements::Sheet(sheet.0.borrow_mut().element(renderer, size, scale)));
     }
     elements
 }

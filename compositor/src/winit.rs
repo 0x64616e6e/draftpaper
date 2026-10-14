@@ -12,7 +12,6 @@ use smithay::{
 };
 
 use crate::{
-    layout::Grid,
     render::{attach_sheet, output_elements},
     theme::Theme,
     CalloopData, Draftpaper,
@@ -57,7 +56,7 @@ pub fn init_winit(
     eprintln!("draftpaper: sheet in theme {}, margin {} mm, {} px/mm", theme.name, theme.margin_mm, nested_mm());
     let margin_mm = theme.margin_mm as f64;
     attach_sheet(&output, theme, nested_mm());
-    state.grid = Some(Grid::new(mode.size.to_logical(1), nested_mm() as f64, margin_mm));
+    state.add_screen(output.clone(), nested_mm() as f64, margin_mm);
 
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
@@ -67,8 +66,6 @@ pub fn init_winit(
 
         match event {
             WinitEvent::Resized { size, .. } => {
-                state.grid = Some(Grid::new(size.to_logical(1), nested_mm() as f64, margin_mm));
-                state.relayout();
                 output.change_current_state(
                     Some(Mode {
                         size,
@@ -78,6 +75,7 @@ pub fn init_winit(
                     None,
                     None,
                 );
+                state.update_screen(&output);
             }
             WinitEvent::Input(event) => state.process_input_event(event),
             WinitEvent::Redraw => {

@@ -44,9 +44,9 @@ pub struct Draftpaper {
 
     pub seat: Seat<Self>,
 
-    // the Draftpaper layout on the (one, nested) output: columns and rows on the zone grid
-    pub layout: crate::layout::Layout,
-    pub grid: Option<crate::layout::Grid>,
+    // one screen per output: its zone grid and layout (screens.rs); `active` takes new windows
+    pub screens: Vec<crate::screens::Screen>,
+    pub active: usize,
 
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
@@ -107,8 +107,8 @@ impl Draftpaper {
             data_device_state,
             popups,
             seat,
-            layout: Default::default(),
-            grid: None,
+            screens: Vec::new(),
+            active: 0,
             session: None,
             tty: false,
             loop_handle: event_loop.handle(),
@@ -177,10 +177,10 @@ impl ClientData for ClientState {
 }
 
 impl Draftpaper {
-    /// Place the windows on the grid again (after a change in the layout or the output's size).
+    /// Place the windows on their screens' grids again (after a change in a layout or an output).
     pub fn relayout(&mut self) {
-        if let Some(grid) = self.grid {
-            self.layout.arrange(&mut self.space, &grid);
+        for s in &self.screens {
+            s.layout.arrange(&mut self.space, &s.grid);
         }
     }
 
@@ -188,7 +188,10 @@ impl Draftpaper {
     pub fn focus(&mut self, window: Option<Window>) {
         let serial = smithay::utils::SERIAL_COUNTER.next_serial();
         if let Some(w) = &window {
-            self.layout.focus_window(w);
+            if let Some(i) = self.screen_of(w) {
+                self.active = i;
+                self.screens[i].layout.focus_window(w);
+            }
             self.space.raise_element(w, true);
         }
         for w in self.space.elements() {
