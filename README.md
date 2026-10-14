@@ -82,7 +82,8 @@ margin = 6                 # millimetres between the screen edge and the frame (
 project = "WORKSTATION"    # default: the host name
 drawn = "me"               # default: the user name (shown when there is no custom cell)
 
-[[cell]]                   # one cell of your own, in the title block's last row
+[[cell]]                   # cells of your own: the first in the title block's last row, the others
+                           # in the bottom margin's free zones, one per zone
 label = "TICKET"
 command = ["my-timer"]     # its first line of output is the value
 interval = 5               # seconds

@@ -7,7 +7,8 @@
     project = "my-host"           # default: the host name
     drawn = "me"                  # default: the user name
 
-    [[cell]]                      # optional: a cell of your own in the title block's last row
+    [[cell]]                      # optional: cells of your own; the first goes in the title block's last
+                                  # row, the others in the bottom margin's free zones, one per zone
     label = "TICKET"
     command = ["jt-bar"]          # its first line of output is the value; empty hides it
     interval = 5                  # seconds

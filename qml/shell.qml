@@ -243,7 +243,8 @@ ShellRoot {
                 }
             }
 
-            // ---- bottom margin: Bluetooth in the first zone | screenshot, theme in the last ----
+            // ---- bottom margin: Bluetooth in the first zone | custom cells after the first, one per zone |
+            //      screenshot, theme in the last ----
             Margin {
                 id: bottomMargin
                 edge: edge; ink: root.ink; inkAlpha: theme.inkAlpha
@@ -256,6 +257,32 @@ ShellRoot {
                         text: "BT " + ((root.readings.bt || []).length ? root.readings.bt.join(", ") : "-")
                         color: root.ink
                         onLeft: () => root.run(["blueman-manager"])
+                    }
+                }
+                Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
+                    model: theme.cells.slice(1)
+                    Item {
+                        id: extra
+                        required property var modelData
+                        required property int index
+                        visible: index + 1 < bottomMargin.zones - 1      // the last zone is taken; the rest are dropped
+                        Poll {
+                            id: extraPoll
+                            command: extra.modelData.command || ["true"]
+                            interval: (extra.modelData.interval || 5) * 1000
+                        }
+                        Zone {
+                            band: bottomMargin; index: extra.index + 1
+                            Cell {
+                                anchors.centerIn: parent
+                                visible: extraPoll.output !== ""
+                                size: edge.fontPx
+                                text: (extra.modelData.label ? extra.modelData.label + " " : "") + extraPoll.output.split("\n")[0]
+                                color: root.ink
+                                onLeft: extra.modelData.left ? () => root.run(extra.modelData.left) : null
+                                onRight: extra.modelData.right ? () => root.run(extra.modelData.right) : null
+                            }
+                        }
                     }
                 }
                 Zone {
