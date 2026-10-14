@@ -40,9 +40,19 @@ Then, in `~/.config/i3/config`, after `set $mod ...`:
 
     include /usr/share/draftpaper/i3/draftpaper.conf
 
-and remove your `bar { }` block and any bindings of your own for Super+Escape and Super+Left/Right
-(i3 reports duplicates). Restart i3 (Super+Shift+R). The include starts Draftpaper, sets the
-window colours and the gaps, and binds the keys below.
+and remove your `bar { }` block. Restart i3 (Super+Shift+R). The include starts Draftpaper, sets the
+window colours and the gaps, and binds Super+Escape for parking.
+
+Cycling through parked windows uses Super+Left/Right, which are i3's default focus keys, so it is a
+separate include. Remove your own `bindsym $mod+Left` and `bindsym $mod+Right` lines, then add:
+
+    include /usr/share/draftpaper/i3/draftpaper-cycle.conf
+
+With nothing parked on a workspace, those keys still move the focus left and right. To keep your keys,
+bind others to the same commands instead:
+
+    bindsym $mod+bracketright exec --no-startup-id draftpaper park next
+    bindsym $mod+bracketleft  exec --no-startup-id draftpaper park prev
 
 A compositor (picom) is recommended: the margins and the title block are transparent windows.
 
@@ -54,7 +64,7 @@ Debian's `contrib` section: add `contrib` to your apt sources, then `sudo apt in
 | Key | |
 |---|---|
 | Super+Escape | Park the focused window in the side margin; on a workspace with every window parked, bring them all back |
-| Super+Right / Super+Left | Bring back the parked window in the first / last cell and park the focused one in the next free cell; with nothing parked, move the focus |
+| Super+Right / Super+Left | With `draftpaper-cycle.conf`: bring back the parked window in the first / last cell and park the focused one in the next free cell; with nothing parked, move the focus |
 
 Clicks: a workspace number switches to it; an empty side cell parks the focused window there and a
 parked window's title brings it back; the profile cell cycles
