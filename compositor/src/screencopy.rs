@@ -64,7 +64,7 @@ impl GlobalDispatch<ZwlrScreencopyManagerV1, ()> for Draftpaper {
 
 impl Dispatch<ZwlrScreencopyManagerV1, ()> for Draftpaper {
     fn request(
-        _: &mut Self,
+        state: &mut Self,
         _: &Client,
         _: &ZwlrScreencopyManagerV1,
         request: zwlr_screencopy_manager_v1::Request,
@@ -80,7 +80,8 @@ impl Dispatch<ZwlrScreencopyManagerV1, ()> for Draftpaper {
             }
             _ => return,
         };
-        let output = Output::from_resource(&output);
+        // an output the client still names after it went (unplugged) is not one to copy
+        let output = Output::from_resource(&output).filter(|o| state.space.output_geometry(o).is_some());
         // the whole output in physical pixels, or the region asked for (logical, from the output's corner)
         let region = output.as_ref().and_then(|o| {
             let mode = o.current_mode()?;
@@ -159,6 +160,11 @@ pub fn finish(data: &mut Draftpaper, renderer: &mut GlesRenderer, pointer: Optio
     let copies = std::mem::take(&mut data.screencopies);
     for copy in copies {
         if !copy.frame.is_alive() {
+            continue;
+        }
+        // the output went (unplugged) since the copy was asked for
+        if data.space.output_geometry(&copy.output).is_none() {
+            copy.frame.failed();
             continue;
         }
         let pointer = pointer.filter(|_| copy.cursor);

@@ -57,7 +57,8 @@ pub fn output_elements(
     output: &Output,
     pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
 ) -> Vec<OutputElements> {
-    let geometry = state.space.output_geometry(output).unwrap();
+    // an output not in the space (gone, or not placed yet) has nothing to show
+    let Some(geometry) = state.space.output_geometry(output) else { return Vec::new() };
     let mut elements = Vec::new();
 
     // locked: the lock surface (if the locker has made one yet) on black, nothing else

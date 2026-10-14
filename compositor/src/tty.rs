@@ -58,6 +58,9 @@ type Surface = DrmOutput<Allocator, Exporter, (), DrmDeviceFd>;
 /// About 160 PPI, for displays that report no physical size.
 const FALLBACK_MM: f32 = 6.2;
 
+/// An output's wl_output global, removed when the output goes (clients then stop naming it).
+struct OutputGlobal(smithay::reexports::wayland_server::backend::GlobalId);
+
 pub struct TtyData {
     pub session: LibSeatSession,
     renderer: GlesRenderer,
@@ -253,6 +256,9 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
     for crtc in gone {
         if let Some((output, _surface, _)) = tty.outputs.remove(&crtc) {
             eprintln!("draftpaper: output {} gone", output.name());
+            if let Some(global) = output.user_data().get::<OutputGlobal>() {
+                data.display_handle.remove_global::<Draftpaper>(global.0.clone());
+            }
             data.space.unmap_output(&output);
             data.remove_screen(&output);
         }
@@ -291,7 +297,9 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
             name,
             PhysicalProperties { size: (phys_w as i32, phys_h as i32).into(), subpixel: Subpixel::Unknown, make: "Unknown".into(), model: "Unknown".into() },
         );
-        let _global = output.create_global::<Draftpaper>(&data.display_handle);
+        // kept with the output, to withdraw it from clients when the output goes
+        let global = output.create_global::<Draftpaper>(&data.display_handle);
+        output.user_data().insert_if_missing(|| OutputGlobal(global));
         let wl_mode = WlMode::from(mode);
         output.set_preferred(wl_mode);
         output.change_current_state(Some(wl_mode), None, Some(Scale::Fractional(scale)), Some(position.into()));
