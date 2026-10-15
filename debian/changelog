@@ -4,6 +4,11 @@ draftpaper (0.3.0) unstable; urgency=medium
     commands and the same files, written byte for byte as before, and
     fast (the shell's readings every 5 s: 4 ms instead of 116; a click in
     the settings: 9 ms instead of 92). The package no longer needs python3.
+  * A click on a layer surface (the settings, the launcher, the shell's
+    margins, a panel's menu) no longer hands the keyboard to the window
+    under it: a surface that reads keys takes it, else it stays where it
+    was. The settings lost every second click to it (Qt cancelled the
+    press as the keyboard left); they now also act on the press.
   * Settings: one terminal row of mid tones (charcoal, graphite, slate,
     petrol, moss, olive, umber, wine, plum, or as the windows), in place
     of near-black tints and a separate terminal shade; the settings take a

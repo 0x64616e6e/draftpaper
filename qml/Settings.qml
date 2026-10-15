@@ -228,6 +228,9 @@ PanelWindow {
     readonly property int most: Math.max(8, ...rows.map(k => (options[k] || []).length))
     readonly property real cellW: Math.min(24 * mm, (cw - 34 * mm) / most)
 
+    // the mouse acts on the press, not the click: a compositor that hands the keyboard to the window
+    // under the settings as the button goes down (Draftpaper's did, until it kept clicks on layer
+    // surfaces to themselves) makes Qt cancel the press, and every second click was lost
     Item {
         id: keys
         anchors.fill: parent
@@ -250,7 +253,7 @@ PanelWindow {
         }
         MouseArea {
             anchors.fill: parent
-            onClicked: settings.cancel()
+            onPressed: settings.cancel()
             onWheel: w => settings.step(w.angleDelta.y < 0 || w.angleDelta.x < 0 ? 1 : -1)
         }
 
@@ -316,7 +319,7 @@ PanelWindow {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: { settings.row = 0; c.picked ? settings.keep() : settings.pickCard(c.index) }
+                    onPressed: { settings.row = 0; c.picked ? settings.keep() : settings.pickCard(c.index) }
                 }
             }
         }
@@ -396,7 +399,7 @@ PanelWindow {
                             }
                             MouseArea {
                                 anchors.fill: parent; anchors.margins: -0.8 * settings.mm
-                                onClicked: { settings.row = r.index + 1; settings.choose(r.modelData, o.modelData.value) }
+                                onPressed: { settings.row = r.index + 1; settings.choose(r.modelData, o.modelData.value) }
                             }
                         }
                     }

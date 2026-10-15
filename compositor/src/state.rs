@@ -266,6 +266,18 @@ impl Draftpaper {
         popups
     }
 
+    /// The layer surface under `pos`, if what is under it belongs to one (the surface itself, a popup of
+    /// it), with whether it reads keys (its keyboard interactivity is not none).
+    pub fn layer_under(&self, pos: Point<f64, Logical>) -> Option<(smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, bool)> {
+        use smithay::{desktop::layer_map_for_output, wayland::shell::wlr_layer::KeyboardInteractivity};
+        let (crate::focus::PointerFocusTarget::Surface(surface), _) = self.surface_under(pos)? else { return None };
+        self.space.outputs().find_map(|o| {
+            let map = layer_map_for_output(o);
+            let layer = map.layer_for_surface(&surface, WindowSurfaceType::ALL)?;
+            Some((layer.wl_surface().clone(), layer.cached_state().keyboard_interactivity != KeyboardInteractivity::None))
+        })
+    }
+
     /// The surface under `pos`: popups of the low layers, overlay and top layer surfaces, then windows,
     /// then bottom and background layer surfaces (Draftpaper's margins and title block live on the
     /// bottom layer).

@@ -119,14 +119,24 @@ impl Draftpaper {
                 let button_state = event.state();
 
                 if ButtonState::Pressed == button_state && !pointer.is_grabbed() {
-                    // a click focuses the window under the pointer; on the paper it keeps the focus
+                    // a click focuses the window under the pointer; on the paper it keeps the focus. On a
+                    // layer surface (the settings, the launcher, the shell's margins and title block, a
+                    // panel's menu) the window under it keeps out of it: such a surface takes the keyboard
+                    // if it reads keys, else the keyboard stays where it was. (Handing it to the window
+                    // under an overlay made Qt cancel the press, and every second click was lost.)
                     let _ = (&keyboard, serial);
-                    if let Some((window, _loc)) = self
-                        .space
-                        .element_under(pointer.current_location())
-                        .map(|(w, l)| (w.clone(), l))
-                    {
-                        self.focus(Some(window));
+                    let pos = pointer.current_location();
+                    match self.layer_under(pos) {
+                        Some((surface, true)) => {
+                            let serial = SERIAL_COUNTER.next_serial();
+                            keyboard.set_focus(self, Some(crate::focus::KeyboardFocusTarget::Surface(surface)), serial);
+                        }
+                        Some((_, false)) => {}
+                        None => {
+                            if let Some(window) = self.space.element_under(pos).map(|(w, _)| w.clone()) {
+                                self.focus(Some(window));
+                            }
+                        }
                     }
                 };
 
