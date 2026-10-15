@@ -56,7 +56,10 @@ def shipped(name):
 
 # the values the editor sets: (section, key); None is the top of the file
 EDITABLE = ([(None, k) for k in ("paper", "paper_light", "paper_shade", "glow", "ink", "alert", "strong")]
-            + [("sheet", k) for k in SHEET_DEFAULTS] + [("windows", k) for k in WINDOW_KEYS])
+            + [("sheet", k) for k in SHEET_DEFAULTS] + [("windows", k) for k in WINDOW_KEYS]
+            # the terminal's colours (alacritty, foot, tmux): the rest of [apps] is left as the file has it
+            + [("apps", k) for k in ("term_bg", "term_fg", "cursor", "cursor_text", "sel_bg", "sel_fg")]
+            + [("apps", p + k) for p in ("", "br_") for k in ("black", "red", "green", "yellow", "blue", "magenta", "cyan", "white")])
 
 
 def _toml_value(key, v):

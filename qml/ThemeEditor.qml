@@ -1,6 +1,7 @@
 // The theme editor (`draftpaper theme edit [NAME]`, or E in the theme picker): on the same board as the
-// picker (Board.qml, the inside of the frame cleared), a schedule of the theme's values down the left,
-// the sheet's colours and shading and the windows' colours, and on the right the theme drawn as a
+// picker (Board.qml, the inside of the frame cleared), a schedule of the theme's values down the left
+// (the sheet's colours and shading, the window borders, the terminal's colours and ANSI palette, which
+// the applications take on saving), scrolled to the value picked, and on the right the theme drawn as a
 // miniature desktop (Desktop.qml) over the instrument for the value picked: a colour on three ruled
 // scales (hue, saturation, lightness) and as hex, a number on one scale. The miniature follows every
 // change at once; the sheet itself (paper, margins, title block) a moment later, from a draft of the
@@ -58,18 +59,36 @@ PanelWindow {
         { section: "sheet", key: "glow_strength", label: "glow strength", min: 0, max: 3, step: 0.05 },
         { section: "sheet", key: "glow_size", label: "glow size", min: 0.2, max: 3, step: 0.05 },
         { section: "sheet", key: "pattern_strength", label: "pattern", min: 0, max: 1, step: 0.01 },
-        { group: "WINDOWS" },
-        { section: "windows", key: "focused", label: "focused" },
-        { section: "windows", key: "focused_inactive", label: "focused, other screen" },
-        { section: "windows", key: "unfocused", label: "unfocused" },
-        { section: "windows", key: "urgent", label: "urgent" },
-        { section: "windows", key: "text", label: "text" },
-        { section: "windows", key: "text_inactive", label: "text, inactive" },
-        { section: "windows", key: "background", label: "background" }
+        { group: "BORDERS" },
+        { section: "windows", key: "focused", label: "focused · accent" },
+        { section: "windows", key: "unfocused", label: "the others" },
+        { group: "TERMINAL · applied on saving" },
+        { section: "apps", key: "term_bg", label: "background" },
+        { section: "apps", key: "term_fg", label: "text" },
+        { section: "apps", key: "cursor", label: "cursor" },
+        { section: "apps", key: "cursor_text", label: "under the cursor" },
+        { section: "apps", key: "sel_bg", label: "selection" },
+        { section: "apps", key: "sel_fg", label: "selected text" },
+        { section: "apps", key: "black", label: "black" },
+        { section: "apps", key: "red", label: "red" },
+        { section: "apps", key: "green", label: "green" },
+        { section: "apps", key: "yellow", label: "yellow" },
+        { section: "apps", key: "blue", label: "blue" },
+        { section: "apps", key: "magenta", label: "magenta" },
+        { section: "apps", key: "cyan", label: "cyan" },
+        { section: "apps", key: "white", label: "white" },
+        { section: "apps", key: "br_black", label: "bright black" },
+        { section: "apps", key: "br_red", label: "bright red" },
+        { section: "apps", key: "br_green", label: "bright green" },
+        { section: "apps", key: "br_yellow", label: "bright yellow" },
+        { section: "apps", key: "br_blue", label: "bright blue" },
+        { section: "apps", key: "br_magenta", label: "bright magenta" },
+        { section: "apps", key: "br_cyan", label: "bright cyan" },
+        { section: "apps", key: "br_white", label: "bright white" }
     ]
     readonly property var current: rows[row] || rows[1]
     readonly property bool isColour: current.min === undefined
-    function get(r) { return !v || !r.key ? undefined : r.section ? v[r.section][r.key] : v[r.key] }
+    function get(r) { return !v || !r.key ? undefined : r.section ? (v[r.section] || {})[r.key] : v[r.key] }
 
     readonly property string hint: !visible ? ""
         : typing ? "enter use this colour · esc leave it"
@@ -97,11 +116,14 @@ PanelWindow {
         for (const k of ["paper", "paper_light", "paper_shade", "glow", "ink", "alert", "strong"]) o[k] = v[k]
         o.sheet = v.sheet
         o.windows = v.windows
+        // the terminal's values only: the rest of the [apps] palette stays as the file has it
+        o.apps = {}
+        for (const r of rows) if (r.section === "apps" && v.apps && v.apps[r.key]) o.apps[r.key] = v.apps[r.key]
         return o
     }
     function set(r, value) {
         const n = JSON.parse(JSON.stringify(v))
-        if (r.section) n[r.section][r.key] = value
+        if (r.section) { n[r.section] = n[r.section] || {}; n[r.section][r.key] = value }
         else n[r.key] = value
         v = n
         edited = true
@@ -282,7 +304,20 @@ PanelWindow {
             x: editor.colX; y: whose.y + whose.height + 4 * editor.mm
             width: editor.colW
             height: board.inY + board.inH - editor.gutter - y
-            readonly property real rowH: Math.min(6.5 * editor.mm, height / editor.rows.length)
+            readonly property real rowH: Math.max(5 * editor.mm, Math.min(6.5 * editor.mm, height / editor.rows.length))
+            clip: true
+            // the picked row stays in view, a row or two from the edge
+            function follow() {
+                const y = Math.max(Math.min(flick.contentY, (editor.row - 2) * rowH), (editor.row + 3) * rowH - height)
+                flick.contentY = Math.max(0, Math.min(editor.rows.length * rowH - height, y))
+            }
+            Connections { target: editor; function onRowChanged() { schedule.follow() } }
+            onHeightChanged: follow()
+            Flickable {
+                id: flick
+                anchors.fill: parent
+                contentWidth: width; contentHeight: schedule.rowH * editor.rows.length
+                boundsBehavior: Flickable.StopAtBounds
             Rectangle {          // the outer rule
                 width: parent.width; height: schedule.rowH * editor.rows.length
                 color: "transparent"; border.width: Math.max(1, 0.3 * editor.mm); border.color: editor.inkA(0.85)
@@ -337,6 +372,7 @@ PanelWindow {
                         onClicked: { editor.row = line.index; editor.pickRow(line.index) }
                     }
                 }
+            }
             }
         }
 

@@ -220,9 +220,10 @@ the focused workspace and window lit in amber, warnings in red).
 Super+T opens the theme picker: the inside of the frame is cleared (with a wallpaper, the picture
 blurred) and the themes lie on it as drawings, the sheet previewing each as you move (the arrows or
 h j k l; Enter keeps one, Escape goes back). E there, or `draftpaper theme edit [NAME]`, opens the theme
-editor on the same cleared board: a schedule of the sheet's colours and shading and the window colours,
-each set on ruled scales (hue, saturation, lightness) or typed as hex (#), the sheet previewing every
-change; Enter saves your own copy in `~/.config/draftpaper/themes/`, which shadows a shipped theme of the
+editor on the same cleared board: a schedule of the sheet's colours and shading, the window borders, and
+the terminal's colours and 16 ANSI colours (alacritty, foot, tmux), each set on ruled scales (hue,
+saturation, lightness) or typed as hex (#). The sheet previews every change, the miniature drawing the
+terminal too; the terminals take the new colours when you save. Enter saves your own copy in `~/.config/draftpaper/themes/`, which shadows a shipped theme of the
 same name (R twice, or `draftpaper theme revert NAME`, brings the shipped one back). `draftpaper theme` lists them and `draftpaper theme <name>`
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'

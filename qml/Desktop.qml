@@ -56,34 +56,45 @@ Canvas {
         for (let j = 0; j < zy; j++) { c.fillText("ABCD"[j], m * 0.32, m + j * zh + m * 0.9); c.fillText("ABCD"[j], w - m * 0.7, m + j * zh + m * 0.9) }
         c.save(); c.translate(m * 0.68, m + zh * 1.75); c.rotate(-Math.PI / 2)
         c.font = font(fp); c.fillStyle = t.ink; c.fillText("notes.md", 0, 0); c.restore()
-        // two windows: a terminal (focused, framed in its colour) and a file list
+        // two windows: a terminal (focused, framed in its colour) in the theme's terminal colours and
+        // ANSI palette, as alacritty and foot have them, and a file list in the applications' colours
+        // (GTK); a theme without an [apps] palette falls back to its window colours
+        const a = t.apps || {}, tw = t.windows
+        const termBg = a.term_bg || tw.background, termFg = a.term_fg || tw.text, dim = a.br_black || tw.text_inactive
         const top = m + 3, left = m + 3, inner = h - 2 * m - 6
         const ww = (w - 2 * m - 9) * 0.55, wh = inner * 0.66
-        const win = (x, width, focused, draw) => {
-            c.fillStyle = t.windows.background; c.fillRect(x, top, width, wh)
-            c.strokeStyle = focused ? t.windows.focused : t.windows.unfocused; c.lineWidth = focused ? Math.max(1.5, w / 700) : 1
+        const win = (x, width, focused, bg, draw) => {
+            c.fillStyle = bg; c.fillRect(x, top, width, wh)
+            c.strokeStyle = focused ? tw.focused : tw.unfocused; c.lineWidth = focused ? Math.max(1.5, w / 700) : 1
             c.strokeRect(x, top, width, wh)
             c.save(); c.beginPath(); c.rect(x, top, width, wh); c.clip(); draw(x + width * 0.04, top + wh * 0.09); c.restore()
         }
         const lh = wh * 0.075, tf = font(lh * 0.72)
-        win(left, ww, true, (x, y) => {
-            const rows = [[t.windows.focused, "❯ ", t.windows.text, "cargo build --release"],
-                          [t.windows.text_inactive, "   Compiling draftpaper-compositor v0.2.0", null, ""],
-                          [t.windows.text_inactive, "    Finished release in 17.5s", null, ""],
-                          [t.windows.focused, "❯ ", t.windows.text, "draftpaper theme " + t.name],
-                          [t.windows.text, t.label + " applied.", null, ""],
-                          [t.windows.focused, "❯ ", t.windows.text, "▌"]]
+        win(left, ww, true, termBg, (x, y) => {
+            // a line: runs of [colour, text]
+            const prompt = [a.green || tw.focused, "❯ "]
+            const rows = [[prompt, [termFg, "cargo build --release"]],
+                          [[a.br_green || dim, "   Compiling "], [termFg, "draftpaper-compositor v0.2.0"]],
+                          [[a.br_green || dim, "    Finished "], [dim, "release in 17.5s"]],
+                          [prompt, [termFg, "git status --short"]],
+                          [[a.red || tw.urgent, " M "], [termFg, "qml/Desktop.qml"]],
+                          [[a.green || tw.focused, "A  "], [termFg, "themes/" + t.name + ".toml"]],
+                          [prompt, [termFg, "ls"]],
+                          [[a.blue || termFg, "compositor  docs  lib  qml  "], [termFg, "README.md"]],
+                          [prompt]]
             c.font = tf
-            rows.forEach((r, i) => {
-                c.fillStyle = r[0]; c.fillText(r[1], x, y + i * lh)
-                if (r[2]) { c.fillStyle = r[2]; c.fillText(r[3], x + c.measureText(r[1]).width, y + i * lh) }
+            rows.forEach((runs, i) => {
+                let at = x
+                for (const [colour, text] of runs) { c.fillStyle = colour; c.fillText(text, at, y + i * lh); at += c.measureText(text).width }
+                if (i === rows.length - 1) { c.fillStyle = a.cursor || termFg; c.fillRect(at, y + i * lh - lh * 0.72, lh * 0.45, lh * 0.85) }
             })
         })
-        win(left + ww + 3, w - 2 * m - 9 - ww, false, (x, y) => {
+        win(left + ww + 3, w - 2 * m - 9 - ww, false, a.bg || tw.background, (x, y) => {
             c.font = tf
             const files = ["compositor/", "docs/", "lib/", "qml/", "themes/", "README.md", "LICENSE"]
             files.forEach((f, i) => {
-                c.fillStyle = f.endsWith("/") ? t.windows.text : t.windows.text_inactive
+                if (i === 2 && a.sel_bg) { c.fillStyle = a.sel_bg; c.fillRect(x - lh * 0.3, y + i * lh - lh * 0.78, (w - 2 * m - 9 - ww) * 0.9, lh) }
+                c.fillStyle = i === 2 && a.sel_fg ? a.sel_fg : f.endsWith("/") ? (a.fg || tw.text) : (a.fg_muted || tw.text_inactive)
                 c.fillText((f.endsWith("/") ? "▸ " : "  ") + f, x, y + i * lh)
             })
         })
