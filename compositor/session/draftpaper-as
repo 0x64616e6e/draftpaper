@@ -18,14 +18,21 @@ setfacl -m "u:$user:x" "$XDG_RUNTIME_DIR" && setfacl -m "u:$user:rw" "$socket" |
 	echo "draftpaper-as: cannot let $user onto the display" >&2
 	exit 1
 }
-runtime=/run/user/$(id -u "$user")
+uid=$(id -u "$user")
+runtime=/run/user/$uid
+# That user's service manager owns their runtime directory and D-Bus session: started from inside your
+# session, sudo makes no login of its own, so nothing starts it, and a program pointed at a runtime
+# directory that does not exist has no D-Bus, no portal, no keyring (Chromium then cannot keep its cookies
+# from one run to the next). Start it (needs sudo to root; keep it running with `loginctl enable-linger`).
+if ! systemctl is-active --quiet "user@$uid.service"; then
+	sudo -n systemctl start "user@$uid.service" 2>/dev/null ||
+		echo "draftpaper-as: $user's service manager is not running and could not be started" >&2
+fi
 [ $# -ge 1 ] || set -- "$(getent passwd "$user" | cut -d: -f7)" -l
 # That user's own background services, the desktop portal above all, take the display from their
-# service manager: tell it, or their GTK programs wait most of a minute for a portal that cannot
-# start. As a login of its own, which starts the manager if need be; the manager outlives a login by
-# some seconds, so it is still there for the program started next.
-sudo -iu "$user" systemctl --user set-environment WAYLAND_DISPLAY="$socket" \
+# service manager: tell it, or their GTK programs wait most of a minute for a portal that cannot start.
+sudo -iu "$user" env XDG_RUNTIME_DIR="$runtime" systemctl --user set-environment WAYLAND_DISPLAY="$socket" \
 	XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Draftpaper 2>/dev/null &&
-	sudo -iu "$user" systemctl --user unset-environment DISPLAY 2>/dev/null
+	sudo -iu "$user" env XDG_RUNTIME_DIR="$runtime" systemctl --user unset-environment DISPLAY 2>/dev/null
 exec sudo -iu "$user" env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$socket" \
 	XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Draftpaper "$@"
