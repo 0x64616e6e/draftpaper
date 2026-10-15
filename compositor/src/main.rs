@@ -20,6 +20,7 @@ mod screencopy;
 mod output_management;
 mod wallpaper;
 mod rules;
+mod title;
 mod tty;
 mod winit;
 

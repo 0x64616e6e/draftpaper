@@ -48,9 +48,14 @@ check: $(CLI)
 	# the shipped themes against the contrast rules (a home of its own: only the shipped themes)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
+# the sheet at every scale, pixel by pixel: from a Draftpaper session (compositor/tests/pixels.sh)
+pixels: $(COMPOSITOR) $(CLI)
+	cd compositor && $(CARGO) build --release --locked --example sheetcheck
+	compositor/tests/pixels.sh
+
 clean:
 	cd compositor && $(CARGO) clean
 	cd cli && $(CARGO) clean
 	rm -f $(SHADERS)
 
-.PHONY: all build install check clean
+.PHONY: all build install check pixels clean

@@ -1,5 +1,16 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * The sheet is measured once, in the display's own pixels (title.rs): the
+    frame, the margins' ticks, the title block's rules and cells, the
+    wallpaper's frost. The compositor draws the title block's rules and the
+    shell only letters its cells, so at a scale of 1.5 the block no longer
+    runs a pixel past the frame into the margin, nor marks the frame's line
+    where its top rule meets it; the frost stops at the frame's line, which
+    keeps one colour along the block; the ticks at the frame's corners lie
+    on the frame's line, not a pixel outside it. At a scale that does not
+    divide the display (1.25, 1.75) the frame is measured from the display's
+    edge, and the wallpaper covers its pixels exactly. make pixels checks it
+    all, pixel by pixel, at every scale.
   * The draftpaper command is Rust (cli/), no longer Python: the same
     commands and the same files, written byte for byte as before, and
     fast (the shell's readings every 5 s: 4 ms instead of 116; a click in

@@ -27,7 +27,8 @@ Item {
     readonly property real inH: height - 2 * inY
     // the title block (TitleBlock.qml: 130 by 36 mm, in the frame's bottom-right corner), and whether a
     // window on this screen covers it
-    readonly property rect block: Qt.rect(width - Math.round(margin) - Math.round(130 * mm), height - Math.round(margin) - Math.round(36 * mm),
+    readonly property rect block: out && out.title ? Qt.rect(out.title.rect.x, out.title.rect.y, out.title.rect.width, out.title.rect.height)
+                                    : Qt.rect(width - Math.round(margin) - Math.round(130 * mm), height - Math.round(margin) - Math.round(36 * mm),
                                           Math.round(130 * mm), Math.round(36 * mm))
     readonly property bool blockCovered: out ? Compositor.windows.some(w => w.output === out.name && w.geometry && !w.parked
         && w.geometry.x - out.x < block.x + block.width && w.geometry.x - out.x + w.geometry.width > block.x

@@ -1,7 +1,9 @@
-// The sheet's title block, live (one per screen): the readings laid out as title-block cells in the
-// frame's bottom-right corner, in the theme's ink. A layer-shell surface on the bottom layer, under every
-// window, so it reads as part of the paper: seen on an empty workspace or once its windows are parked,
-// never on top of work. Sizes are millimetres of this screen.
+// The sheet's title block, live (one per screen): the readings lettered in the title block's cells, in
+// the frame's bottom-right corner, in the theme's ink. The compositor draws the block's rules, measured
+// in the display's own pixels with the frame (compositor/src/title.rs), and sends where its cells are
+// (the output's "title"); the shell only letters them. A layer-shell surface on the bottom layer, under
+// every window, so it reads as part of the paper: seen on an empty workspace or once its windows are
+// parked, never on top of work. Sizes are millimetres of this screen.
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
@@ -14,14 +16,24 @@ Item {
 
     readonly property var theme: shell.theme
     readonly property real mm: edge.mm
-    readonly property real bw: 130 * mm
-    readonly property real bh: 36 * mm
     readonly property color ink: theme.ink
     readonly property color line: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.85 * theme.inkAlpha + 0.1))
     readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
     readonly property var custom: theme.cells.length > 0 ? theme.cells[0] : null
 
-    // [x, y, w, h] in mm, label, value (StyledText), click (left), click (right), alert
+    // the block and its cells from the compositor, in logical pixels of the output; a compositor before
+    // 0.3.0 sends none, and the shell draws the rules itself (from the millimetres below)
+    readonly property var geo: edge.output && edge.output.title ? edge.output.title : null
+    // the layer surface: whole logical pixels from the frame's corner, wide enough to hold the block;
+    // the block inside it at (ox, oy)
+    readonly property int marginR: Math.round(edge.margin)
+    readonly property int surfW: geo ? Math.ceil(edge.width - marginR - geo.rect.x - 1e-6) : Math.round(130 * mm)
+    readonly property int surfH: geo ? Math.ceil(edge.height - marginR - geo.rect.y - 1e-6) : Math.round(36 * mm)
+    readonly property real ox: geo ? geo.rect.x - (edge.width - marginR - surfW) : 0
+    readonly property real oy: geo ? geo.rect.y - (edge.height - marginR - surfH) : 0
+
+    // per cell, in the compositor's order: [x, y, w, h] in mm (only without its geometry), label, value
+    // (StyledText), click (left), click (right), alert
     readonly property var cells: [
         [0, 0, 34, 24, "TIME", Qt.formatDateTime(shell.now, "HH:mm"), null, null, false],
         [34, 0, 32, 12, "DATE", Qt.formatDateTime(shell.now, "ddd dd MMM yyyy"), null, null, false],
@@ -42,36 +54,45 @@ Item {
         id: win
         screen: block.edge.screen
         anchors { bottom: true; right: true }
-        margins { bottom: Math.round(block.edge.margin); right: Math.round(block.edge.margin) }
-        implicitWidth: Math.round(block.bw)
-        implicitHeight: Math.round(block.bh)
+        margins { bottom: block.marginR; right: block.marginR }
+        implicitWidth: block.surfW
+        implicitHeight: block.surfH
         exclusionMode: ExclusionMode.Ignore
         aboveWindows: false
         focusable: false
         color: "transparent"
         WlrLayershell.namespace: "draftpaper-title-block"
 
-        // the block's outer rule, as heavy as the frame, on its top and left: its right and bottom are the
-        // frame's own line (drawn by the compositor, in the margins' ink when they take a wallpaper's
-        // colours), which a rule of the block's would cover in the theme's
+        // without the compositor's geometry: the block's outer rule on its top and left (its right and
+        // bottom are the frame's line), and each cell's border
         Rectangle {
+            visible: !block.geo
             width: parent.width; height: Math.max(1, Math.round(2 / block.edge.dpr))
             color: block.line
         }
         Rectangle {
+            visible: !block.geo
             width: Math.max(1, Math.round(2 / block.edge.dpr)); height: parent.height
             color: block.line
         }
-        Item {                            // the cells, kept off the frame's line along the right and bottom
-            anchors { fill: parent; rightMargin: Math.max(1, Math.round(2 / block.edge.dpr)); bottomMargin: Math.max(1, Math.round(2 / block.edge.dpr)) }
+        Item {                            // the cells, kept inside the block
+            x: block.ox; y: block.oy
+            width: block.geo ? block.geo.rect.width : parent.width - Math.max(1, Math.round(2 / block.edge.dpr))
+            height: block.geo ? block.geo.rect.height : parent.height - Math.max(1, Math.round(2 / block.edge.dpr))
             clip: true
         Repeater {
             model: block.cells
             Item {
+                id: cell
                 required property var modelData
-                x: modelData[0] * block.mm; y: modelData[1] * block.mm
-                width: modelData[2] * block.mm; height: modelData[3] * block.mm
+                required property int index
+                readonly property var at: block.geo ? block.geo.cells[index] : null
+                x: at ? at.x - block.geo.rect.x : modelData[0] * block.mm
+                y: at ? at.y - block.geo.rect.y : modelData[1] * block.mm
+                width: at ? at.width : modelData[2] * block.mm
+                height: at ? at.height : modelData[3] * block.mm
                 Rectangle {
+                    visible: !block.geo
                     anchors.fill: parent
                     color: "transparent"
                     border.color: block.faint

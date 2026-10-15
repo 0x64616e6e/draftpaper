@@ -30,6 +30,8 @@ Build the package with `dpkg-buildpackage -us -uc -b` (needs `debhelper`); check
   the shell; comments that say why, at the density of the surrounding code.
 - Run `make check`, and try the change in a Draftpaper session (or a nested one); say in the pull request what you tested
   and what you could not (one screen or two, HiDPI or not, laptop or desktop).
+- A change to what the sheet draws (the frame, the ticks, the title block, the wallpaper) also runs `make pixels`
+  from a Draftpaper session: the sheet at every scale, checked pixel by pixel against `compositor/src/title.rs`.
 - Update `README.md` and `docs/draftpaper.1` when you change commands, keys or configuration.
 - New dependencies need a reason: every one becomes a Debian package dependency.
 

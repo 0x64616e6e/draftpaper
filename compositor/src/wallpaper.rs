@@ -6,7 +6,7 @@
 //! margins stay the theme's paper, or with `margins = "ambient"` take the picture's colours: each margin
 //! cell the average of the picture's edge beside it, neighbouring cells blending softly, and the margins'
 //! lettering in whichever of the theme's inks reads on them (`margin_ink`, sent to the shell). Under the
-//! title block (the shell's TitleBlock.qml, 130 by 36 mm in the frame's bottom-right corner) the picture
+//! title block (title.rs: 130 by 36 mm in the frame's bottom-right corner, up to its line) the picture
 //! is blurred and tinted with the paper (`title_tint`), so the readings stay legible.
 //!
 //! Everything is prepared once per output, size and theme (decoding, cropping, averaging, blurring on
@@ -26,9 +26,6 @@ use smithay::{
 };
 
 use crate::theme::Theme;
-
-/// The title block's size in millimetres (as TitleBlock.qml draws it).
-const TITLE_BLOCK_MM: (f64, f64) = (130.0, 36.0);
 
 struct Picture {
     path: PathBuf,
@@ -285,9 +282,11 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
         (None, None)
     };
 
-    // the title block's place (bottom right of the interior) and the picture there, blurred and tinted
-    let (bw, bh) = ((TITLE_BLOCK_MM.0 * mm as f64).round() as i32, (TITLE_BLOCK_MM.1 * mm as f64).round() as i32);
-    let title = Rectangle::<i32, Physical>::new((w - margin - bw, h - margin - bh).into(), (bw.max(1), bh.max(1)).into());
+    // the title block's place (title.rs: bottom right of the interior, up to the frame's line, which is drawn
+    // over the picture as along the rest of the frame) and the picture there, blurred and tinted
+    let block = crate::title::title_block(size, margin, mm).rect;
+    let title = Rectangle::<i32, Physical>::new(block.loc, (block.size.w - crate::title::LINE, block.size.h - crate::title::LINE).into());
+    let (bw, bh) = (title.size.w, title.size.h);
     let (tx, ty) = ((title.loc.x - interior.loc.x).max(0) as u32, (title.loc.y - interior.loc.y).max(0) as u32);
     let under = imageops::crop_imm(&filled, tx.min(iw - 1), ty.min(ih - 1), (bw as u32).min(iw - tx.min(iw - 1)), (bh as u32).min(ih - ty.min(ih - 1))).to_image();
     // frosted glass: blurred about 1.5 mm (blurred small and scaled back, quick), so the picture's shapes

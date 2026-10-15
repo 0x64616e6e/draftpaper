@@ -29,13 +29,15 @@ use crate::{sheet::SheetRenderer, state::Draftpaper, theme::Theme};
 
 render_elements! {
     pub OutputElements<=GlesRenderer>;
-    /// the pointer, and the wallpaper's textures
+    /// the pointer
     Buffer=MemoryRenderBufferRenderElement<GlesRenderer>,
     Window=CropRenderElement<RelocateRenderElement<RescaleRenderElement<WaylandSurfaceRenderElement<GlesRenderer>>>>,
     Border=SolidColorRenderElement,
     /// the lock surface, and the low layers' menus drawn above the windows
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Sheet=PixelShaderElement,
+    /// the wallpaper's textures, cut to their pixels
+    Picture=CropRenderElement<MemoryRenderBufferRenderElement<GlesRenderer>>,
 }
 
 /// The sheet of one output, kept with the output.
@@ -43,6 +45,21 @@ pub struct OutputSheet(pub RefCell<SheetRenderer>);
 
 /// The four 1 px edges of a window's border, kept with the window.
 struct Border(RefCell<[SolidColorBuffer; 4]>);
+
+/// The title block's rules (title.rs), kept with the output.
+struct TitleRules(RefCell<Vec<SolidColorBuffer>>);
+
+/// The output's size in physical pixels: its mode, as it is turned. The sheet is measured from these
+/// edges, not from the logical size scaled, which a scale such as 1.75 rounds past them.
+pub fn mode_size(output: &Output) -> (i32, i32) {
+    match output.current_mode() {
+        Some(mode) => {
+            let s = output.current_transform().transform_size(mode.size);
+            (s.w, s.h)
+        }
+        None => (0, 0),
+    }
+}
 
 /// Give `output` its sheet, at `mm` physical pixels per millimetre.
 pub fn attach_sheet(output: &Output, theme: Theme, mm: f32) {
@@ -262,13 +279,15 @@ pub fn output_elements(
         // margins, the frosted title block, under the sheet's lines
         output.user_data().insert_if_missing(crate::wallpaper::WallpaperCache::default);
         let cache = output.user_data().get::<crate::wallpaper::WallpaperCache>().unwrap();
-        let physical = (size.w as f64 * scale).round() as i32;
-        let physical = (physical, (size.h as f64 * scale).round() as i32);
-        let wall = screen.is_some_and(|s| {
-            // the margin as the shader rounds it: whole logical pixels, scaled
-            let margin = ((s.margin_mm * s.mm).round() * scale).round() as i32;
-            crate::wallpaper::prepare(cache, &sheet.theme, physical, margin, s.grid.zones, sheet.mm)
-        });
+        let physical = mode_size(output);
+        // the margin and the zones, for the shader, the wallpaper and the title block alike
+        // physical pixels per millimetre, as the screen has them (and the IPC sends them)
+        let mm = screen.map(|s| s.phys_mm as f32).unwrap_or(sheet.mm);
+        let (margin, zones) = match screen {
+            Some(s) => (crate::title::margin(s.margin_mm, s.mm, scale), s.grid.zones),
+            None => (crate::title::margin(sheet.theme.margin_mm as f64, sheet.mm as f64 / scale, scale), (2, 2)),
+        };
+        let wall = screen.is_some() && crate::wallpaper::prepare(cache, &sheet.theme, physical, margin, zones, mm);
         let prepared = cache.0.borrow();
         let wallpaper = prepared.as_ref().filter(|_| wall);
         let mode = match wallpaper {
@@ -278,18 +297,43 @@ pub fn output_elements(
         };
         let ink = wallpaper.and_then(|w| w.margin_ink).unwrap_or(sheet.theme.ink);
         sheet.set_wall(mode, ink);
-        elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale)));
+        // the title block's rules (title.rs), when the shell letters it: over the sheet and the frost,
+        // whole pixels, none over another or over the frame's line
+        let lettered = layer_map_for_output(output).layers().any(|l| l.namespace() == "draftpaper-title-block");
+        if lettered {
+            let block = crate::title::title_block(physical, margin, mm);
+            let t = &sheet.theme;
+            let colour = |alpha: f32| {
+                let a = alpha.min(1.0);
+                [t.ink[0] * a, t.ink[1] * a, t.ink[2] * a, a]
+            };
+            // as the margins' lettering: the outer rule nearly the frame's weight, the cells' lighter
+            let (heavy, light) = (colour(0.85 * t.sheet.pattern_strength + 0.1), colour(0.6 * t.sheet.pattern_strength + 0.1));
+            // buffers of physical pixels (scale 1), kept with the output so that damage follows their changes
+            let buffers = output.user_data().get_or_insert(|| TitleRules(RefCell::new(Vec::new())));
+            let mut buffers = buffers.0.borrow_mut();
+            buffers.resize_with(block.rules.len(), SolidColorBuffer::default);
+            for (buffer, rule) in buffers.iter_mut().zip(&block.rules) {
+                buffer.update((rule.rect.size.w, rule.rect.size.h), if rule.heavy { heavy } else { light });
+                elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, rule.rect.loc, 1.0, 1.0, Kind::Unspecified)));
+            }
+        }
+        elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale, physical, margin, zones)));
         if let Some(w) = wallpaper {
+            // whole logical pixels, rounded up: the element is cropped to the rectangle's pixels after
             let logical = |r: Rectangle<i32, smithay::utils::Physical>| {
-                Size::<i32, Logical>::from(((r.size.w as f64 / scale).round() as i32, (r.size.h as f64 / scale).round() as i32))
+                Size::<i32, Logical>::from(((r.size.w as f64 / scale).ceil() as i32, (r.size.h as f64 / scale).ceil() as i32))
             };
             // drawn whole (`src`, the buffer's own pixels: its scale is 1) at the rectangle's size; without a
             // src Smithay takes the logical size for one, and on a scaled output showed the buffer's top-left
-            // corner, magnified
+            // corner, magnified. An element's size is whole logical pixels, which at a scale such as 1.75 is not
+            // whole physical ones: drawn a little larger, then cut to the rectangle, it covers it exactly
             let mut draw = |buffer: &MemoryRenderBuffer, px: (i32, i32), r: Rectangle<i32, smithay::utils::Physical>| {
                 let src = Rectangle::<f64, Logical>::from_size((px.0 as f64, px.1 as f64).into());
                 if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(renderer, r.loc.to_f64(), buffer, None, Some(src), Some(logical(r)), Kind::Unspecified) {
-                    elements.push(OutputElements::Buffer(e));
+                    if let Some(e) = CropRenderElement::from_element(e, scale, r) {
+                        elements.push(OutputElements::Picture(e));
+                    }
                 }
             };
             draw(&w.frosted, (w.title.size.w, w.title.size.h), w.title);

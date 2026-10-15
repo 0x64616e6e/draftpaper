@@ -39,8 +39,10 @@ uniform vec4 hidden;
 // lines are drawn here, in margin_ink, over the picture's colours)
 uniform float wall;
 uniform vec3 margin_ink;
-// the output in physical pixels (Smithay's `size` is the element's logical size)
-uniform vec2 physical;
+// the element's extent in physical pixels (Smithay's `size` is its logical size), then the output's own
+// (its mode): at a scale that does not divide the mode, the logical size is rounded up, and the element
+// runs past the output's edge
+uniform vec4 physical;
 
 float bloom(vec2 uv, vec2 c, float r, float k) {
     vec2 d = vec2((uv.x - c.x) * size.x / size.y, uv.y - c.y);
@@ -48,16 +50,26 @@ float bloom(vec2 uv, vec2 c, float r, float k) {
     return min(1.0, k * strength.x) * exp(-dot(d, d) / (2.0 * rr * rr));
 }
 
-// 1.0 within half a pixel of a line at `at`
-float near(float p, float at) { return step(abs(p - at), 0.5); }
+// 1.0 on the tick of boundary k (of n) along a side len pixels long, as title.rs's tick() places it: at
+// the frame's corners the frame's line (2 pixels), between them one pixel at mg + round(k * inside / n),
+// in whole numbers (a float division may round the wrong way; the products are exact)
+float ticked(float p, float len, float mg, float n, float k) {
+    if (k < 0.5) return step(mg, p) * step(p, mg + 1.0);
+    if (k > n - 0.5) return step(len - mg - 2.0, p) * step(p, len - mg - 1.0);
+    float a = 2.0 * k * (len - 2.0 * mg) + n, b = 2.0 * n;
+    float at = floor(a / b);
+    if (at * b > a) at -= 1.0;
+    if ((at + 1.0) * b <= a) at += 1.0;
+    return step(abs(p - (mg + at)), 0.25);
+}
 
 // bit k of a mask held in a float (no bit operations in GLSL ES 2; exact up to 2^24)
 float bit(float mask, float k) { return mod(floor(mask / exp2(k) + 0.25), 2.0); }
 
 void main() {
     vec2 uv = v_coords;
-    vec2 px = floor(v_coords * physical);      // physical pixel, origin top left
-    float w = physical.x, h = physical.y, mm = strength.w, mg = grid.x;
+    vec2 px = floor(v_coords * physical.xy);   // physical pixel, origin top left
+    float w = physical.z, h = physical.w, mm = strength.w, mg = grid.x;
 
     // the paper: light -> paper -> shade along the angle, smoothstepped, then three blooms of glow
     float ca = cos(shape.x), sa = sin(shape.x);
@@ -80,15 +92,15 @@ void main() {
     if (inY && ((px.x >= mg && px.x < mg + 2.0) || (px.x >= w - mg - 2.0 && px.x < w - mg))) m = max(m, 0.85);
     if (inX && ((px.y >= mg && px.y < mg + 2.0) || (px.y >= h - mg - 2.0 && px.y < h - mg))) m = max(m, 0.85);
     float zw = (w - 2.0 * mg) / grid.y, zh = (h - 2.0 * mg) / grid.z;
-    if ((px.y < mg || px.y >= h - mg) && px.x >= mg - 0.5 && px.x <= w - mg + 0.5) {
-        float k = floor((px.x - mg) / zw + 0.5);
+    if ((px.y < mg || px.y >= h - mg) && px.x >= mg && px.x < w - mg) {
+        float k = clamp(floor((px.x - mg) / zw + 0.5), 0.0, grid.y);
         float off = bit(px.y < mg ? hidden.x : hidden.y, k);
-        m = max(m, 0.6 * near(px.x, mg + k * zw) * (1.0 - off));
+        m = max(m, 0.6 * ticked(px.x, w, mg, grid.y, k) * (1.0 - off));
     }
-    if ((px.x < mg || px.x >= w - mg) && px.y >= mg - 0.5 && px.y <= h - mg + 0.5) {
-        float k = floor((px.y - mg) / zh + 0.5);
+    if ((px.x < mg || px.x >= w - mg) && px.y >= mg && px.y < h - mg) {
+        float k = clamp(floor((px.y - mg) / zh + 0.5), 0.0, grid.z);
         float off = bit(px.x < mg ? hidden.z : hidden.w, k);
-        m = max(m, 0.6 * near(px.y, mg + k * zh) * (1.0 - off));
+        m = max(m, 0.6 * ticked(px.y, h, mg, grid.z, k) * (1.0 - off));
     }
     if (wall > 0.5) {
         // the picture shows in the frame's interior (no dots over it)
@@ -114,8 +126,8 @@ void main() {
 pub struct SheetRenderer {
     program: Option<GlesPixelProgram>,
     element: Option<PixelShaderElement>,
-    size: Size<i32, Logical>,
-    scale: f64,
+    /// what the element was built for: the size, the scale, the mode, the margin and the zones
+    key: (Size<i32, Logical>, u64, (i32, i32), i32, (u32, u32)),
     pub theme: Theme,
     /// physical pixels per millimetre of the output (from its physical size, or the 160 PPI fallback)
     pub mm: f32,
@@ -127,7 +139,7 @@ pub struct SheetRenderer {
 
 impl SheetRenderer {
     pub fn new(theme: Theme, mm: f32) -> Self {
-        SheetRenderer { program: None, element: None, size: (0, 0).into(), scale: 1.0, theme, mm, hidden: [0; 4], wall: (0, [0; 3]) }
+        SheetRenderer { program: None, element: None, key: ((0, 0).into(), 0, (0, 0), 0, (0, 0)), theme, mm, hidden: [0; 4], wall: (0, [0; 3]) }
     }
 
     /// The sheet for an output of `size`, built once and rebuilt when the size changes.
@@ -155,8 +167,9 @@ impl SheetRenderer {
     }
 
     /// `size` is the output's logical size and `scale` its scale: the shader works in the physical pixels
-    /// it draws, so the frame and the zones land on the same pixels as the layout's (logical) grid.
-    pub fn element(&mut self, renderer: &mut GlesRenderer, size: Size<i32, Logical>, scale: f64) -> PixelShaderElement {
+    /// it draws, the margin (title.rs's margin()) and the zones the layout's, so the frame and the zones land
+    /// on the pixels the rest of the sheet is measured from.
+    pub fn element(&mut self, renderer: &mut GlesRenderer, size: Size<i32, Logical>, scale: f64, mode: (i32, i32), margin: i32, zones: (u32, u32)) -> PixelShaderElement {
         if self.program.is_none() {
             let names = [
                 UniformName::new("paper", UniformType::_3f),
@@ -167,21 +180,18 @@ impl SheetRenderer {
                 UniformName::new("shape", UniformType::_4f),
                 UniformName::new("strength", UniformType::_4f),
                 UniformName::new("grid", UniformType::_3f),
-                UniformName::new("physical", UniformType::_2f),
+                UniformName::new("physical", UniformType::_4f),
                 UniformName::new("hidden", UniformType::_4f),
                 UniformName::new("wall", UniformType::_1f),
                 UniformName::new("margin_ink", UniformType::_3f),
             ];
             self.program = Some(renderer.compile_custom_pixel_shader(SHADER, &names).expect("the sheet shader compiles"));
         }
-        if self.element.is_none() || self.size != size || self.scale != scale {
+        let key = (size, scale.to_bits(), mode, margin, zones);
+        if self.element.is_none() || self.key != key {
             let t = &self.theme;
             let s = &t.sheet;
-            // the layout rounds the margin in logical pixels; the shader takes the same edge, scaled
-            let logical_mm = self.mm / scale as f32;
-            let margin = (t.margin_mm * logical_mm).round() * scale as f32;
-            let zones = |len: f32| ((len - 2.0 * margin) / (50.0 * self.mm)).round().max(2.0);
-            let physical = (size.w as f32 * scale as f32, size.h as f32 * scale as f32);
+            let physical = ((size.w as f64 * scale).round() as f32, (size.h as f64 * scale).round() as f32);
             let uniforms = vec![
                 Uniform::new("paper", t.paper),
                 Uniform::new("paper_light", t.paper_light),
@@ -190,8 +200,8 @@ impl SheetRenderer {
                 Uniform::new("ink", t.ink),
                 Uniform::new("shape", [s.angle.to_radians(), s.midpoint, s.blend, s.shading]),
                 Uniform::new("strength", [s.glow_strength, s.glow_size, s.pattern_strength, self.mm]),
-                Uniform::new("grid", [margin, zones(physical.0), zones(physical.1)]),
-                Uniform::new("physical", [physical.0, physical.1]),
+                Uniform::new("grid", [margin as f32, zones.0.max(1) as f32, zones.1.max(1) as f32]),
+                Uniform::new("physical", [physical.0, physical.1, mode.0 as f32, mode.1 as f32]),
                 Uniform::new("hidden", self.hidden.map(|m| m as f32)),
                 Uniform::new("wall", self.wall.0 as f32),
                 Uniform::new("margin_ink", self.wall.1.map(f32::from_bits)),
@@ -205,8 +215,7 @@ impl SheetRenderer {
                 uniforms,
                 Kind::Unspecified,
             ));
-            self.size = size;
-            self.scale = scale;
+            self.key = key;
         }
         self.element.clone().unwrap()
     }
