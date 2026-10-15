@@ -283,15 +283,19 @@ pub fn output_elements(
             let logical = |r: Rectangle<i32, smithay::utils::Physical>| {
                 Size::<i32, Logical>::from(((r.size.w as f64 / scale).round() as i32, (r.size.h as f64 / scale).round() as i32))
             };
-            let mut draw = |buffer: &MemoryRenderBuffer, r: Rectangle<i32, smithay::utils::Physical>| {
-                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(renderer, r.loc.to_f64(), buffer, None, None, Some(logical(r)), Kind::Unspecified) {
+            // drawn whole (`src`, the buffer's own pixels: its scale is 1) at the rectangle's size; without a
+            // src Smithay takes the logical size for one, and on a scaled output showed the buffer's top-left
+            // corner, magnified
+            let mut draw = |buffer: &MemoryRenderBuffer, px: (i32, i32), r: Rectangle<i32, smithay::utils::Physical>| {
+                let src = Rectangle::<f64, Logical>::from_size((px.0 as f64, px.1 as f64).into());
+                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(renderer, r.loc.to_f64(), buffer, None, Some(src), Some(logical(r)), Kind::Unspecified) {
                     elements.push(OutputElements::Buffer(e));
                 }
             };
-            draw(&w.frosted, w.title);
-            draw(&w.picture, w.interior);
-            if let Some(ambient) = &w.ambient {
-                draw(ambient, Rectangle::from_size(physical.into()));
+            draw(&w.frosted, (w.title.size.w, w.title.size.h), w.title);
+            draw(&w.picture, (w.interior.size.w, w.interior.size.h), w.interior);
+            if let Some((ambient, px)) = &w.ambient {
+                draw(ambient, *px, Rectangle::from_size(physical.into()));
             }
         }
     }

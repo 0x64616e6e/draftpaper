@@ -89,7 +89,7 @@ pub struct OutputWallpaper {
     pub interior: Rectangle<i32, Physical>,
     pub picture: MemoryRenderBuffer,
     /// the margins' colours, at an eighth of the output's size (drawn stretched over it, smoothly)
-    pub ambient: Option<MemoryRenderBuffer>,
+    pub ambient: Option<(MemoryRenderBuffer, (i32, i32))>,
     /// the title block's place and the picture there, blurred and tinted
     pub title: Rectangle<i32, Physical>,
     pub frosted: MemoryRenderBuffer,
@@ -280,7 +280,7 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
         // the margins' ink: the theme's, or the paper's light or shade when that reads better on them
         let other = if luminance(theme.ink) < 0.4 { theme.paper_light } else { theme.paper_shade };
         let ink = if contrast(theme.ink, avg) >= contrast(other, avg).min(4.5) { theme.ink } else { other };
-        (Some(buffer(&soft)), Some(ink))
+        (Some((buffer(&soft), (soft.width() as i32, soft.height() as i32))), Some(ink))
     } else {
         (None, None)
     };
@@ -290,8 +290,11 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
     let title = Rectangle::<i32, Physical>::new((w - margin - bw, h - margin - bh).into(), (bw.max(1), bh.max(1)).into());
     let (tx, ty) = ((title.loc.x - interior.loc.x).max(0) as u32, (title.loc.y - interior.loc.y).max(0) as u32);
     let under = imageops::crop_imm(&filled, tx.min(iw - 1), ty.min(ih - 1), (bw as u32).min(iw - tx.min(iw - 1)), (bh as u32).min(ih - ty.min(ih - 1))).to_image();
-    let tiny = imageops::resize(&under, (under.width() / 16).max(2), (under.height() / 16).max(2), FilterType::Triangle);
-    let tiny = imageops::blur(&tiny, 2.0);
+    // frosted glass: blurred about 1.5 mm (blurred small and scaled back, quick), so the picture's shapes
+    // still show through; how much paper lies over it is `title_tint`
+    let k = (mm / 2.0).max(1.0);
+    let tiny = imageops::resize(&under, ((under.width() as f32 / k) as u32).max(2), ((under.height() as f32 / k) as u32).max(2), FilterType::Triangle);
+    let tiny = imageops::blur(&tiny, 3.0);
     let mut frosted = imageops::resize(&tiny, bw.max(1) as u32, bh.max(1) as u32, FilterType::Triangle);
     let (t, paper) = (theme.title_tint, rgba(theme.paper));
     for p in frosted.pixels_mut() {

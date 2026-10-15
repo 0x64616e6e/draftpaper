@@ -9,6 +9,11 @@ draftpaper (0.3.0) unstable; urgency=medium
     under it: a surface that reads keys takes it, else it stays where it
     was. The settings lost every second click to it (Qt cancelled the
     press as the keyboard left); they now also act on the press.
+  * The wallpaper on a scaled display (1.5, 2) showed its top-left corner,
+    magnified: drawn without a source rectangle, Smithay took the logical
+    size for one. Now the whole picture is drawn, and the ambient margins
+    and the title block too. The title block's frost is lighter (about
+    1.5 mm of blur), so the picture's shapes show through it.
   * The wallpaper's mounting and look: wallpaper_fit (fill, as before; fit
     whole on the paper; centre at its own size), wallpaper_position,
     wallpaper_brightness, wallpaper_wash (paper over it) and wallpaper_blur
