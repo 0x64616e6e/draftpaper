@@ -127,6 +127,10 @@ tap = true                 # touchpad: tap to click
 natural_scroll = true
 focus_follows_mouse = true  # the window the pointer enters takes the focus
 
+[layout]
+new_window = "column"      # a third window and on: a new column beside the focused one, or "row":
+                           # a new row under the focused window (the first two are side by side)
+
 [animations]
 enabled = true             # false: every change at once
 duration_ms = 220

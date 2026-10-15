@@ -504,12 +504,13 @@ impl Draftpaper {
 
     /// Place a new window, floating (`dialog`) or in the layout of the active screen.
     pub fn place_as(&mut self, window: Window, dialog: bool) {
+        let mode = self.config.new_window;
         if let Some(screen) = self.active_screen() {
             let grid = screen.grid;
             if dialog {
                 screen.workspace_mut().floating.push(window.clone());
             } else {
-                screen.layout_mut().add(window.clone(), &grid);
+                screen.layout_mut().add(window.clone(), &grid, mode);
             }
             self.relayout();
             self.focus(Some(window));

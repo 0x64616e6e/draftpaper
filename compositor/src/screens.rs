@@ -159,7 +159,7 @@ impl Draftpaper {
             (i, s.workspaces.iter().position(|w| w.number == number).unwrap())
         });
         let g = self.screens[j].grid;
-        self.screens[j].workspaces[k].layout.add(window, &g);
+        self.screens[j].workspaces[k].layout.add(window, &g, self.config.new_window);
         self.relayout();
         let next = self.screens[i].layout().focused();
         self.focus(next);

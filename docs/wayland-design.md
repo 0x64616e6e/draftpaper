@@ -247,7 +247,9 @@ Settled on 2026-10-14:
 
 ## Open questions
 
-1. How a third or fourth window joins: a new column or a row in the focused column? (M0 decides by use.)
+1. How a third or fourth window joins: a new column or a row in the focused column? Both are there
+   (`[layout] new_window = "column" | "row"`, 2026-10-15, column by default) to be tried in use; the
+   choice goes into the decisions above (#12).
 2. Whether the free resize (off the zones) is needed at all.
 
 ## References

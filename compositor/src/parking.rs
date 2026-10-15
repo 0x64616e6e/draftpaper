@@ -86,11 +86,11 @@ impl Draftpaper {
     /// Back into its workspace (screen `i`, workspace `k`, the parked entry `p`); not focused. Returns
     /// the window and the cell it was in.
     fn unpark_window(&mut self, i: usize, k: usize, p: usize) -> (Window, usize) {
-        let grid = self.screens[i].grid;
+        let (grid, mode) = (self.screens[i].grid, self.config.new_window);
         let ws = &mut self.screens[i].workspaces[k];
         let parked = ws.parked.remove(p);
         match &parked.spot {
-            Spot::Tiled(placeholder) => ws.layout.unpark(parked.window.clone(), placeholder, &grid),
+            Spot::Tiled(placeholder) => ws.layout.unpark(parked.window.clone(), placeholder, &grid, mode),
             Spot::Floating => ws.floating.push(parked.window.clone()),
         }
         (parked.window, parked.cell)

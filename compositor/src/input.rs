@@ -255,7 +255,8 @@ impl Draftpaper {
                         if let Some(w) = self.screens[i].layout().focused() {
                             let (g, gn) = (self.screens[i].grid, self.screens[n].grid);
                             self.screens[i].layout_mut().remove(&w, &g);
-                            self.screens[n].layout_mut().add(w.clone(), &gn);
+                            let mode = self.config.new_window;
+                            self.screens[n].layout_mut().add(w.clone(), &gn, mode);
                             self.relayout();
                             self.focus(Some(w));
                         }

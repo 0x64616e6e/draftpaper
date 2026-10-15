@@ -3,9 +3,10 @@
 //! a zone boundary and lines up with the ticks in the margins. The last column and the last row end on
 //! the frame.
 //!
-//! A new window opens a column to the right of the focused one and the zones are shared out again; once
-//! there are as many columns as zones across, new windows stack as rows in the focused column instead.
-//! (Which of the two a new window should do is issue #12.)
+//! The first window takes the frame and the second opens a column beside it. After that, config.toml's
+//! `[layout] new_window` decides (issue #12): "column", a new column to the right of the focused one
+//! (rows in the focused column once there are as many columns as zones across); or "row", a new row
+//! under the focused window (a new column once the column has as many rows as zones down).
 //!
 //! A parked window leaves the layout and leaves a placeholder (Placeholder): its neighbours and the
 //! layout's sizes then, so it comes back to the same place, and to the same sizes when nothing else
@@ -68,6 +69,14 @@ pub enum Direction {
     Right,
     Up,
     Down,
+}
+
+/// Where a new window goes once there are two (config.toml, `[layout] new_window`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum NewWindow {
+    #[default]
+    Column,
+    Row,
 }
 
 #[derive(Debug)]
@@ -157,11 +166,18 @@ impl Layout {
         };
     }
 
-    /// A new window: a new column to the right of the focused one, or, with every zone across taken
-    /// by a column, a new row under the focused window.
-    pub fn add(&mut self, window: Window, grid: &Grid) {
+    /// A new window: a new column to the right of the focused one, or a new row under the focused
+    /// window, as `mode` says (see the top of this file).
+    pub fn add(&mut self, window: Window, grid: &Grid, mode: NewWindow) {
         let (fc, fr) = self.focus.unwrap_or((self.columns.len().saturating_sub(1), 0));
-        if (self.columns.len() as u32) < grid.zones.0 {
+        let room_across = (self.columns.len() as u32) < grid.zones.0;
+        let room_down = self.columns.get(fc).is_some_and(|c| (c.windows.len() as u32) < grid.zones.1);
+        let as_column = self.columns.is_empty()
+            || match mode {
+                NewWindow::Column => room_across,
+                NewWindow::Row => room_across && (self.columns.len() < 2 || !room_down),
+            };
+        if as_column {
             let at = if self.columns.is_empty() { 0 } else { fc + 1 };
             self.columns.insert(at, Column { windows: vec![window], width: 1, heights: vec![] });
             Self::reshare_rows(&mut self.columns[at], grid);
@@ -214,7 +230,7 @@ impl Layout {
     /// Put a parked window back where its placeholder says: into its column between the same
     /// neighbours, or as its own column between the same columns (at the nearest place when those have
     /// gone). With the layout as it was before, the sizes are as they were too.
-    pub fn unpark(&mut self, window: Window, placeholder: &Placeholder, grid: &Grid) {
+    pub fn unpark(&mut self, window: Window, placeholder: &Placeholder, grid: &Grid, mode: NewWindow) {
         let column_of = |ws: &[Window], cols: &[Column]| cols.iter().position(|c| c.windows.iter().any(|w| ws.contains(w)));
         if let Some(c) = (!placeholder.column.is_empty()).then(|| column_of(&placeholder.column, &self.columns)).flatten() {
             let col = &self.columns[c].windows;
@@ -239,7 +255,7 @@ impl Layout {
             self.focus = Some((c, 0));
         } else {
             // no room for a column of its own: placed like a new window
-            self.add(window, grid);
+            self.add(window, grid, mode);
         }
         let windows = |s: &[(Vec<Window>, u32, Vec<f64>)]| s.iter().map(|c| c.0.clone()).collect::<Vec<_>>();
         if windows(&self.snapshot()) == windows(&placeholder.before) {

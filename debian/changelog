@@ -5,6 +5,8 @@ draftpaper (0.3.0) unstable; urgency=medium
     on; displays are named with the make, model and serial from their EDID
     (#30).
   * A screen's zones follow a change of its scale at once.
+  * [layout] new_window: a third window opens a new column (as before) or a
+    row under the focused window (#12).
 
  -- 0x64616e6e <daniel@este.systems>  Thu, 15 Oct 2026 03:15:13 +0300
 

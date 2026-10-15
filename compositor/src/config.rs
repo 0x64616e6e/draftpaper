@@ -14,6 +14,9 @@
 //!     enabled = true                   # false: reduced motion, every change at once
 //!     duration_ms = 220
 //!
+//!     [layout]
+//!     new_window = "column"            # a third window: a new column, or "row" (under the focused one)
+//!
 //!     [bindings]                       # key = action; "none" removes a default
 //!     "Mod+Return" = "spawn foot"      # Mod is Super on the TTY, Alt when nested
 //!     "Mod+d" = "spawn fuzzel"
@@ -93,6 +96,8 @@ pub struct Config {
     pub bindings: Vec<Binding>,
     /// how long parking, unparking and switching workspaces take; None: no animations
     pub animations: Option<std::time::Duration>,
+    /// where a third window goes: a new column, or a row in the focused column (layout.rs)
+    pub new_window: crate::layout::NewWindow,
 }
 
 pub fn path() -> PathBuf {
@@ -252,7 +257,12 @@ impl Config {
         let enabled = anim.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
         let ms = anim.get("duration_ms").and_then(|v| v.as_integer()).unwrap_or(220).clamp(0, 2000) as u64;
         let animations = (enabled && ms > 0).then(|| std::time::Duration::from_millis(ms));
-        Ok(Config { input, bindings, animations })
+        let new_window = match table.get("layout").and_then(|l| l.get("new_window")).and_then(|v| v.as_str()) {
+            None | Some("column") => crate::layout::NewWindow::Column,
+            Some("row") => crate::layout::NewWindow::Row,
+            Some(other) => return Err(format!("[layout] new_window = \"{other}\": \"column\" or \"row\"")),
+        };
+        Ok(Config { input, bindings, animations, new_window })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1
