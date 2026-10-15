@@ -52,7 +52,7 @@ from the releases, and 0.2 replaces it.
 
 ## Keys
 
-Mod is Super (the Windows key).
+Mod is Super (the Windows key). Every key, click and command on one page: [docs/cheatsheet.md](docs/cheatsheet.md).
 
 | Key | |
 |---|---|
@@ -71,6 +71,7 @@ Mod is Super (the Windows key).
 | Mod+Shift+x | Lock the screen (swaylock) |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Print | A region to swappy (slurp, grim) |
+| Shift+Print | The screen you are on to ~/Pictures |
 | Mod+Print | Every screen to ~/Pictures |
 | Volume, brightness keys | wpctl, brightnessctl |
 | Mod+Shift+e | Leave the session |
