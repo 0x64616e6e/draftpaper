@@ -1,5 +1,7 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * The top and bottom margins number their zones (1 from the left), as the
+    side margins letter theirs, in every zone nothing else takes.
   * Every window is a zone at least. A window alone on the sheet (or alone
     in its column) resizes in zones from the frame, Mod+Ctrl+Left/Up
     pulling its right or bottom edge in, Right/Down pushing it back out,

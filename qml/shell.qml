@@ -364,9 +364,16 @@ ShellRoot {
                         onClicked: e => { if (noticeZone.hint === "") root.noticeClicked(e.button === Qt.LeftButton) }
                     }
                 }
+                ZoneNumbers {   // the columns' numbers, in the zones nothing else takes
+                    band: topMargin; edge: edge
+                    taken: k => k < spacesZone.span
+                        || (noticeZone.visible && k >= noticeZone.first && k < noticeZone.first + noticeZone.span)
+                        || (k === topMargin.zones - 1 && topStatus.implicitWidth > 0)
+                }
                 Zone {
                     band: topMargin; index: -1
                     Row {
+                        id: topStatus
                         anchors.centerIn: parent
                         spacing: 4 * edge.mm
                         Cell { visible: root.tempHot; size: edge.fontPx; text: root.tempText; color: theme.alert }
@@ -427,13 +434,19 @@ ShellRoot {
                         onLeft: () => root.run(["blueman-manager"])
                     }
                 }
+                ZoneNumbers {   // the columns' numbers, in the zones nothing else takes
+                    band: bottomMargin; edge: edge
+                    taken: k => k === 0 || k === bottomMargin.zones - 1 || (extraCells.itemAt(k - 1)?.busy ?? false)
+                }
                 Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
+                    id: extraCells
                     model: theme.cells.slice(1)
                     Item {
                         id: extra
                         required property var modelData
                         required property int index
                         visible: index + 1 < bottomMargin.zones - 1      // the last zone is taken; the rest are dropped
+                        readonly property bool busy: visible && extraPoll.output !== ""
                         Poll {
                             id: extraPoll
                             command: extra.modelData.command || ["true"]
