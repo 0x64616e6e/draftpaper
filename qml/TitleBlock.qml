@@ -51,12 +51,20 @@ Item {
         color: "transparent"
         WlrLayershell.namespace: "draftpaper-title-block"
 
-        Rectangle {                       // the block's outer rule, as heavy as the frame
-            anchors.fill: parent
-            color: "transparent"
-            border.color: block.line
-            border.width: Math.max(1, Math.round(2 / block.edge.dpr))
+        // the block's outer rule, as heavy as the frame, on its top and left: its right and bottom are the
+        // frame's own line (drawn by the compositor, in the margins' ink when they take a wallpaper's
+        // colours), which a rule of the block's would cover in the theme's
+        Rectangle {
+            width: parent.width; height: Math.max(1, Math.round(2 / block.edge.dpr))
+            color: block.line
         }
+        Rectangle {
+            width: Math.max(1, Math.round(2 / block.edge.dpr)); height: parent.height
+            color: block.line
+        }
+        Item {                            // the cells, kept off the frame's line along the right and bottom
+            anchors { fill: parent; rightMargin: Math.max(1, Math.round(2 / block.edge.dpr)); bottomMargin: Math.max(1, Math.round(2 / block.edge.dpr)) }
+            clip: true
         Repeater {
             model: block.cells
             Item {
@@ -95,6 +103,7 @@ Item {
                     onClicked: e => { const f = e.button === Qt.RightButton ? modelData[7] : modelData[6]; if (f) f() }
                 }
             }
+        }
         }
     }
 }

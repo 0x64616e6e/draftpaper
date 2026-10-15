@@ -9,6 +9,9 @@ draftpaper (0.3.0) unstable; urgency=medium
     under it: a surface that reads keys takes it, else it stays where it
     was. The settings lost every second click to it (Qt cancelled the
     press as the keyboard left); they now also act on the press.
+  * The title block draws its outer rule on its top and left only: its
+    right and bottom are the frame's line, which its rule (in the theme's
+    ink) covered when the margins take a wallpaper's colours.
   * The wallpaper on a scaled display (1.5, 2) showed its top-left corner,
     magnified: drawn without a source rectangle, Smithay took the logical
     size for one. Now the whole picture is drawn, and the ambient margins
