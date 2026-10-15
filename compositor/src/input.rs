@@ -350,7 +350,8 @@ impl Draftpaper {
                 }
             }
             Action::Resize(d) => {
-                self.screens[i].layout_mut().resize(d);
+                let grid = self.screens[i].grid;
+                self.screens[i].layout_mut().resize(d, &grid);
                 self.relayout();
             }
             Action::Spawn(command) => {

@@ -11,7 +11,7 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+d | Launcher (fuzzel) |
 | Mod+h j k l · Mod+Up/Down | Move the focus |
 | Mod+Shift+h j k l · Mod+Shift+arrows | Move the window |
-| Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going) |
+| Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going); a window alone moves its right or bottom edge in from the frame |
 | Mod+f | Fullscreen |
 | Mod+Shift+q | Close the window |
 | Mod+1 … Mod+9, Mod+0 | Workspace 1 … 9, 10 |

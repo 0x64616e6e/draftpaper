@@ -1,7 +1,7 @@
 //! The layout: a workspace is a row of columns, a column a stack of rows, and both are measured in the
 //! sheet's zones (widths in the zones across, heights in the zones down), so every window edge falls on
 //! a zone boundary and lines up with the ticks in the margins. The last column and the last row end on
-//! the frame.
+//! the frame, except a window alone across or down, resized in from it (Layout::resize).
 //!
 //! The first window takes the frame and the second opens a column beside it. After that, config.toml's
 //! `[layout] new_window` decides (issue #12): "column", a new column to the right of the focused one
@@ -136,7 +136,18 @@ struct Column {
     width: u32,
     /// height of each row in zones down (fractions only when rows outnumber the zones)
     heights: Vec<f64>,
+    /// zones down left empty under a window alone in its column (resized up from the frame)
+    free: u32,
 }
+
+impl Column {
+    fn new(window: Window) -> Column {
+        Column { windows: vec![window], width: 1, heights: vec![], free: 0 }
+    }
+}
+
+/// A column as Layout::snapshot keeps it: its windows, width, rows' heights and free zones.
+type Snapshot = (Vec<Window>, u32, Vec<f64>, u32);
 
 /// Where a parked window was in the layout, to put it back there (Layout::park, Layout::unpark).
 #[derive(Debug, Clone)]
@@ -151,7 +162,8 @@ pub struct Placeholder {
     /// its column and row then: the last resort
     index: (usize, usize),
     /// the layout before it left; when the layout is that again once it is back, its sizes are too
-    before: Vec<(Vec<Window>, u32, Vec<f64>)>,
+    before: Vec<Snapshot>,
+    free: u32,
 }
 
 #[derive(Debug, Default)]
@@ -159,6 +171,8 @@ pub struct Layout {
     columns: Vec<Column>,
     /// focused (column, row)
     focus: Option<(usize, usize)>,
+    /// zones across left empty right of a column alone on the sheet (resized left from the frame)
+    free: u32,
 }
 
 /// `total` zones shared among `n`: whole zones, the extra ones to the leftmost (or topmost).
@@ -201,6 +215,7 @@ impl Layout {
     }
 
     fn reshare_columns(&mut self, grid: &Grid) {
+        self.free = 0;
         let widths = share(grid.zones.0, self.columns.len());
         for (col, w) in self.columns.iter_mut().zip(widths) {
             col.width = w;
@@ -209,6 +224,7 @@ impl Layout {
 
     fn reshare_rows(col: &mut Column, grid: &Grid) {
         let n = col.windows.len();
+        col.free = 0;
         col.heights = if n as u32 <= grid.zones.1 {
             share(grid.zones.1, n).into_iter().map(f64::from).collect()
         } else {
@@ -229,7 +245,7 @@ impl Layout {
             };
         if as_column {
             let at = if self.columns.is_empty() { 0 } else { fc + 1 };
-            self.columns.insert(at, Column { windows: vec![window], width: 1, heights: vec![] });
+            self.columns.insert(at, Column::new(window));
             Self::reshare_rows(&mut self.columns[at], grid);
             self.reshare_columns(grid);
             self.focus = Some((at, 0));
@@ -255,8 +271,8 @@ impl Layout {
     }
 
     /// The windows column by column, with the columns' widths and the rows' heights.
-    fn snapshot(&self) -> Vec<(Vec<Window>, u32, Vec<f64>)> {
-        self.columns.iter().map(|c| (c.windows.clone(), c.width, c.heights.clone())).collect()
+    fn snapshot(&self) -> Vec<Snapshot> {
+        self.columns.iter().map(|c| (c.windows.clone(), c.width, c.heights.clone(), c.free)).collect()
     }
 
     /// Take `window` out of the layout, remembering where it was.
@@ -272,6 +288,7 @@ impl Layout {
             right: self.columns.get(c + 1).map(|col| col.windows.clone()).unwrap_or_default(),
             index: (c, r),
             before: self.snapshot(),
+            free: self.free,
         };
         self.remove(window, grid);
         Some(placeholder)
@@ -299,7 +316,7 @@ impl Layout {
                 .map(|i| i + 1)
                 .or_else(|| column_of(&placeholder.right, &self.columns))
                 .unwrap_or(placeholder.index.0.min(self.columns.len()));
-            self.columns.insert(c, Column { windows: vec![window], width: 1, heights: vec![] });
+            self.columns.insert(c, Column::new(window));
             Self::reshare_rows(&mut self.columns[c], grid);
             self.reshare_columns(grid);
             self.focus = Some((c, 0));
@@ -307,12 +324,14 @@ impl Layout {
             // no room for a column of its own: placed like a new window
             self.add(window, grid, mode);
         }
-        let windows = |s: &[(Vec<Window>, u32, Vec<f64>)]| s.iter().map(|c| c.0.clone()).collect::<Vec<_>>();
+        let windows = |s: &[Snapshot]| s.iter().map(|c| c.0.clone()).collect::<Vec<_>>();
         if windows(&self.snapshot()) == windows(&placeholder.before) {
-            for (col, (_, width, heights)) in self.columns.iter_mut().zip(&placeholder.before) {
+            for (col, (_, width, heights, free)) in self.columns.iter_mut().zip(&placeholder.before) {
                 col.width = *width;
                 col.heights = heights.clone();
+                col.free = *free;
             }
+            self.free = placeholder.free;
         }
     }
 
@@ -363,7 +382,7 @@ impl Layout {
                     None if !alone && (self.columns.len() as u32) < grid.zones.0 => {
                         let at = if dir == Direction::Left { 0 } else { self.columns.len() };
                         Self::reshare_rows(&mut self.columns[c], grid);
-                        self.columns.insert(at, Column { windows: vec![window], width: 1, heights: vec![] });
+                        self.columns.insert(at, Column::new(window));
                         Self::reshare_rows(&mut self.columns[at], grid);
                         self.focus = Some((at, 0));
                     }
@@ -376,14 +395,17 @@ impl Layout {
 
     /// Resize by one zone: left/right moves the boundary on the focused column's right (on its left for
     /// the last column) one zone that way, up/down the boundary under the focused row (over it for the
-    /// last row); the window on the other side gives or takes the zone.
-    pub fn resize(&mut self, dir: Direction) {
+    /// last row); the window on the other side gives or takes the zone. A window alone across (or down)
+    /// moves its right (or bottom) edge instead, in from the frame and back out to it; the zones it
+    /// leaves stay empty until a neighbour comes.
+    pub fn resize(&mut self, dir: Direction, grid: &Grid) {
         let Some((c, r)) = self.focus else { return };
         let grow = matches!(dir, Direction::Right | Direction::Down);
         match dir {
             Direction::Left | Direction::Right => {
                 let n = self.columns.len();
                 if n < 2 {
+                    self.free = if grow { self.free.saturating_sub(1) } else { (self.free + 1).min(grid.zones.0 - 1) };
                     return;
                 }
                 let (a, b) = if c + 1 < n { (c, c + 1) } else { (c - 1, c) };
@@ -397,6 +419,7 @@ impl Layout {
                 let col = &mut self.columns[c];
                 let n = col.windows.len();
                 if n < 2 {
+                    col.free = if grow { col.free.saturating_sub(1) } else { (col.free + 1).min(grid.zones.1 - 1) };
                     return;
                 }
                 let (a, b) = if r + 1 < n { (r, r + 1) } else { (r - 1, r) };
@@ -415,11 +438,11 @@ impl Layout {
         let mut x0 = 0u32;
         let last_c = self.columns.len().saturating_sub(1);
         for (ci, col) in self.columns.iter().enumerate() {
-            let x1 = if ci == last_c { grid.zones.0 } else { x0 + col.width };
+            let x1 = if ci == last_c { grid.zones.0.saturating_sub(self.free).max(x0 + 1) } else { x0 + col.width };
             let mut y0 = 0.0;
             let last_r = col.windows.len().saturating_sub(1);
             for (ri, window) in col.windows.iter().enumerate() {
-                let y1 = if ri == last_r { grid.zones.1 as f64 } else { y0 + col.heights[ri] };
+                let y1 = if ri == last_r { (grid.zones.1.saturating_sub(col.free) as f64).max(y0 + 1.0) } else { y0 + col.heights[ri] };
                 let tile = grid.tile(x0, x1, y0, y1);
                 let rect = tile.logical;
                 set_tile(window, Some(tile));
