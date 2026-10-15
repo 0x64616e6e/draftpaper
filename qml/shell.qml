@@ -309,10 +309,12 @@ ShellRoot {
                     }
                 }
                 Zone {          // a notification: the zone before the last, growing leftwards as far as the
-                                // workspaces' zones; one line, cut with … when it is longer still
+                                // workspaces' zones; one line, cut with … when it is longer still. While
+                                // the theme picker is open, its keys instead.
                     id: noticeZone
                     band: topMargin; index: -2
-                    readonly property bool here: root.notice !== null && (!edge.output || edge.output.focused)
+                    readonly property string hint: themePicker.hint
+                    readonly property bool here: (root.notice !== null || hint !== "") && (!edge.output || edge.output.focused)
                     readonly property int room: Math.max(1, topMargin.zones - 1 - spacesZone.span)
                     readonly property real pad: 3 * edge.mm
                     span: Math.min(room, Math.max(1, Math.ceil((noticeMeasure.implicitWidth + countText.implicitWidth + 2 * pad) / topMargin.zoneLength)))
@@ -320,14 +322,14 @@ ShellRoot {
                     Text {          // the text at its full length, to size the zone
                         id: noticeMeasure
                         visible: false
-                        text: root.noticeText(root.notice)
+                        text: noticeZone.hint || root.noticeText(root.notice)
                         textFormat: Text.StyledText
                         font.family: Fonts.mono; font.pixelSize: edge.fontPx
                     }
                     Text {          // "+2": notifications waiting behind this one
                         id: countText
                         anchors { right: parent.right; rightMargin: noticeZone.pad; verticalCenter: parent.verticalCenter }
-                        visible: root.noticeList.length > 1
+                        visible: noticeZone.hint === "" && root.noticeList.length > 1
                         text: "+" + (root.noticeList.length - 1)
                         font.family: Fonts.mono; font.pixelSize: edge.fontPx * 0.8
                         color: Qt.rgba(edge.ink.r, edge.ink.g, edge.ink.b, 0.6)
@@ -340,13 +342,13 @@ ShellRoot {
                         elide: Text.ElideRight
                         horizontalAlignment: noticeZone.span < noticeZone.room ? Text.AlignHCenter : Text.AlignLeft
                         font.family: Fonts.mono; font.pixelSize: edge.fontPx
-                        color: root.notice && root.notice.urgency === NotificationUrgency.Critical ? theme.alert : edge.ink
+                        color: noticeZone.hint === "" && root.notice && root.notice.urgency === NotificationUrgency.Critical ? theme.alert : edge.ink
                     }
                     MouseArea {     // left: the notification's default action, then gone; right: gone
                         anchors.fill: parent
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: e => root.noticeClicked(e.button === Qt.LeftButton)
+                        onClicked: e => { if (noticeZone.hint === "") root.noticeClicked(e.button === Qt.LeftButton) }
                     }
                 }
                 Zone {

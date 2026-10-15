@@ -4,16 +4,22 @@ PREFIX ?= /usr
 SHARE = $(DESTDIR)$(PREFIX)/share/draftpaper
 LIB = $(DESTDIR)$(PREFIX)/lib/draftpaper
 CARGO ?= cargo
+QSB ?= /usr/lib/qt6/bin/qsb
 COMPOSITOR = compositor/target/release/draftpaper-compositor
+SHADERS = qml/board.frag.qsb
 
 all: build
 
-build: $(COMPOSITOR)
+build: $(COMPOSITOR) $(SHADERS)
+
+# the shell's shaders (the theme picker's board), for every graphics API Qt may use
+%.frag.qsb: %.frag
+	$(QSB) --glsl "100es,120,150" --hlsl 50 --msl 12 -o $@ $<
 
 $(COMPOSITOR):
 	cd compositor && $(CARGO) build --release --locked
 
-install: $(COMPOSITOR)
+install: $(COMPOSITOR) $(SHADERS)
 	# the programs
 	install -Dm755 bin/draftpaper $(DESTDIR)$(PREFIX)/bin/draftpaper
 	install -Dm755 $(COMPOSITOR) $(DESTDIR)$(PREFIX)/bin/draftpaper-compositor
@@ -22,7 +28,7 @@ install: $(COMPOSITOR)
 	install -d $(LIB)/draftpaper $(SHARE)/qml $(SHARE)/themes $(SHARE)/apps
 	install -m644 lib/draftpaper/*.py $(LIB)/draftpaper/
 	# the shell, the themes and the applications' templates
-	install -m644 qml/*.qml $(SHARE)/qml/
+	install -m644 qml/*.qml $(SHADERS) $(SHARE)/qml/
 	install -m644 themes/*.toml $(SHARE)/themes/
 	install -m644 apps/* $(SHARE)/apps/
 	# the session: the display manager's entry, the user units, the portals
@@ -40,5 +46,6 @@ check:
 
 clean:
 	cd compositor && $(CARGO) clean
+	rm -f $(SHADERS)
 
 .PHONY: all build install check clean

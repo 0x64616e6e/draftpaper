@@ -211,12 +211,13 @@ the focused workspace and window lit in amber, warnings in red).
 
 *Blueprint, with the terminal and the editor in the theme's colours; `build.log` parked on the right.*
 
-![The theme picker: the themes side by side, the desktop behind previewing Day Panel](docs/picker.jpg)
+![The theme picker: the four themes as drawings on the board, Blueprint picked](docs/picker.jpg)
 
-*The theme picker (Super+T): the desktop behind it previews the theme in the middle.*
+*The theme picker (Super+T): the themes laid out on the board; the sheet around them previews the picked one.*
 
-Super+T opens the theme picker: the themes side by side, the desktop previewing each as you move
-(Enter keeps one, Escape goes back). `draftpaper theme` lists them and `draftpaper theme <name>`
+Super+T opens the theme picker: the inside of the frame is cleared (with a wallpaper, the picture
+blurred) and the themes lie on it as drawings, the sheet previewing each as you move (the arrows or
+h j k l; Enter keeps one, Escape goes back). `draftpaper theme` lists them and `draftpaper theme <name>`
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'
 palette (`[apps]`; see `/usr/share/draftpaper/themes/softglow.toml`); your own go in
@@ -241,7 +242,7 @@ the applications, the readings the shell polls.
 
 ## Building
 
-    make                         # the compositor (cargo; a recent Rust, e.g. from rustup)
+    make                         # the compositor (cargo; a recent Rust, e.g. from rustup), the shaders (qsb)
     dpkg-buildpackage -us -uc -b # the package
 
 The build needs the development packages in `debian/control` and fetches the crates with cargo.

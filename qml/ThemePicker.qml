@@ -1,13 +1,16 @@
-// The theme picker (Mod+t, or a click on the theme cell): the themes in a cover flow over the dimmed
-// desktop, the one picked large in the middle and framed in its own accent, the others turned away on
-// either side, its name below. Each card is a miniature desktop in that theme, drawn from its own values
-// (`draftpaper theme json`): the sheet's paper, glow, frame and ticks, the margins lettered (workspaces,
-// a notification, the bottom cells, a parked window), two windows with a terminal and a file list, the
-// title block filled in. Browsing previews live: the desktop behind takes the picked theme a moment
+// The theme picker (Mod+t, or a click on the theme cell): the themes laid out as drawings on the board.
+// The inside of the sheet's frame is cleared of windows (board.frag: the sheet's own paper, or the
+// wallpaper blurred), and the themes lie on it in a grid, all the same size, each a miniature desktop in
+// that theme drawn from its own values (`draftpaper theme json`): the sheet's paper, glow, frame and
+// ticks, the margins lettered, two windows with a terminal and a file list, the title block filled in.
+// Each carries a drawing label below; the picked one is outlined in heavier ink. The margins stay the
+// sheet's, the keys are lettered in the top margin (shell.qml, the notice zone), and the title block
+// shows when no window covers it. Browsing previews live: the sheet takes the picked theme a moment
 // after it is picked; Enter keeps it (and runs config.toml's [hooks] theme: the applications), Escape
-// goes back to the theme it was. Left, right or the wheel
-// browse; a click on a side card picks it, on the middle one keeps it.
+// goes back to the theme it was. The arrows (or h j k l) and the wheel browse; a click on a drawing
+// picks it, on the picked one keeps it, anywhere else goes back.
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -19,14 +22,16 @@ PanelWindow {
     screen: Quickshell.screens.find(s => Compositor.output(s.name) && Compositor.output(s.name).focused) || Quickshell.screens[0]
     readonly property var out: Compositor.output(screen ? screen.name : "")
     readonly property real mm: out ? out.px_per_mm : 4.2
+    readonly property real dpr: out ? out.scale : 1
+    readonly property real margin: out ? out.margin : Math.round(6 * mm)
     property var themes: []
     property int selected: 0
-    // where the flow is: eased towards `selected` as it changes (at once when opening, or with reduced motion)
-    property real at: 0
-    property bool easing: false
-    Behavior on at { enabled: picker.easing && picker.shell.theme.animations; NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
     property string original: ""        // the theme when the picker opened: Escape goes back to it
     property string shown: ""           // the theme applied for the preview
+    property string wallpaper: ""       // config.toml's, as a file URL ("" for none)
+    // the keys, lettered in the top margin while the picker is open
+    readonly property string hint: visible ? "←→↑↓ browse · enter keep · esc back to "
+        + (themes.find(t => t.name === original) || { label: "" }).label : ""
 
     anchors { top: true; bottom: true; left: true; right: true }
     exclusionMode: ExclusionMode.Ignore
@@ -35,12 +40,39 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     color: "transparent"
 
-    readonly property real cardW: width * 0.46
-    readonly property real cardH: cardW * height / Math.max(1, width)
+    // the board's theme: the one the sheet shows
+    readonly property var t: themes.find(x => x.name === shown) || themes[selected] || null
+    readonly property color ink: t ? t.ink : "#62574C"
+
+    // the frame's interior, in logical pixels (the frame's line is 2 physical pixels wide)
+    readonly property real inX: margin + 2 / dpr
+    readonly property real inY: margin + 2 / dpr
+    readonly property real inW: width - 2 * inX
+    readonly property real inH: height - 2 * inY
+    // the title block (TitleBlock.qml: 130 by 36 mm, in the frame's bottom-right corner), and whether a
+    // window on this screen covers it
+    readonly property rect block: Qt.rect(width - Math.round(margin) - Math.round(130 * mm), height - Math.round(margin) - Math.round(36 * mm),
+                                          Math.round(130 * mm), Math.round(36 * mm))
+    readonly property bool blockCovered: out ? Compositor.windows.some(w => w.output === out.name && w.geometry && !w.parked
+        && w.geometry.x - out.x < block.x + block.width && w.geometry.x - out.x + w.geometry.width > block.x
+        && w.geometry.y - out.y < block.y + block.height && w.geometry.y - out.y + w.geometry.height > block.y) : true
+
+    // the drawings: a grid of columns enough for a square-ish layout, clear of the title block's height
+    // when it shows
+    readonly property int cols: Math.max(1, Math.ceil(Math.sqrt(themes.length)))
+    readonly property int rows: Math.max(1, Math.ceil(themes.length / cols))
+    readonly property real gutter: 8 * mm
+    readonly property real labelH: 8 * mm
+    readonly property real areaH: inH - gutter - (blockCovered ? 0 : 36 * mm + gutter)
+    readonly property real cardH: Math.max(10, Math.min((areaH - gutter - (rows - 1) * gutter - rows * labelH) / rows,
+                                                        ((inW - 2 * gutter - (cols - 1) * gutter) / cols) * height / Math.max(1, width)))
+    readonly property real cardW: cardH * width / Math.max(1, height)
+    readonly property real gridX: inX + (inW - cols * cardW - (cols - 1) * gutter) / 2
+    readonly property real gridY: inY + gutter + Math.max(0, (areaH - gutter - rows * (cardH + labelH) - (rows - 1) * gutter) / 2)
 
     function open() {
-        easing = false
         load.running = true
+        wall.running = true
         visible = true
     }
     // browsing switches the sheet only (`--preview`: no [hooks] theme); keeping switches it all
@@ -61,10 +93,9 @@ PanelWindow {
     }
     function pick(i) {
         selected = Math.max(0, Math.min(themes.length - 1, i))
-        at = selected
         settle.restart()
     }
-    // the desktop takes the picked theme once the picking pauses
+    // the sheet takes the picked theme once the picking pauses
     Timer { id: settle; interval: 350; onTriggered: picker.preview(picker.themes[picker.selected] ? picker.themes[picker.selected].name : "") }
 
     Process {
@@ -76,24 +107,84 @@ PanelWindow {
                     picker.themes = JSON.parse(this.text)
                     const i = Math.max(0, picker.themes.findIndex(t => t.current))
                     picker.original = picker.shown = picker.themes[i] ? picker.themes[i].name : ""
-                    picker.easing = false
                     picker.selected = i
-                    picker.at = i
-                    picker.easing = true
                 } catch (e) {}
             }
         }
     }
+    Process {
+        id: wall
+        command: [picker.shell.bin, "wallpaper"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const p = this.text.trim().replace(/^~(?=\/)/, Quickshell.env("HOME"))
+                picker.wallpaper = p && p !== "none" ? "file://" + p : ""
+            }
+        }
+    }
 
-    Rectangle {          // the desktop, dimmed
+    // the wallpaper over the interior, cropped as the compositor crops it (to fill, centred), blurred and
+    // tinted a little with the paper so the labels read on it; the board samples it
+    Item {
+        id: blurred
+        width: picker.inW; height: picker.inH
+        visible: false
+        Image {
+            id: picture
+            anchors.fill: parent
+            source: picker.wallpaper
+            fillMode: Image.PreserveAspectCrop
+            sourceSize: Qt.size(Math.round(picker.inW * picker.dpr / 2), Math.round(picker.inH * picker.dpr / 2))
+            asynchronous: true
+            cache: false
+            visible: false
+        }
+        MultiEffect {
+            anchors.fill: parent
+            source: picture
+            blurEnabled: true
+            blur: 1.0
+            blurMax: 48
+            autoPaddingEnabled: false
+        }
+        Rectangle { anchors.fill: parent; color: picker.t ? picker.t.paper : "#ffffff"; opacity: 0.35 }
+    }
+
+    ShaderEffect {
+        id: board
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.42)
+        readonly property var th: picker.t
+        property color paper: th ? th.paper : "#ffffff"
+        property color paperLight: th ? th.paper_light : "#ffffff"
+        property color paperShade: th ? th.paper_shade : "#ffffff"
+        property color glow: th ? th.glow : "#ffffff"
+        property color ink: picker.ink
+        property vector4d shape: th ? Qt.vector4d(th.sheet.angle * Math.PI / 180, th.sheet.midpoint, th.sheet.blend, th.sheet.shading) : Qt.vector4d(1, 0.5, 1, 1)
+        property vector4d strength: th ? Qt.vector4d(th.sheet.glow_strength, th.sheet.glow_size, th.sheet.pattern_strength, picker.mm * picker.dpr) : Qt.vector4d(0, 1, 0, 6)
+        property vector4d physical: Qt.vector4d(picker.width * picker.dpr, picker.height * picker.dpr, picture.status === Image.Ready ? 1 : 0, 0)
+        property vector4d interior: Qt.vector4d(picker.margin * picker.dpr + 2, picker.margin * picker.dpr + 2,
+                                                (picker.width - picker.margin) * picker.dpr - 2, (picker.height - picker.margin) * picker.dpr - 2)
+        property vector4d hole: picker.blockCovered ? Qt.vector4d(0, 0, 0, 0)
+            : Qt.vector4d(picker.block.x * picker.dpr, picker.block.y * picker.dpr, (picker.block.x + picker.block.width) * picker.dpr, (picker.block.y + picker.block.height) * picker.dpr)
+        property var picture: ShaderEffectSource {
+            sourceItem: blurred
+            textureSize: Qt.size(Math.round(picker.inW * picker.dpr), Math.round(picker.inH * picker.dpr))
+            live: true
+        }
+        fragmentShader: Qt.resolvedUrl("board.frag.qsb")
+    }
+
+    Item {
+        anchors.fill: parent
         focus: true
         Keys.onPressed: e => {
-            if (e.key === Qt.Key_Escape) picker.cancel()
-            else if (e.key === Qt.Key_Left || e.key === Qt.Key_H) picker.pick(picker.selected - 1)
-            else if (e.key === Qt.Key_Right || e.key === Qt.Key_L) picker.pick(picker.selected + 1)
-            else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Space) picker.keep()
+            const k = e.key
+            if (k === Qt.Key_Escape) picker.cancel()
+            else if (k === Qt.Key_Left || k === Qt.Key_H) picker.pick(picker.selected - 1)
+            else if (k === Qt.Key_Right || k === Qt.Key_L) picker.pick(picker.selected + 1)
+            else if (k === Qt.Key_Up || k === Qt.Key_K) picker.pick(picker.selected - picker.cols)
+            else if (k === Qt.Key_Down || k === Qt.Key_J) picker.pick(picker.selected + picker.cols)
+            else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) picker.keep()
             else return
             e.accepted = true
         }
@@ -109,58 +200,32 @@ PanelWindow {
                 id: card
                 required property var modelData
                 required property int index
-                readonly property real d: index - picker.at          // places from the middle
-                readonly property real ad: Math.abs(d)
-                readonly property real side: Math.min(1, ad)         // 0 in the middle, 1 turned away
+                readonly property bool picked: index === picker.selected
+                x: picker.gridX + (index % picker.cols) * (picker.cardW + picker.gutter)
+                y: picker.gridY + Math.floor(index / picker.cols) * (picker.cardH + picker.labelH + picker.gutter)
                 width: picker.cardW; height: picker.cardH
-                x: picker.width / 2 - width / 2 + Math.sign(d) * (side * picker.width * 0.30 + Math.max(0, ad - 1) * picker.width * 0.06)
-                y: picker.height / 2 - height / 2 - picker.height * 0.04
-                z: 100 - ad * 10
-                opacity: ad > 3.2 ? 0 : 1 - Math.max(0, ad - 2) * 0.6
-                // scaled down before it turns: the turn's perspective grows with the size it turns
-                transform: [
-                    Scale { origin.x: card.width / 2; origin.y: card.height / 2; xScale: 1 - card.side * 0.42; yScale: 1 - card.side * 0.42 },
-                    Rotation {
-                        origin.x: card.width / 2; origin.y: card.height / 2
-                        axis { x: 0; y: 1; z: 0 }
-                        angle: -Math.sign(card.d) * card.side * 45
-                    }
-                ]
-                Rectangle {          // the frame: the theme's own focused-window colour, around the picked one
-                    anchors.fill: parent
-                    anchors.margins: -6
-                    color: "transparent"
-                    border.width: 4
-                    border.color: card.modelData.windows.focused
-                    visible: card.index === picker.selected
-                }
+
                 Desktop { anchors.fill: parent; t: card.modelData }
-                Rectangle {          // the ones turned away, shaded a little
+                Rectangle {          // the outline: a hairline of ink, heavier around the picked one
+                    readonly property real w: card.picked ? Math.max(2, 0.7 * picker.mm) : Math.max(1 / picker.dpr, 0.2 * picker.mm)
                     anchors.fill: parent
-                    color: Qt.rgba(0, 0, 0, 0.35 * card.side)
+                    anchors.margins: -w
+                    color: "transparent"
+                    border.width: w
+                    border.color: card.picked ? picker.ink : Qt.rgba(picker.ink.r, picker.ink.g, picker.ink.b, 0.7)
+                }
+                Text {               // the drawing's label
+                    anchors { left: parent.left; top: parent.bottom; topMargin: 2.2 * picker.mm }
+                    text: "DWG " + String(card.index + 1).padStart(2, "0") + "    " + card.modelData.label.toUpperCase()
+                    font.family: Fonts.mono; font.pixelSize: 3 * picker.mm; font.letterSpacing: 0.3 * picker.mm
+                    font.bold: card.picked
+                    color: card.picked ? picker.ink : Qt.rgba(picker.ink.r, picker.ink.g, picker.ink.b, 0.7)
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: card.index === picker.selected ? picker.keep() : picker.pick(card.index)
+                    onClicked: card.picked ? picker.keep() : picker.pick(card.index)
                 }
             }
-        }
-
-        Text {               // the picked theme's name
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: parent.height / 2 + picker.cardH / 2 + 6 * picker.mm - parent.height * 0.04
-            text: picker.themes[picker.selected] ? picker.themes[picker.selected].label : ""
-            font.family: Fonts.mono; font.pixelSize: 7 * picker.mm; font.letterSpacing: 0.6 * picker.mm
-            color: "#F2EEE6"
-            style: Text.Raised; styleColor: Qt.rgba(0, 0, 0, 0.5)
-        }
-        Text {
-            // above the cards, clear of the title block in the corner
-            anchors.horizontalCenter: parent.horizontalCenter
-            y: parent.height / 2 - parent.height * 0.04 - picker.cardH / 2 - 8 * picker.mm - height
-            text: "←  →  browse     enter  keep     esc  back to " + (picker.themes.find(t => t.name === picker.original) || { label: "" }).label
-            font.family: Fonts.mono; font.pixelSize: 3 * picker.mm
-            color: Qt.rgba(0.95, 0.93, 0.9, 0.75)
         }
     }
 

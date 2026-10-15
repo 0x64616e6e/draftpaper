@@ -12,6 +12,10 @@ draftpaper (0.3.0) unstable; urgency=medium
     laptop panel's rotation.
   * A window of one fixed size (swappy's) floats, centred at its size,
     rather than leaving empty paper in a tile.
+  * The theme picker lays the themes out as drawings on the board: the
+    inside of the frame cleared to the sheet's paper (with a wallpaper, the
+    picture blurred), all the same size, the picked one outlined in heavier
+    ink; the keys are lettered in the top margin.
   * draftpaper-as USER [COMMAND]: a program, or a shell, as another user on
     the session, for work kept under a separate account.
 

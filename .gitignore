@@ -5,3 +5,4 @@ debian/files
 debian/*.substvars
 __pycache__/
 target/
+qml/*.qsb
