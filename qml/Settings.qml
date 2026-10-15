@@ -5,7 +5,8 @@
 //
 // The colour scheme: the themes as drawings along the top (Desktop.qml), each lettered with its main
 // contrasts, or with how many of its words fall below 4.5:1; and below them the builder, six rows of
-// discrete choices (paper, tone, accent, windows, terminal text, contrast) from which `draftpaper scheme`
+// discrete choices (paper, tone, accent, windows, the terminal's background and text, contrast) from
+// which `draftpaper scheme`
 // derives a whole theme whose every word is readable (scheme.py). Building shapes the last drawing,
 // Custom. Whatever is picked, a drawing or a choice, the sheet previews a moment later; Enter keeps it
 // (the applications too: a theme switch, or `draftpaper scheme keep`, which writes [scheme] and the
@@ -37,14 +38,15 @@ PanelWindow {
     property var custom: null           // the scheme the choices build (`draftpaper scheme json`)
     property var options: ({})         // each choice's values, with their colours and contrasts
     property var choices: ({})
-    property int row: 0                 // 0: the drawings; 1 to 6: the builder's rows
+    property int row: 0                 // 0: the drawings; 1 to 7: the builder's rows
     property int card: 0                // the drawing picked
     property string original: ""        // the theme when it opened: Escape goes back to it
     property string shown: ""           // the theme the sheet previews
     property string wallpaper: ""
     property bool reverting: false
-    readonly property var rows: ["paper", "tone", "accent", "windows", "text", "contrast"]
-    readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", text: "TERMINAL TEXT", contrast: "CONTRAST" })
+    readonly property var rows: ["paper", "tone", "accent", "windows", "terminal", "text", "contrast"]
+    readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", terminal: "TERMINAL",
+                                       text: "TERMINAL TEXT", contrast: "CONTRAST" })
     // the drawings: the themes, then the one the choices build
     readonly property var cards: custom ? themes.concat([custom]) : themes
     readonly property var picked: cards[card] || null

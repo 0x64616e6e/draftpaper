@@ -219,8 +219,8 @@ the focused workspace and window lit in amber, warnings in red).
 Super+T opens the settings on the board: the inside of the frame is cleared (with a wallpaper, the
 picture blurred), and the colour scheme lies on it. Along the top, the themes as drawings, each lettered
 with its main contrasts (or with how many of its words fall below 4.5:1); below them, a scheme built
-from six choices: paper light or dark, its tone, the accent, windows dark or light, the terminal's text,
-and the contrast (about 7:1, or 10:1 and more). The choices pick hues; the lightnesses are worked out so
+from seven choices: paper light or dark, its tone, the accent, windows dark or light, the terminal's
+background (as the windows, or deeper and tinted) and its text, and the contrast (about 7:1, or 10:1 and more). The choices pick hues; the lightnesses are worked out so
 that every word, the 16 terminal colours included, reads at 4.5:1 or more and dimmed text at 3:1. The
 contrast between text and background carries legibility, its hue does not. The sheet previews what is
 picked; Enter keeps it (a built scheme is written to `[scheme]` in config.toml and to the theme

@@ -12,6 +12,8 @@ lightness looks like the same step whatever the hue.
     tone      greige sand clay sage teal blueprint slate graphite
     accent    amber orange red rose violet blue teal green
     windows   dark | light            the applications: terminals, GTK, Qt, Firefox
+    terminal  windows neutral tone blue green warm plum    the terminal's background, on the windows'
+                                      side (dark or light): as the windows, or deeper and tinted
     text      neutral cream lime amber ice    the terminal's text
     contrast  standard | high         main text at about 7:1 (softer), or 10:1 and more
 
@@ -30,11 +32,15 @@ ACCENTS = {
     "violet": (300, 0.12), "blue": (255, 0.13), "teal": (195, 0.10), "green": (145, 0.12),
 }
 TEXTS = {"neutral": None, "cream": (85, 0.03), "lime": (125, 0.08), "amber": (75, 0.10), "ice": (230, 0.03)}
+# the terminal's background: None, as the windows; "tone", the paper's hue; else (hue, chroma)
+TERMINALS = {"windows": None, "neutral": (0, 0.0), "tone": "tone", "blue": (255, 0.045), "green": (155, 0.035),
+             "warm": (60, 0.03), "plum": (320, 0.035)}
 CHOICES = {
     "paper": ["light", "dark"], "tone": list(TONES), "accent": list(ACCENTS), "windows": ["dark", "light"],
-    "text": list(TEXTS), "contrast": ["standard", "high"],
+    "terminal": list(TERMINALS), "text": list(TEXTS), "contrast": ["standard", "high"],
 }
-DEFAULT = {"paper": "light", "tone": "greige", "accent": "amber", "windows": "dark", "text": "cream", "contrast": "standard"}
+DEFAULT = {"paper": "light", "tone": "greige", "accent": "amber", "windows": "dark", "terminal": "windows", "text": "cream",
+           "contrast": "standard"}
 MAIN = {"standard": 7.0, "high": 10.0}
 WORDS, DIM, BORDER = 4.5, 3.0, 3.0
 
@@ -163,9 +169,17 @@ def build(choices):
     fg = solve(nh, nc, bg_L if soft else fg_pref, texts)
     fg_dim = solve(nh, nc, dim_pref, [(bg, WORDS), (surface, WORDS)])
     fg_muted = solve(nh, nc, muted_pref, [(bg, DIM), (surface, DIM)])
-    term_bg, term_bg_alt = bg, surface
+    # the terminal's background: as the windows', or a deeper one of its own, tinted; on the same side
+    tb = TERMINALS[ch["terminal"]]
+    if tb is None:
+        term_bg, term_bg_alt = bg, surface
+        tbh, tbc, tb_L = nh, nc, bg_L
+    else:
+        tbh, tbc = (th, min(tc, 0.035)) if tb == "tone" else tb
+        tb_L = 0.18 if dark_windows else 0.985
+        term_bg, term_bg_alt = oklch(tb_L, tbc, tbh), oklch(tb_L + (0.05 if dark_windows else -0.04), tbc, tbh)
     th_text = TEXTS[ch["text"]] or (nh, nc)
-    term_fg = solve(th_text[0], th_text[1], bg_L if soft else fg_pref, [(term_bg, main), (term_bg_alt, WORDS)])
+    term_fg = solve(th_text[0], th_text[1], tb_L if soft else fg_pref, [(term_bg, main), (term_bg_alt, WORDS)])
 
     # the accent: the focused window's border (against the paper and the window), fills, and ink for words
     focused = solve(ah, ac, 0.72 if dark_windows else 0.58, [(bg, BORDER), (surface, BORDER)])
@@ -189,16 +203,17 @@ def build(choices):
     for name, h in hues.items():
         ansi[name] = solve(h, 0.12, 0.70 if dark_windows else 0.48, [(term_bg, WORDS), (term_bg_alt, WORDS)])
         ansi["br_" + name] = solve(h, 0.10, 0.82 if dark_windows else 0.40, [(term_bg, WORDS), (term_bg_alt, WORDS)])
+    gc = min(tbc, 0.012)                                                # the greys, a touch of the background's hue
     if dark_windows:
-        ansi["black"] = surface_alt                                     # a background, not text
-        ansi["br_black"] = solve(nh, nc, 0.62, [(term_bg, WORDS), (term_bg_alt, WORDS)])   # comments, dim text
-        ansi["white"] = solve(nh, nc, 0.86, [(term_bg, WORDS)])
-        ansi["br_white"] = solve(nh, nc, 0.97, [(term_bg, main)])
+        ansi["black"] = oklch(tb_L + 0.09, tbc, tbh)                    # a background, not text
+        ansi["br_black"] = solve(tbh, gc, 0.62, [(term_bg, WORDS), (term_bg_alt, WORDS)])   # comments, dim text
+        ansi["white"] = solve(tbh, gc, 0.86, [(term_bg, WORDS)])
+        ansi["br_white"] = solve(tbh, gc, 0.97, [(term_bg, main)])
     else:
-        ansi["black"] = solve(nh, nc, 0.20, [(term_bg, main)])
-        ansi["br_black"] = solve(nh, nc, 0.48, [(term_bg, WORDS), (term_bg_alt, WORDS)])
-        ansi["white"] = surface_alt                                     # backgrounds in a light terminal
-        ansi["br_white"] = bg_alt
+        ansi["black"] = solve(tbh, gc, 0.20, [(term_bg, main)])
+        ansi["br_black"] = solve(tbh, gc, 0.48, [(term_bg, WORDS), (term_bg_alt, WORDS)])
+        ansi["white"] = oklch(tb_L - 0.085, tbc, tbh)                   # backgrounds in a light terminal
+        ansi["br_white"] = oklch(tb_L - 0.035, tbc, tbh)
     cursor = accent
     cursor_text = term_bg if contrast(term_bg, cursor) >= WORDS else solve(ah, 0.02, 0.12 if light_or(cursor) else 0.97, [(cursor, WORDS)])
 

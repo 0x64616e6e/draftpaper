@@ -56,7 +56,8 @@ the touchscreen, wakes them.
 | Esc · click elsewhere | Back to the theme you had |
 | R twice | Your copy of a shipped theme back to the shipped one |
 
-The builder's rows: paper (light, dark), tone, accent, windows (dark, light), terminal text, contrast
+The builder's rows: paper (light, dark), tone, accent, windows (dark, light), terminal background (as the
+windows, neutral, tone, blue, green, warm, plum), terminal text, contrast
 (standard about 7:1, high 10:1 and more). Every scheme it builds keeps every word at 4.5:1 or more.
 
 ## The sheet's margins and title block

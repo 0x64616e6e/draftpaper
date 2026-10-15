@@ -15,7 +15,7 @@ draftpaper (0.3.0) unstable; urgency=medium
   * Settings on the board (Mod+t, draftpaper settings; it replaces the
     theme picker): the inside of the frame cleared to the sheet's paper
     (with a wallpaper, the picture blurred), the themes as drawings with
-    their contrasts, and a colour scheme built from six choices whose
+    their contrasts, and a colour scheme built from seven choices whose
     lightnesses are solved so that every word reads at 4.5:1 or more
     (#36); a built scheme is kept in [scheme] and the theme "custom".
   * draftpaper theme check: themes against the contrast rules, run by

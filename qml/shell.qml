@@ -209,7 +209,7 @@ ShellRoot {
     IpcHandler {
         target: "settings"
         function toggle(): void { settings.visible ? settings.cancel() : settings.open() }
-        // what the keys do, for scripts: a row (0 the drawings, 1 to 6 the builder's), a step along it
+        // what the keys do, for scripts: a row (0 the drawings, 1 to 7 the builder's), a step along it
         function row(n: int): void { if (settings.visible) settings.row = Math.max(0, Math.min(settings.rows.length, n)) }
         function step(n: int): void { if (settings.visible) settings.step(n) }
         function keep(): void { if (settings.visible) settings.keep() }
