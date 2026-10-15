@@ -10,6 +10,8 @@ draftpaper (0.3.0) unstable; urgency=medium
   * Touchscreens: a finger goes to the surface under it (wl_touch), and
     a tap focuses the window as a click does; the touch follows the
     laptop panel's rotation.
+  * A window of one fixed size (swappy's) floats, centred at its size,
+    rather than leaving empty paper in a tile.
   * draftpaper-as USER [COMMAND]: a program, or a shell, as another user on
     the session, for work kept under a separate account.
 

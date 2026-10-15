@@ -46,6 +46,7 @@ impl CompositorHandler for Draftpaper {
             let window = self.space.elements().find(|w| w.wl_surface().as_deref() == Some(&root)).cloned();
             if let Some(window) = window {
                 window.on_commit();
+                self.float_if_fixed(&window);
                 if self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.floating.contains(&window))) {
                     self.relayout();
                 }

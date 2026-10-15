@@ -43,7 +43,7 @@ i3 add-on find the same desktop.
 1. Daily-drivable on a laptop with an external monitor: DRM/KMS session from a TTY or a display manager,
    libinput, multiple outputs with hotplug, per-output scale including fractional.
 2. The Draftpaper layout: tiling inside the frame, workspaces per output, focus by keyboard and pointer,
-   fullscreen (covers the sheet), floating for dialogs and popups only.
+   fullscreen (covers the sheet), floating for dialogs, popups and windows of one fixed size only.
 3. Parking with exact restore, by key, by clicking a cell, and cycling.
 4. The sheet rendered by the compositor, live (theme switch without restart), at physical scale.
 5. The margins and title block from the existing Quickshell code, unchanged where possible.
@@ -191,7 +191,7 @@ covers panels that report nonsense.
 | Session, devices | libseat (logind or seatd), udev, DRM/KMS with atomic modesetting; GBM + EGL/GLES renderer from Smithay |
 | Input | libinput: keyboards with xkb layouts, touchpad (tap, natural scroll, two-finger gestures for workspaces), TrackPoint, touchscreen (on the laptop panel, turning with its transform) |
 | Clients | xdg-shell, xdg-decoration (server-side: a 1 px border, no titles), wlr-layer-shell, xdg-output, viewporter, fractional-scale-v1, presentation-time, linux-dmabuf, single-pixel-buffer, cursor-shape |
-| X11 apps | Xwayland (Debian's `xwayland`) started with the compositor as a rootless client, and Smithay's built-in X11 window manager: X11 windows tile like Wayland ones, transient windows and dialogs float, menus and tooltips place themselves; clipboard and primary selection bridged both ways, X11 clients reading them only while an X11 window has the keyboard. Chosen over niri's xwayland-satellite, which is neither in Debian nor on crates.io and would be a second program to ship in the one package |
+| X11 apps | Xwayland (Debian's `xwayland`) started with the compositor as a rootless client, and Smithay's built-in X11 window manager: X11 windows tile like Wayland ones, transient windows, dialogs and fixed-size windows float, menus and tooltips place themselves; clipboard and primary selection bridged both ways, X11 clients reading them only while an X11 window has the keyboard. Chosen over niri's xwayland-satellite, which is neither in Debian nor on crates.io and would be a second program to ship in the one package |
 | Clipboard | wl_data_device, primary selection, data-control (for clipboard managers) |
 | Lock and idle | ext-session-lock (swaylock), ext-idle-notify (swayidle), idle-inhibit (video players) |
 | Screens | wlr-screencopy for grim and flameshot; screencasting through xdg-desktop-portal (the GNOME backend with Mutter's screencast D-Bus API, as niri does, or xdg-desktop-portal-wlr) |

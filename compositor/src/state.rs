@@ -496,10 +496,35 @@ impl Draftpaper {
         keyboard.set_focus(self, window.map(crate::focus::KeyboardFocusTarget::Window), serial);
     }
 
-    /// Place a new Wayland window: a dialog (a window with a parent) floats, anything else joins the layout.
+    /// Place a new Wayland window: a dialog (a window with a parent) floats, anything else joins the
+    /// layout (until it turns out to be of one fixed size: float_if_fixed).
     pub fn place(&mut self, window: Window) {
         let dialog = window.toplevel().is_some_and(|t| t.parent().is_some());
         self.place_as(window, dialog);
+    }
+
+    /// A tiled Wayland window of one fixed size (its smallest and largest the same, as swappy's) floats,
+    /// centred at that size: a tile would only leave empty paper around it. Clients say so with their
+    /// first frame, after the window was placed, so this runs on every commit.
+    pub fn float_if_fixed(&mut self, window: &Window) {
+        let Some(t) = window.toplevel() else { return };
+        let fixed = smithay::wayland::compositor::with_states(t.wl_surface(), |states| {
+            let mut cached = states.cached_state.get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
+            let size = cached.current();
+            size.min_size.w > 0 && size.min_size.h > 0 && size.min_size == size.max_size
+        });
+        if !fixed {
+            return;
+        }
+        let Some((i, k)) = self.workspace_of(window) else { return };
+        let grid = self.screens[i].grid;
+        let ws = &mut self.screens[i].workspaces[k];
+        if !ws.layout.windows().any(|w| w == window) || ws.fullscreen.as_ref() == Some(window) {
+            return;
+        }
+        ws.layout.remove(window, &grid);
+        ws.floating.push(window.clone());
+        self.relayout();
     }
 
     /// Place a new window, floating (`dialog`) or in the layout of the active screen.

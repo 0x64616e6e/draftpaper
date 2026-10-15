@@ -1,8 +1,9 @@
 //! X11 applications. Xwayland (Debian's `xwayland`) starts with the compositor as a rootless Wayland
 //! client, and Smithay's X11 window manager runs inside the compositor: X11 windows tile like Wayland
-//! ones, transient windows and dialogs float, and unmanaged windows (menus, tooltips) are shown where
-//! they ask to be. The clipboard and the primary selection are bridged both ways. Clients started after
-//! Xwayland is up find it through DISPLAY. Follows anvil's shell/x11.rs (Smithay v0.7.0, MIT).
+//! ones, transient windows, dialogs and windows of one fixed size float, and unmanaged windows (menus,
+//! tooltips) are shown where they ask to be. The clipboard and the primary selection are bridged both
+//! ways. Clients started after Xwayland is up find it through DISPLAY.
+//! Follows anvil's shell/x11.rs (Smithay v0.7.0, MIT).
 
 use std::os::fd::OwnedFd;
 
@@ -129,7 +130,10 @@ impl XwmHandler for Draftpaper {
 
     fn map_window_request(&mut self, _xwm: XwmId, surface: X11Surface) {
         let _ = surface.set_mapped(true);
+        // a window of one fixed size floats too (see Draftpaper::place)
+        let fixed = surface.min_size().is_some_and(|min| min.w > 0 && min.h > 0 && surface.max_size() == Some(min));
         let dialog = surface.is_transient_for().is_some()
+            || fixed
             || matches!(surface.window_type(), Some(WmWindowType::Dialog | WmWindowType::Utility | WmWindowType::Splash | WmWindowType::Toolbar));
         self.place_as(Window::new_x11_window(surface), dialog);
     }
