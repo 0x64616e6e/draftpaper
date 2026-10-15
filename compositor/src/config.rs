@@ -112,6 +112,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+Left", "move left"), ("Mod+Shift+Right", "move right"), ("Mod+Shift+Up", "move up"), ("Mod+Shift+Down", "move down"),
     ("Mod+Shift+h", "move left"), ("Mod+Shift+l", "move right"), ("Mod+Shift+k", "move up"), ("Mod+Shift+j", "move down"),
     ("Mod+Ctrl+Left", "resize left"), ("Mod+Ctrl+Right", "resize right"), ("Mod+Ctrl+Up", "resize up"), ("Mod+Ctrl+Down", "resize down"),
+    ("Mod+Ctrl+h", "resize left"), ("Mod+Ctrl+l", "resize right"), ("Mod+Ctrl+k", "resize up"), ("Mod+Ctrl+j", "resize down"),
     ("Mod+1", "workspace 1"), ("Mod+2", "workspace 2"), ("Mod+3", "workspace 3"), ("Mod+4", "workspace 4"), ("Mod+5", "workspace 5"),
     ("Mod+6", "workspace 6"), ("Mod+7", "workspace 7"), ("Mod+8", "workspace 8"), ("Mod+9", "workspace 9"), ("Mod+0", "workspace 10"),
     ("Mod+Shift+1", "send 1"), ("Mod+Shift+2", "send 2"), ("Mod+Shift+3", "send 3"), ("Mod+Shift+4", "send 4"), ("Mod+Shift+5", "send 5"),
@@ -367,6 +368,17 @@ mod tests {
         for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print"] {
             let sym = xkb::keysym_from_name(key, xkb::KEYSYM_CASE_INSENSITIVE);
             assert!(config.bindings.iter().any(|b| b.key == sym), "{key} is bound");
+        }
+    }
+
+    #[test]
+    fn resize_by_letters_too() {
+        let config = Config::default_config();
+        let mods = Mods { main: true, ctrl: true, ..Default::default() };
+        for (key, dir) in [("h", Direction::Left), ("l", Direction::Right), ("k", Direction::Up), ("j", Direction::Down)] {
+            let sym = xkb::keysym_from_name(key, xkb::KEYSYM_CASE_INSENSITIVE);
+            let b = config.bindings.iter().find(|b| b.mods == mods && b.key == sym).expect("bound");
+            assert!(matches!(b.action, Action::Resize(d) if d == dir), "Mod+Ctrl+{key}");
         }
     }
 }

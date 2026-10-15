@@ -20,6 +20,7 @@ draftpaper (0.3.0) unstable; urgency=medium
     picker): the sheet's colours and shading and the window colours on
     ruled scales or as hex, previewed live; saving writes your own copy,
     which shadows a shipped theme until draftpaper theme revert.
+  * Mod+Ctrl+h/j/k/l resize, as the arrows do.
   * A cheatsheet: every key, click, command and file on one page
     (/usr/share/doc/draftpaper/cheatsheet.md).
   * draftpaper-as USER [COMMAND]: a program, or a shell, as another user on
