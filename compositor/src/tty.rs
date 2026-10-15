@@ -708,6 +708,15 @@ fn configure_with(
             if output.current_mode() != Some(wl) {
                 surface.use_mode(mode, &mut tty.renderer, &DrmOutputRenderElements::<GlesRenderer, OutputElements>::default()).map_err(|e| format!("{}: mode: {e:?}", change.name))?;
                 output.change_current_state(Some(wl), None, None, None);
+                // millimetres in the new mode's pixels (unless config.toml fixes them)
+                let (phys_w, _) = info.size().unwrap_or((0, 0));
+                let mm = output_settings(&change.name).mm.unwrap_or(if phys_w > 0 { wl.size.w as f32 / phys_w as f32 } else { FALLBACK_MM });
+                if let Some(sheet) = output.user_data().get::<crate::render::OutputSheet>() {
+                    sheet.0.borrow_mut().mm = mm;
+                }
+                if let Some(screen) = data.screens.iter_mut().find(|s| s.output == output) {
+                    screen.phys_mm = mm as f64;
+                }
                 eprintln!("draftpaper: output {} mode {}x{}@{:.3}", change.name, wl.size.w, wl.size.h, wl.refresh as f64 / 1000.0);
             }
         }
