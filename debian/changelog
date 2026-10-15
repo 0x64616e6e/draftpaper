@@ -12,6 +12,9 @@ draftpaper (0.3.0) unstable; urgency=medium
     laptop panel's rotation.
   * A window of one fixed size (swappy's) floats, centred at its size,
     rather than leaving empty paper in a tile.
+  * A floating window's border shows over the windows under it (it was
+    drawn behind every window, so only tiles, bordered in the gutters,
+    showed theirs).
   * Settings on the board (Mod+t, draftpaper settings; it replaces the
     theme picker): the inside of the frame cleared to the sheet's paper
     (with a wallpaper, the picture blurred), the themes as drawings with
