@@ -9,7 +9,7 @@ apart: a light sheet and dark windows leave no colour 3:1 from both). The colour
 lightness looks like the same step whatever the hue.
 
     paper     light | dark            the sheet
-    tone      greige sand clay sage teal blueprint slate graphite
+    tone      greige sand clay sage graphite, teal blueprint slate frost indigo
     accent    amber orange red rose violet blue teal green
     windows   dark | light            the applications: terminals, GTK, Qt, Firefox
     shade     deep dark charcoal slate    the windows' lightness on their side: from the deepest to a
@@ -30,6 +30,7 @@ import math
 TONES = {
     "greige": (70, 0.020), "sand": (80, 0.045), "clay": (45, 0.040), "sage": (145, 0.030),
     "teal": (205, 0.040), "blueprint": (250, 0.075), "slate": (245, 0.025), "graphite": (0, 0.0),
+    "frost": (225, 0.014), "indigo": (275, 0.045),
 }
 ACCENTS = {
     "amber": (70, 0.13), "orange": (50, 0.15), "red": (27, 0.15), "rose": (0, 0.12),

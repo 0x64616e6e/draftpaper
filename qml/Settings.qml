@@ -221,7 +221,9 @@ PanelWindow {
     // the builder's rows: 12 mm each, less when they would run past the frame (the laptop's panel)
     readonly property real builderY: board.inY + gutter + 6 * mm + cardH + 16 * mm
     readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (board.inY + board.inH - gutter - builderY - 6 * mm) / rows.length))
-    readonly property real cellW: Math.min(24 * mm, (cw - 34 * mm) / 8)
+    // the cells as wide as the longest row allows
+    readonly property int most: Math.max(8, ...rows.map(k => (options[k] || []).length))
+    readonly property real cellW: Math.min(24 * mm, (cw - 34 * mm) / most)
 
     Item {
         id: keys
