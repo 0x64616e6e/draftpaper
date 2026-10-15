@@ -73,7 +73,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Print | A region to swappy (slurp, grim) |
 | Shift+Print | The screen you are on to ~/Pictures |
 | Mod+Print | Every screen to ~/Pictures |
-| Mod+z | A region magnified, pixel by pixel (slurp, grim, feh) |
+| Mod+z | A magnifier on the pointer: scroll zooms, Shift+scroll sizes it, Escape closes |
 | Volume, brightness keys | wpctl, brightnessctl |
 | Mod+Shift+e | Leave the session |
 | Ctrl+Alt+F1 … F12 | Switch virtual terminal |
@@ -202,7 +202,8 @@ then `systemctl --user enable kanshi`. A display turned off stays off until it i
 unplugged; when every display left is off, they come on again.
 
 Actions: `focus|move|resize left|right|up|down`, `workspace N`, `send N`, `fullscreen`, `close`, `park`,
-`park_next`, `park_prev`, `screenshot`, `power off|on`, `reload`, `quit`, `spawn COMMAND`.
+`park_next`, `park_prev`, `screenshot`, `zoom` (the magnifier), `pointer X Y` (the pointer there, for
+scripts), `power off|on`, `reload`, `quit`, `spawn COMMAND`.
 
 ## Another account
 

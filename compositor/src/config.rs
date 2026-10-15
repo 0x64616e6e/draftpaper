@@ -48,6 +48,10 @@ pub enum Action {
     Spawn(String),
     /// every output to ~/Pictures (TTY only)
     Screenshot,
+    /// the magnifier on the pointer, or away (lens.rs)
+    Zoom,
+    /// the pointer to this place (logical pixels of the whole layout), for scripts and tests
+    Pointer(f64, f64),
     /// park the focused window in the first free cell, or, with nothing showing, bring every parked
     /// window back (parking.rs)
     Park,
@@ -140,9 +144,9 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Print", r#"spawn g=$(slurp) && grim -g "$g" - | swappy -f -"#),
     ("Shift+Print", r#"spawn mkdir -p ~/Pictures && grim -o "$(draftpaper-compositor msg focused-output)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"#),
     ("Mod+Print", "screenshot"),
-    // a magnifier: a region picked with slurp, shown in feh with its pixels as blocks, to check a line
-    // down to the pixel (q or Escape closes it)
-    ("Mod+z", r#"spawn f="${XDG_RUNTIME_DIR:-/tmp}/draftpaper-zoom.png"; g=$(slurp) && grim -g "$g" "$f" && feh --auto-zoom --force-aliasing --image-bg black --title "zoom $g" "$f"; rm -f "$f""#),
+    // the magnifier on the pointer, to check a line down to the pixel (lens.rs): scroll zooms, Shift and
+    // scroll sizes it, Escape or Mod+z again puts it away
+    ("Mod+z", "zoom"),
     // the laptop's media keys: PipeWire's wpctl (up to 150%, as the shell's volume cell), brightnessctl
     ("XF86AudioRaiseVolume", "spawn wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"),
     ("XF86AudioLowerVolume", "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
@@ -176,6 +180,14 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
         "close" => Action::Close,
         "quit" => Action::Quit,
         "screenshot" => Action::Screenshot,
+        "zoom" => Action::Zoom,
+        "pointer" => {
+            let mut xy = arg.split_whitespace().map(|v| v.parse::<f64>());
+            match (xy.next(), xy.next()) {
+                (Some(Ok(x)), Some(Ok(y))) => Action::Pointer(x, y),
+                _ => return Err(format!("\"{s}\": pointer X Y")),
+            }
+        }
         "reload" => Action::Reload,
         "park" => Action::Park,
         "park_at" => {

@@ -4,11 +4,15 @@
 //! `make pixels` takes the screenshots (a nested session at each scale) and runs this on them.
 //!
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient] [windows]
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lens BEFORE.png X Y
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
 //! open side by side (layout.rs): their borders a logical pixel's worth wide, whole, against the frame's
 //! line and either side of the tick's pixel between them.
+//! With `lens`, the magnifier (src/lens.rs) on the pointer at X, Y (logical), at its first level and size:
+//! each pixel of BEFORE (the same screen without it) a block of exactly its colour, the grid between them,
+//! the hotspot's pixel outlined.
 
 #[allow(dead_code)]
 #[path = "../src/title.rs"]
@@ -16,6 +20,9 @@ mod title;
 #[allow(dead_code)]
 #[path = "../src/layout.rs"]
 mod layout;
+#[allow(dead_code)]
+#[path = "../src/lens.rs"]
+mod lens;
 
 use image::{Rgba, RgbaImage};
 
@@ -33,6 +40,12 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "lens") {
+        let before: RgbaImage = image::open(&args[6]).expect("the screenshot before the lens").to_rgba8();
+        let (x, y): (f64, f64) = (args[7].parse().unwrap(), args[8].parse().unwrap());
+        lens_check(&img, &before, scale, phys_mm, (x, y), &args[1]);
+        return;
+    }
     let (w, h) = (img.width() as i32, img.height() as i32);
     let mg = title::margin(margin_mm, phys_mm / scale, scale);
     let block = title::title_block((w, h), mg, phys_mm as f32);
@@ -173,6 +186,70 @@ fn main() {
         println!("{}: exact ({w}x{h}, scale {scale}, margin {mg} px, title block {}x{} at {left},{top})", args[1], right - left, bottom - top);
     } else {
         println!("{}: {} faults", args[1], faults.len());
+        std::process::exit(1);
+    }
+}
+
+/// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+fn lens_check(img: &RgbaImage, before: &RgbaImage, scale: f64, phys_mm: f64, at: (f64, f64), name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let lens = lens::Lens::default();
+    let level = lens.level();
+    let hotspot = smithay::utils::Point::from((at.0 * scale, at.1 * scale));
+    let (src, dst, c) = lens::place((w, h), hotspot, level, (lens.size_mm * phys_mm).round());
+    let l = level as i32;
+    let outline = if level >= 12.0 { 2 } else { 1 };
+    let mut faults = 0;
+    let mut fault = |what: String| {
+        if faults < 20 {
+            eprintln!("  {what}");
+        }
+        faults += 1;
+    };
+    for j in 0..src.size.h {
+        for i in 0..src.size.w {
+            let (sx, sy) = (src.loc.x + i, src.loc.y + j);
+            let orig = *before.get_pixel(sx as u32, sy as u32);
+            let grey = |v: u8| (v as f32 * 0.7 + 0.5 * 255.0 * 0.3).round() as i32;
+            for py in 0..l {
+                for px in 0..l {
+                    let (x, y) = (dst.loc.x + i * l + px, dst.loc.y + j * l + py);
+                    if x < 0 || y < 0 || x >= w || y >= h {
+                        continue;
+                    }
+                    let got = *img.get_pixel(x as u32, y as u32);
+                    let edge = px < outline || py < outline || px >= l - outline || py >= l - outline;
+                    if (sx, sy) == c && edge {
+                        // the hotspot's outline: black or white
+                        if !(got[0] == got[1] && got[1] == got[2] && (got[0] < 3 || got[0] > 252)) {
+                            fault(format!("({x}, {y}): the hotspot's outline is {got:?}"));
+                        }
+                        continue;
+                    }
+                    let want: [i32; 3] = if level >= 6.0 && (px < 1 || py < 1) {
+                        [grey(orig[0]), grey(orig[1]), grey(orig[2])]
+                    } else {
+                        [orig[0] as i32, orig[1] as i32, orig[2] as i32]
+                    };
+                    if (0..3).any(|k| (got[k] as i32 - want[k]).abs() > 2) {
+                        fault(format!("({x}, {y}) in the block of ({sx}, {sy}) is {got:?}, its pixel {orig:?}"));
+                    }
+                }
+            }
+        }
+    }
+    // the frame: a dark pixel outside a light one, all round
+    for (x, y) in [(dst.loc.x - 2, dst.loc.y + 5), (dst.loc.x + 5, dst.loc.y - 2), (dst.loc.x + dst.size.w + 1, dst.loc.y + 5), (dst.loc.x + 5, dst.loc.y + dst.size.h + 1)] {
+        let (dx, dy) = ((x - dst.loc.x).signum().min(0) + (x >= dst.loc.x + dst.size.w) as i32, (y - dst.loc.y).signum().min(0) + (y >= dst.loc.y + dst.size.h) as i32);
+        let (outer, inner) = (*img.get_pixel(x as u32, y as u32), *img.get_pixel((x - dx) as u32, (y - dy) as u32));
+        if !(outer[0] < inner[0] && outer[1] < inner[1] && outer[2] < inner[2]) {
+            fault(format!("the lens's frame at ({x}, {y}): {outer:?} outside {inner:?}"));
+        }
+    }
+    if faults == 0 {
+        println!("{name}: exact (the lens {}x{} at {},{}, {level} times, the hotspot {c:?})", dst.size.w, dst.size.h, dst.loc.x, dst.loc.y);
+    } else {
+        println!("{name}: {faults} faults");
         std::process::exit(1);
     }
 }

@@ -1,7 +1,17 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
-  * Mod+z: a magnifier. A region picked with slurp is shown in feh, its
-    pixels as blocks, to check a line down to the pixel (q closes it).
+  * Mod+z (the zoom action): a magnifier on the pointer, each pixel a
+    block with a faint grid between them and the one under the pointer
+    outlined, to check a line down to the pixel. Scrolling zooms (2 to 64
+    times), Shift and scrolling sizes the lens (20 to 200 mm); Escape or
+    Mod+z again puts it away.
+  * draftpaper-compositor takes the displays and input devices only with
+    --tty (as the session starts it): started from inside a session with
+    no display to nest in, it no longer falls back to them.
+  * draftpaper-compositor --headless WxH [--scale S]: one output drawn
+    offscreen on the GPU's render node, shown nowhere, for tests; make
+    pixels runs on it and needs no session. The pointer action moves the
+    pointer (draftpaper-compositor msg pointer X Y).
   * The sheet is measured once, in the display's own pixels (title.rs): the
     frame, the margins' ticks, the title block's rules and cells, the
     wallpaper's frost. The compositor draws the title block's rules and the

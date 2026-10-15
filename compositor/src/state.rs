@@ -51,6 +51,8 @@ pub struct Draftpaper {
     pub idle_notifier_state: smithay::wayland::idle_notify::IdleNotifierState<Self>,
     pub idle_inhibit_state: smithay::wayland::idle_inhibit::IdleInhibitManagerState,
     pub locked: bool,
+    /// the magnifier, while it is out (lens.rs)
+    pub lens: Option<crate::lens::Lens>,
     /// the displays are off (DPMS; tty::set_power)
     pub screens_off: bool,
     /// the lock object of the locker holding the lock (handlers/lock_idle.rs)
@@ -82,6 +84,8 @@ pub struct Draftpaper {
     pub config_mtime: Option<std::time::SystemTime>,
     /// the TTY backend's devices and outputs (None when nested)
     pub tty_data: Option<crate::tty::TtyData>,
+    /// the headless backend (headless.rs), for tests
+    pub headless: Option<crate::headless::Headless>,
     pub loop_handle: smithay::reexports::calloop::LoopHandle<'static, Draftpaper>,
     /// the IPC socket and its clients (ipc.rs)
     pub ipc: crate::ipc::Ipc,
@@ -177,6 +181,7 @@ impl Draftpaper {
             idle_notifier_state,
             idle_inhibit_state,
             locked: false,
+            lens: None,
             screens_off: false,
             lock_holder: None,
             lock_surfaces: Default::default(),
@@ -196,6 +201,7 @@ impl Draftpaper {
             config: crate::config::Config::default_config(),
             config_mtime: None,
             tty_data: None,
+            headless: None,
             loop_handle: event_loop.handle(),
             ipc: Default::default(),
             anim: Default::default(),

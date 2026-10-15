@@ -8,7 +8,10 @@ draftpaper, draftpaper-compositor, draftpaper-session, draftpaper-as \- the Wayl
 .B draftpaper-session
 .br
 .B draftpaper-compositor
-.RB [ --tty ]
+.RB [ --tty \fR|\fB --headless
+.IR WIDTH x HEIGHT
+.RB [ --scale
+.IR S ]]
 .RB [ --session ]
 .RB [ --command
 .IR PROGRAM ]
@@ -30,9 +33,16 @@ session's environment and runs
 .BR "draftpaper-compositor --tty --session" ,
 which starts the systemd user target
 .B draftpaper-session.target
-(the shell, swayidle, the volume keeper) once it is up. Without a TTY,
+(the shell, swayidle, the volume keeper) once it is up. Without
+.BR --tty ,
 .B draftpaper-compositor
-runs nested in a window of the running desktop.
+runs nested in a window of the running desktop, and with no desktop to nest in it refuses to start: it
+takes the displays and input devices only when asked to. With
+.BR --headless ,
+for tests, it draws one output of that size offscreen on the GPU's render node, shown nowhere
+.RB ( "make pixels" );
+.B DRAFTPAPER_MM
+sets its pixels per millimetre.
 .PP
 .B draftpaper
 is the rest: themes, the generated files for the shell, the launcher, the lock screen and the

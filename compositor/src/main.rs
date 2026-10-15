@@ -6,6 +6,7 @@ mod handlers;
 mod config;
 mod cursor;
 mod focus;
+mod headless;
 mod input;
 mod layout;
 mod render;
@@ -19,6 +20,7 @@ mod animation;
 mod screencopy;
 mod output_management;
 mod wallpaper;
+mod lens;
 mod rules;
 mod title;
 mod tty;
@@ -34,6 +36,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(ipc::msg(&args[1..]));
     }
 
+    // draftpaper-compositor [--tty | --headless WxH [--scale S]] [--session] [--command PROGRAM] | msg REQUEST...
+    // the TTY backend (the displays and input devices themselves) only when asked for: a compositor
+    // started without it from inside a session, with no display to nest in, must not take the hardware
+    let tty = args.iter().any(|a| a == "--tty");
+    let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
+    let headless = value("--headless").map(|v| {
+        let (w, h) = v.split_once('x').and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?))).unwrap_or_else(|| {
+            eprintln!("draftpaper: --headless WIDTHxHEIGHT, as 3840x2160");
+            std::process::exit(2);
+        });
+        (w, h, value("--scale").and_then(|s| s.parse::<f64>().ok()).unwrap_or(1.0))
+    });
+    if !tty && headless.is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none() {
+        eprintln!("draftpaper: no display to nest in: --tty to run on the displays themselves (a login session), --headless WxH for tests");
+        std::process::exit(2);
+    }
+
     if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
         tracing_subscriber::fmt().with_env_filter(env_filter).init();
     } else {
@@ -46,10 +65,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let display: Display<Draftpaper> = Display::new()?;
     let mut data = Draftpaper::new(&mut event_loop, display);
 
-    // draftpaper-compositor [--tty] [--session] [--command PROGRAM] | msg REQUEST...
-    // the TTY backend when asked for, or when there is no display to nest in
-    let tty = args.iter().any(|a| a == "--tty")
-        || (std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none());
     // --session: started as the login session (draftpaper-session): hand the environment to systemd
     // and D-Bus and start draftpaper-session.target, stopped again on exit
     let session = args.iter().any(|a| a == "--session");
@@ -61,6 +76,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
         std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
+    } else if let Some((w, h, scale)) = headless {
+        if let Err(e) = crate::headless::init_headless(&mut event_loop, &mut data, (w, h), scale) {
+            eprintln!("draftpaper: headless: {e}");
+            std::process::exit(1);
+        }
     } else {
         crate::winit::init_winit(&mut event_loop, &mut data)?;
     }
@@ -79,8 +99,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .status();
     }
 
-    // X11 applications
-    data.start_xwayland();
+    // X11 applications (not for tests)
+    if headless.is_none() {
+        data.start_xwayland();
+    }
 
     // config.toml: read now, and again whenever it changes
     data.reload_config();

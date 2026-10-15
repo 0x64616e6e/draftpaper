@@ -36,6 +36,8 @@ render_elements! {
     /// the lock surface, and the low layers' menus drawn above the windows
     Surface=WaylandSurfaceRenderElement<GlesRenderer>,
     Sheet=PixelShaderElement,
+    /// the magnifier (lens.rs)
+    Lens=crate::lens::LensElement,
     /// the wallpaper's textures, cut to their pixels
     Picture=CropRenderElement<MemoryRenderBufferRenderElement<GlesRenderer>>,
 }
@@ -69,6 +71,41 @@ pub fn attach_sheet(output: &Output, theme: Theme, mm: f32) {
 /// The elements of one frame of `output`. `pointer` is the cursor image and its hotspot, when this
 /// backend draws the cursor itself.
 pub fn output_elements(
+    state: &Draftpaper,
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
+) -> Vec<OutputElements> {
+    // the magnifier (lens.rs), on the output under the pointer: the scene without the pointer, the lens
+    // and its frame in front
+    let at = state.seat.get_pointer().unwrap().current_location();
+    let here = state.space.output_geometry(output).filter(|g| g.to_f64().contains(at));
+    let (Some(lens), Some(geometry), false) = (&state.lens, here, state.locked) else {
+        return scene_elements(state, renderer, output, pointer);
+    };
+    let scene = scene_elements(state, renderer, output, None);
+    let scale = output.current_scale().fractional_scale();
+    let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
+    let hotspot = (at - geometry.loc.to_f64()).to_physical(scale);
+    let Some((element, frame)) = crate::lens::lens(renderer, output, mode_size(output), &scene, lens, hotspot, mm) else { return scene };
+    let buffers = output.user_data().get_or_insert(|| LensFrame(RefCell::new(Default::default())));
+    let mut buffers = buffers.0.borrow_mut();
+    let mut elements = Vec::with_capacity(scene.len() + 9);
+    for (i, (buffer, r)) in buffers.iter_mut().zip(frame).enumerate() {
+        let colour = if i < 4 { [0.0, 0.0, 0.0, 0.85] } else { [0.85, 0.85, 0.85, 0.85] };
+        buffer.update((r.size.w, r.size.h), colour);
+        elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, r.loc, 1.0, 1.0, Kind::Unspecified)));
+    }
+    elements.push(OutputElements::Lens(element));
+    elements.extend(scene);
+    elements
+}
+
+/// The magnifier's frame (lens.rs), kept with the output.
+struct LensFrame(RefCell<[SolidColorBuffer; 8]>);
+
+/// What `output` shows, without the magnifier.
+fn scene_elements(
     state: &Draftpaper,
     renderer: &mut GlesRenderer,
     output: &Output,

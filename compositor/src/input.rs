@@ -43,7 +43,14 @@ impl Draftpaper {
                     serial,
                     time,
                     |state, mods, keysym| match pressed
-                        .then(|| state.config.action(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty))
+                        .then(|| {
+                            // the magnifier out: Escape puts it away
+                            let escape = keysym.modified_sym() == smithay::input::keyboard::Keysym::Escape && !mods.ctrl && !mods.alt && !mods.logo && !mods.shift;
+                            if state.lens.is_some() && escape {
+                                return Some(Action::Zoom);
+                            }
+                            state.config.action(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty)
+                        })
                         .flatten()
                         .filter(|a| !locked || matches!(a, Action::Vt(_)))
                     {
@@ -153,6 +160,19 @@ impl Draftpaper {
             }
             InputEvent::PointerAxis { event, .. } => {
                 let source = event.source();
+                // the magnifier out: the wheel zooms it, with Shift sizes it (the windows do not scroll)
+                if self.lens.is_some() {
+                    let notches = event
+                        .amount_v120(Axis::Vertical)
+                        .map(|v| v / 120.0)
+                        .or_else(|| event.amount(Axis::Vertical).map(|a| a / 15.0))
+                        .unwrap_or(0.0);
+                    let shift = self.seat.get_keyboard().unwrap().modifier_state().shift;
+                    if let Some(lens) = self.lens.as_mut() {
+                        lens.scroll(notches, shift);
+                    }
+                    return;
+                }
 
                 let horizontal_amount = event
                     .amount(Axis::Horizontal)
@@ -338,6 +358,20 @@ impl Draftpaper {
             }
             Action::Quit => self.loop_signal.stop(),
             Action::Screenshot => crate::tty::screenshot(self),
+            Action::Pointer(x, y) => {
+                let pos = smithay::utils::Point::<f64, smithay::utils::Logical>::from((x, y));
+                let pointer = self.seat.get_pointer().unwrap();
+                let under = self.surface_under(pos);
+                let serial = SERIAL_COUNTER.next_serial();
+                pointer.motion(self, under, &MotionEvent { location: pos, serial, time: self.start_time.elapsed().as_millis() as u32 });
+                pointer.frame(self);
+            }
+            Action::Zoom => {
+                self.lens = match self.lens.take() {
+                    Some(_) => None,
+                    None => Some(crate::lens::Lens::default()),
+                };
+            }
             Action::Park => self.park_toggle(),
             Action::ParkAt(cell, ws) => self.park_at(cell, ws),
             Action::Unpark(id) => self.unpark(id),

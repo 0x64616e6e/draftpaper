@@ -108,7 +108,7 @@ impl smithay::wayland::dmabuf::DmabufHandler for Draftpaper {
         dmabuf: smithay::backend::allocator::dmabuf::Dmabuf,
         notifier: smithay::wayland::dmabuf::ImportNotifier,
     ) {
-        if self.tty_data.as_mut().is_some_and(|t| t.import_dmabuf(&dmabuf)) {
+        if self.tty_data.as_mut().is_some_and(|t| t.import_dmabuf(&dmabuf)) || self.headless.as_mut().is_some_and(|h| h.import_dmabuf(&dmabuf)) {
             let _ = notifier.successful::<Draftpaper>();
         } else {
             notifier.failed();

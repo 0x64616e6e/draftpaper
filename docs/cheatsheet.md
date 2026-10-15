@@ -41,7 +41,7 @@ config.toml floats, pins or places other windows.
 | Print | A region (slurp) into swappy: annotate, save, copy |
 | Shift+Print | The screen you are on into ~/Pictures |
 | Mod+Print | Every screen into ~/Pictures (the compositor's own) |
-| Mod+z | A magnifier: a region (slurp) in feh, its pixels as blocks; q closes it |
+| Mod+z | The magnifier on the pointer, each pixel a block; scroll zooms (2–64×), Shift+scroll sizes it, Escape or Mod+z puts it away |
 | Mod+Shift+x | Lock now (swaylock) |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Volume, mic, brightness keys | wpctl (volume up to 150%), brightnessctl |
