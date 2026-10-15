@@ -635,14 +635,14 @@ pub fn configure(data: &mut Draftpaper, changes: &[crate::output_management::Hea
 }
 
 /// The display mode `want` names on this connector: the same size and refresh (a custom mode with no
-/// refresh: the fastest at that size).
+/// refresh, as kanshi sends `mode 3840x2160`: the display's preferred one at that size, else the fastest).
 fn find_mode(info: &connector::Info, want: &crate::output_management::ModeInfo) -> Option<smithay::reexports::drm::control::Mode> {
     let at_size = info.modes().iter().filter(|m| {
         let wl = WlMode::from(**m);
         wl.size.w == want.w && wl.size.h == want.h
     });
     if want.refresh == 0 {
-        return at_size.max_by_key(|m| WlMode::from(**m).refresh).copied();
+        return at_size.max_by_key(|m| (m.mode_type().contains(ModeTypeFlags::PREFERRED), WlMode::from(**m).refresh)).copied();
     }
     // a custom refresh within 0.5 Hz of the display's own
     at_size.min_by_key(|m| (WlMode::from(**m).refresh - want.refresh).abs()).filter(|m| (WlMode::from(**m).refresh - want.refresh).abs() <= 500).copied()
