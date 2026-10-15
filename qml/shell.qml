@@ -208,7 +208,7 @@ ShellRoot {
     ThemePicker { id: themePicker; shell: root }
     // the theme editor (`draftpaper theme edit [NAME]`, or E in the picker)
     ThemeEditor { id: themeEditor; shell: root }
-    function editTheme(name, back, fromPicker) { themeEditor.open(name, back, fromPicker) }
+    function editTheme(name, back, fromPicker, onScreen) { themeEditor.open(name, back, fromPicker, onScreen) }
     function resumePicker(name) { themePicker.resume(name) }
     IpcHandler {
         target: "editor"

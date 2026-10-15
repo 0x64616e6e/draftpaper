@@ -17,7 +17,9 @@ PanelWindow {
     id: picker
     required property var shell
     visible: false
-    screen: Quickshell.screens.find(s => Compositor.output(s.name) && Compositor.output(s.name).focused) || Quickshell.screens[0]
+    // the screen it opens on, fixed until it closes (not the focus's, which moves as the pointer does)
+    screen: Quickshell.screens[0]
+    function focusedScreen() { return Quickshell.screens.find(s => Compositor.output(s.name) && Compositor.output(s.name).focused) || Quickshell.screens[0] }
     readonly property var out: Compositor.output(screen ? screen.name : "")
     readonly property real mm: out ? out.px_per_mm : 4.2
     readonly property real dpr: out ? out.scale : 1
@@ -60,6 +62,7 @@ PanelWindow {
     readonly property real gridY: inY + gutter + Math.max(0, (areaH - gutter - rows * (cardH + labelH) - (rows - 1) * gutter) / 2)
 
     function open() {
+        screen = focusedScreen()
         load.running = true
         wall.running = true
         visible = true
@@ -86,7 +89,7 @@ PanelWindow {
         if (!name) return
         settle.stop()
         visible = false
-        shell.editTheme(name, picker.shown, true)
+        shell.editTheme(name, picker.shown, true, picker.screen)
     }
     function resume(name) {
         load.running = true            // the themes again: one may have been saved

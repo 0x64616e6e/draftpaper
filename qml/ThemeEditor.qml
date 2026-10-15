@@ -19,7 +19,9 @@ PanelWindow {
     id: editor
     required property var shell
     visible: false
-    screen: Quickshell.screens.find(s => Compositor.output(s.name) && Compositor.output(s.name).focused) || Quickshell.screens[0]
+    // the screen it opens on, fixed until it closes (not the focus's, which moves as the pointer does)
+    screen: Quickshell.screens[0]
+    function focusedScreen() { return Quickshell.screens.find(s => Compositor.output(s.name) && Compositor.output(s.name).focused) || Quickshell.screens[0] }
     readonly property var out: Compositor.output(screen ? screen.name : "")
     readonly property real mm: board.mm
     anchors { top: true; bottom: true; left: true; right: true }
@@ -97,7 +99,8 @@ PanelWindow {
           + (entry && entry.own && entry.shipped ? " · r revert" : "")
 
     // ---- opening, values, the draft ----
-    function open(themeName, backTo, picker) {
+    function open(themeName, backTo, picker, onScreen) {
+        screen = onScreen || focusedScreen()
         name = themeName
         back = backTo
         fromPicker = picker
