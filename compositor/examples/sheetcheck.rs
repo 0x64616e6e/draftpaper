@@ -3,14 +3,19 @@
 //! frame, its outer rule whole and exactly as heavy as the frame's, the corner ticks on the frame's line.
 //! `make pixels` takes the screenshots (a nested session at each scale) and runs this on them.
 //!
-//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient]
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient] [windows]
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
-//! (the frame's line is drawn over the picture then, and changes along it).
+//! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
+//! open side by side (layout.rs): their borders a logical pixel's worth wide, whole, against the frame's
+//! line and either side of the tick's pixel between them.
 
 #[allow(dead_code)]
 #[path = "../src/title.rs"]
 mod title;
+#[allow(dead_code)]
+#[path = "../src/layout.rs"]
+mod layout;
 
 use image::{Rgba, RgbaImage};
 
@@ -26,7 +31,8 @@ fn main() {
     }
     let img: RgbaImage = image::open(&args[1]).expect("a screenshot").to_rgba8();
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
-    let ambient = args.get(5).is_some_and(|a| a == "ambient");
+    let ambient = args[5..].iter().any(|a| a == "ambient");
+    let windows = args[5..].iter().any(|a| a == "windows");
     let (w, h) = (img.width() as i32, img.height() as i32);
     let mg = title::margin(margin_mm, phys_mm / scale, scale);
     let block = title::title_block((w, h), mg, phys_mm as f32);
@@ -76,9 +82,10 @@ fn main() {
             }
         }
     }
-    // the outer rule: two rows and two columns of one colour, paper (or picture) either side of them
+    // the outer rule: two rows and two columns of one colour, paper (or picture) either side of them (a
+    // window covers it when there are windows)
     let rule = px(left + 4, top);
-    for x in left..right - 2 {
+    for x in (left..right - 2).filter(|_| !windows) {
         for y in [top, top + 1] {
             if diff(px(x, y), rule) > 6 {
                 fault(format!("top rule at ({x}, {y}) is {:?}, not {:?}", px(x, y), rule));
@@ -88,7 +95,7 @@ fn main() {
             fault(format!("({x}, {}) above the top rule is as dark as the rule", top - 1));
         }
     }
-    for y in top..bottom - 2 {
+    for y in (top..bottom - 2).filter(|_| !windows) {
         for x in [left, left + 1] {
             if diff(px(x, y), rule) > 6 {
                 fault(format!("left rule at ({x}, {y}) is {:?}, not {:?}", px(x, y), rule));
@@ -115,6 +122,50 @@ fn main() {
                     fault(format!("right margin at ({x}, {y}): the corner tick should {}be here", if on { "" } else { "not " }));
                 }
             }
+        }
+    }
+
+    if windows {
+        // the grid as the compositor has it (an output at 0,0), and the two columns of two windows
+        let size = smithay::utils::Size::from(((w as f64 / scale).ceil() as i32, (h as f64 / scale).ceil() as i32));
+        let grid = layout::Grid::new((0, 0).into(), size, phys_mm / scale, margin_mm, scale, (w, h));
+        let n0 = grid.zones.0 - grid.zones.0 / 2;
+        let b = grid.border();
+        let tiles = [grid.tile(0, n0, 0.0, grid.zones.1 as f64).pixels, grid.tile(n0, grid.zones.0, 0.0, grid.zones.1 as f64).pixels];
+        for (i, p) in tiles.iter().enumerate() {
+            let (x0, y0, x1, y1) = (p.loc.x, p.loc.y, p.loc.x + p.size.w, p.loc.y + p.size.h);
+            let colour = px(x0 - 1, (y0 + y1) / 2);
+            // the four bands, b pixels each, one colour; just outside and inside them, something else
+            let mut band = |x: i32, y: i32, outside: (i32, i32), inside: (i32, i32)| {
+                if diff(px(x, y), colour) > 3 {
+                    fault(format!("window {i}: border at ({x}, {y}) is {:?}, not {:?}", px(x, y), colour));
+                }
+                for (q, what) in [(outside, "outside"), (inside, "inside")] {
+                    if diff(px(q.0, q.1), colour) <= 3 {
+                        fault(format!("window {i}: ({}, {}) {what} its border is the border's colour", q.0, q.1));
+                    }
+                }
+            };
+            for y in [y0 + 5, (y0 + y1) / 2, y1 - 5] {
+                for d in 1..=b {
+                    band(x0 - d, y, (x0 - b - 1, y), (x0, y));
+                    band(x1 - 1 + d, y, (x1 + b, y), (x1 - 1, y));
+                }
+            }
+            for x in [x0 + 5, (x0 + x1) / 2, x1 - 5] {
+                for d in 1..=b {
+                    band(x, y0 - d, (x, y0 - b - 1), (x, y0));
+                    band(x, y1 - 1 + d, (x, y1 + b), (x, y1 - 1));
+                }
+            }
+        }
+        // between them the tick's pixel, under the tick in the top margin
+        let t = tiles[0].loc.x + tiles[0].size.w + b;
+        if tiles[1].loc.x - b != t + 1 {
+            fault(format!("the gutter between the windows is {} pixels, not one", tiles[1].loc.x - b - t));
+        }
+        if diff(px(t, mg / 2), px(t - 3, mg / 2)) <= 6 {
+            fault(format!("no tick in the top margin at x = {t}, above the gutter"));
         }
     }
 

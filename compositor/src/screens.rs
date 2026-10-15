@@ -63,7 +63,7 @@ impl Draftpaper {
         let geometry = self.space.output_geometry(&output).unwrap();
         let phys_mm = mm;
         let mm = mm / scale;
-        let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm);
+        let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm, scale, crate::render::mode_size(&output));
         // the lowest number not yet in use
         let number = (1..).find(|n| !self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.number == *n))).unwrap();
         self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, hidden_ticks: [0; 4] });
@@ -88,7 +88,7 @@ impl Draftpaper {
         let Some(geometry) = self.space.output_geometry(output) else { return };
         if let Some(s) = self.screens.iter_mut().find(|s| &s.output == output) {
             s.mm = s.phys_mm / output.current_scale().fractional_scale();
-            s.grid = Grid::new(geometry.loc, geometry.size, s.mm, s.margin_mm);
+            s.grid = Grid::new(geometry.loc, geometry.size, s.mm, s.margin_mm, output.current_scale().fractional_scale(), crate::render::mode_size(output));
         }
         self.relayout();
     }

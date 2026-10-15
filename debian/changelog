@@ -11,6 +11,14 @@ draftpaper (0.3.0) unstable; urgency=medium
     divide the display (1.25, 1.75) the frame is measured from the display's
     edge, and the wallpaper covers its pixels exactly. make pixels checks it
     all, pixel by pixel, at every scale.
+  * Tiles are measured with the sheet too, in the display's pixels, and each
+    window is put on its own: its border a logical pixel's worth of whole
+    pixels, against the frame's line, and between two windows the borders
+    either side of the tick's pixel, which shows the paper in line with the
+    tick in the margin. At 1.25 and 1.75 the windows on the right and at
+    the bottom no longer run past the frame by a pixel or two, and at 1.5
+    their edges and borders no longer fall between pixels. make pixels
+    checks two windows at every scale.
   * The draftpaper command is Rust (cli/), no longer Python: the same
     commands and the same files, written byte for byte as before, and
     fast (the shell's readings every 5 s: 4 ms instead of 116; a click in

@@ -40,6 +40,13 @@ shot() {
         DRAFTPAPER_ROOT="$repo" DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" \
         setsid qs -p "$repo/qml/shell.qml" -n > "$t/qs.log" 2>&1 &
     shell=$!
+    # two terminals side by side, grey: unlike either border colour, so their edges show
+    if [ "${3:-}" = windows ]; then
+        for i in 1 2; do
+            env HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" setsid foot -o colors.background=808080 > /dev/null 2>&1 &
+            sleep 0.5
+        done
+    fi
     sleep 4
     rm -f "$t"/Pictures/*.png
     kill -USR1 "$nest"
@@ -51,7 +58,17 @@ shot() {
 }
 
 fail=0
-for margins in paper ambient; do
+command -v foot > /dev/null || echo "no foot: windows not checked"
+for margins in paper ambient windows; do
+    if [ $margins = windows ]; then
+        command -v foot > /dev/null || continue
+        printf '%s\n' "$plain" > "$t/.config/draftpaper/config.toml"
+        for scale in 1 1.25 1.5 1.75 2; do
+            shot $scale "$t/sheet.png" windows
+            "$check" "$t/sheet.png" $scale "$mm" 6 windows | sed "s|$t/sheet.png|two windows, scale $scale|" || fail=1
+        done
+        continue
+    fi
     if [ $margins = ambient ]; then
         [ -n "$wallpaper" ] || { echo "no picture in /usr/share/backgrounds: ambient margins not checked"; continue; }
         printf 'wallpaper = "%s"\nmargins = "ambient"\n%s\n' "$wallpaper" "$plain" > "$t/.config/draftpaper/config.toml"

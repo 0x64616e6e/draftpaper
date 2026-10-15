@@ -371,6 +371,7 @@ impl Draftpaper {
             // floating windows, above the tiles, at their own size: centred inside the frame, or (a rule's
             // "corner": picture-in-picture) in its bottom-right corner, above the title block
             for window in &ws.floating {
+                crate::layout::set_tile(window, None);
                 let size = window.geometry().size;
                 let a = s.grid.area;
                 let loc = if crate::rules::is_cornered(window) {

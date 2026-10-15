@@ -228,7 +228,7 @@ impl Draftpaper {
                 .filter_map(|(i, s)| {
                     let g = self.space.output_geometry(&s.output)?;
                     let margin = (s.margin_mm * s.mm).round();
-                    let frame = (s.grid.origin.x, s.grid.origin.y, g.size.w as f64 - 2.0 * margin, g.size.h as f64 - 2.0 * margin);
+                    let frame = (s.grid.origin.x, s.grid.origin.y, s.grid.zone.0 * s.grid.zones.0 as f64, s.grid.zone.1 * s.grid.zones.1 as f64);
                     Some(json!({
                         "name": s.output.name(),
                         "focused": i == focused,

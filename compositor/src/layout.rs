@@ -15,51 +15,101 @@
 use smithay::{
     desktop::{Space, Window},
     reexports::wayland_protocols::xdg::shell::server::xdg_toplevel,
-    utils::{Logical, Point, Rectangle, Size},
+    utils::{Logical, Physical, Point, Rectangle, Size},
 };
 
-/// The frame's interior in logical pixels and its zones.
+/// The frame's interior and its zones, measured as the sheet is (title.rs): in the output's physical
+/// pixels, from the edges of its mode. The logical numbers are those divided by the scale.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Grid {
+    /// where windows may go: inside the frame's line and their borders, in whole logical pixels (an
+    /// exclusive zone of a foreign panel narrows it)
     pub area: Rectangle<i32, Logical>,
     /// left edge of the zone grid (the frame line's outer edge), and the zone sizes
     pub origin: Point<f64, Logical>,
     pub zone: (f64, f64),
     pub zones: (u32, u32),
+    /// the output's place (logical), scale, size (physical, its mode) and margin (physical)
+    at: Point<i32, Logical>,
+    scale: f64,
+    mode: (i32, i32),
+    margin: i32,
+}
+
+/// A tile: where its window goes in the space (whole logical pixels, the size it is told) and the
+/// physical pixels it covers on its output, which the renderer moves it onto and cuts it to (render.rs).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Tile {
+    pub logical: Rectangle<i32, Logical>,
+    pub pixels: Rectangle<i32, Physical>,
 }
 
 impl Grid {
-    /// For an output at `at` of `size` logical pixels at `mm` logical pixels per millimetre, with a margin of
-    /// `margin_mm`: the same arithmetic as the shader and render.py (margin rounded to whole pixels,
-    /// zones of about 50 mm, at least two).
-    pub fn new(at: Point<i32, Logical>, size: Size<i32, Logical>, mm: f64, margin_mm: f64) -> Grid {
-        let mg = (margin_mm * mm).round();
-        let (w, h) = (size.w as f64, size.h as f64);
-        let (ox, oy) = (at.x as f64, at.y as f64);
-        let nx = ((w - 2.0 * mg) / (50.0 * mm)).round().max(2.0);
-        let ny = ((h - 2.0 * mg) / (50.0 * mm)).round().max(2.0);
-        // windows sit inside the 2 px frame line
-        let inner = 2.0;
-        Grid {
-            area: Rectangle::new(
-                ((ox + mg + inner) as i32, (oy + mg + inner) as i32).into(),
-                ((w - 2.0 * (mg + inner)) as i32, (h - 2.0 * (mg + inner)) as i32).into(),
-            ),
-            origin: (ox + mg, oy + mg).into(),
-            zone: ((w - 2.0 * mg) / nx, (h - 2.0 * mg) / ny),
+    /// For an output at `at` of `size` logical pixels at `mm` logical pixels per millimetre and `scale`,
+    /// `mode` physical pixels, with a margin of `margin_mm`: zones of about 50 mm, at least two.
+    pub fn new(at: Point<i32, Logical>, size: Size<i32, Logical>, mm: f64, margin_mm: f64, scale: f64, mode: (i32, i32)) -> Grid {
+        let mode = if mode.0 > 0 && mode.1 > 0 { mode } else { ((size.w as f64 * scale).round() as i32, (size.h as f64 * scale).round() as i32) };
+        let mg = crate::title::margin(margin_mm, mm, scale);
+        let (iw, ih) = ((mode.0 - 2 * mg) as f64, (mode.1 - 2 * mg) as f64);
+        let nx = (iw / (50.0 * mm * scale)).round().max(2.0);
+        let ny = (ih / (50.0 * mm * scale)).round().max(2.0);
+        let mut grid = Grid {
+            area: Rectangle::default(),
+            origin: (at.x as f64 + mg as f64 / scale, at.y as f64 + mg as f64 / scale).into(),
+            zone: (iw / nx / scale, ih / ny / scale),
             zones: (nx as u32, ny as u32),
-        }
+            at,
+            scale,
+            mode,
+            margin: mg,
+        };
+        // the whole tile: its logical rectangle holds every tile
+        let whole = grid.pixels(0, nx as u32, 0.0, ny);
+        let (x0, y0) = ((whole.loc.x as f64 / scale).floor() as i32, (whole.loc.y as f64 / scale).floor() as i32);
+        let (x1, y1) = (((whole.loc.x + whole.size.w) as f64 / scale).ceil() as i32, ((whole.loc.y + whole.size.h) as f64 / scale).ceil() as i32);
+        grid.area = Rectangle::new((at.x + x0, at.y + y0).into(), (x1 - x0, y1 - y0).into());
+        grid
     }
 
-    /// The x of the boundary `k` zones in, clamped to the frame's interior.
-    fn x(&self, k: u32) -> i32 {
-        let x = (self.origin.x + k as f64 * self.zone.0).round() as i32;
-        x.clamp(self.area.loc.x, self.area.loc.x + self.area.size.w)
+    /// A window's border, in physical pixels: one logical pixel's worth.
+    pub fn border(&self) -> i32 {
+        (self.scale.round() as i32).max(1)
     }
 
-    fn y(&self, k: f64) -> i32 {
-        let y = (self.origin.y + k * self.zone.1).round() as i32;
-        y.clamp(self.area.loc.y, self.area.loc.y + self.area.size.h)
+    /// The physical pixel of the boundary `k` zones in along a side of `len` pixels cut into `n` zones:
+    /// the tick there (title.rs's tick()); k may be a fraction (rows outnumbering the zones).
+    fn boundary(&self, len: i32, n: f64, k: f64) -> i32 {
+        self.margin + (k * (len - 2 * self.margin) as f64 / n).round() as i32
+    }
+
+    /// The physical pixels of a window spanning zones x0..x1 across and y0..y1 down: inside the frame's
+    /// line and its border on the frame's side; between two windows, their borders either side of the
+    /// tick's pixel, which the paper shows through, in line with the tick in the margin.
+    fn pixels(&self, x0: u32, x1: u32, y0: f64, y1: f64) -> Rectangle<i32, Physical> {
+        let (nx, ny) = (self.zones.0 as f64, self.zones.1 as f64);
+        let (b, line) = (self.border(), crate::title::LINE);
+        let left = if x0 == 0 { self.margin + line + b } else { self.boundary(self.mode.0, nx, x0 as f64) + 1 + b };
+        let right = if x1 >= self.zones.0 { self.mode.0 - self.margin - line - b } else { self.boundary(self.mode.0, nx, x1 as f64) - b };
+        let top = if y0 <= 0.0 { self.margin + line + b } else { self.boundary(self.mode.1, ny, y0) + 1 + b };
+        let bottom = if y1 >= ny { self.mode.1 - self.margin - line - b } else { self.boundary(self.mode.1, ny, y1) - b };
+        Rectangle::new((left, top).into(), ((right - left).max(1), (bottom - top).max(1)).into())
+    }
+
+    /// The tile of a window spanning zones x0..x1 across and y0..y1 down, kept inside `area`.
+    pub fn tile(&self, x0: u32, x1: u32, y0: f64, y1: f64) -> Tile {
+        let s = self.scale;
+        let mut p = self.pixels(x0, x1, y0, y1);
+        // a foreign panel's exclusive zone: the tile stays out of it
+        let a = self.area;
+        let (ax0, ay0) = (((a.loc.x - self.at.x) as f64 * s).ceil() as i32, ((a.loc.y - self.at.y) as f64 * s).ceil() as i32);
+        let (ax1, ay1) = (((a.loc.x + a.size.w - self.at.x) as f64 * s).floor() as i32, ((a.loc.y + a.size.h - self.at.y) as f64 * s).floor() as i32);
+        let (l, t) = (p.loc.x.max(ax0), p.loc.y.max(ay0));
+        let (r, bt) = ((p.loc.x + p.size.w).min(ax1), (p.loc.y + p.size.h).min(ay1));
+        p = Rectangle::new((l, t).into(), ((r - l).max(1), (bt - t).max(1)).into());
+        // in whole logical pixels: the nearest place, and a size that covers the pixels (cut to them)
+        let loc = ((p.loc.x as f64 / s).round() as i32, (p.loc.y as f64 / s).round() as i32);
+        let size = ((p.size.w as f64 / s).ceil() as i32, (p.size.h as f64 / s).ceil() as i32);
+        Tile { logical: Rectangle::new((self.at.x + loc.0, self.at.y + loc.1).into(), size.into()), pixels: p }
     }
 }
 
@@ -359,26 +409,20 @@ impl Layout {
         }
     }
 
-    /// Place every window on the grid and tell it its size.
+    /// Place every window on the grid and tell it its size. Each keeps its tile (tile_of), for the renderer.
     /// `skip` is a fullscreen window, placed by the caller.
     pub fn arrange(&self, space: &mut Space<Window>, grid: &Grid, skip: Option<&Window>) {
         let mut x0 = 0u32;
         let last_c = self.columns.len().saturating_sub(1);
         for (ci, col) in self.columns.iter().enumerate() {
             let x1 = if ci == last_c { grid.zones.0 } else { x0 + col.width };
-            let (left, right) = (grid.x(x0), grid.x(x1));
             let mut y0 = 0.0;
             let last_r = col.windows.len().saturating_sub(1);
             for (ri, window) in col.windows.iter().enumerate() {
                 let y1 = if ri == last_r { grid.zones.1 as f64 } else { y0 + col.heights[ri] };
-                let (top, bottom) = (grid.y(y0), grid.y(y1));
-                // a 1 px gutter either side of an inner boundary lets the paper show between windows
-                let l = if ci == 0 { left } else { left + 1 };
-                let r = if ci == last_c { right } else { right - 1 };
-                let t = if ri == 0 { top } else { top + 1 };
-                let b = if ri == last_r { bottom } else { bottom - 1 };
-                // never a negative size, however small the area has become
-                let rect = Rectangle::new((l, t).into(), ((r - l).max(1), (b - t).max(1)).into());
+                let tile = grid.tile(x0, x1, y0, y1);
+                let rect = tile.logical;
+                set_tile(window, Some(tile));
                 if Some(window) == skip {
                     y0 = y1;
                     continue;
@@ -403,6 +447,61 @@ impl Layout {
                 y0 = y1;
             }
             x0 = x1;
+        }
+    }
+}
+
+/// A tiled window's tile, kept with the window by Layout::arrange.
+struct TileOf(std::cell::Cell<Option<Tile>>);
+
+pub fn set_tile(window: &Window, tile: Option<Tile>) {
+    window.user_data().get_or_insert(|| TileOf(std::cell::Cell::new(None))).0.set(tile);
+}
+
+/// The tile `window` was last given, while it is still where and as large as that tile says (floating,
+/// or a client still catching up with its new size, it is drawn as it is).
+pub fn tile_of(window: &Window, at: Rectangle<i32, Logical>) -> Option<Tile> {
+    window.user_data().get::<TileOf>()?.0.get().filter(|t| t.logical == at)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::title::{margin, tick, LINE};
+
+    /// At every scale, tiles land on whole physical pixels symmetric about the frame: each border abuts
+    /// the frame's line, or the tick's pixel between two windows, and the window's logical place and size
+    /// cover its pixels within the one pixel the renderer moves and cuts.
+    #[test]
+    fn tiles_are_exact() {
+        for &(w, h, phys_mm) in &[(1920, 1200, 6.4), (3840, 2160, 6.1935), (2560, 1440, 4.13), (2880, 1800, 9.1)] {
+            for &scale in &[1.0, 1.25, 1.5, 1.75, 2.0] {
+                let size = Size::from(((w as f64 / scale).ceil() as i32, (h as f64 / scale).ceil() as i32));
+                let at = Point::from((100, 0));
+                let g = Grid::new(at, size, phys_mm / scale, 6.0, scale, (w, h));
+                let (b, mg) = (g.border(), margin(6.0, phys_mm / scale, scale));
+                let case = format!("{w}x{h} at {scale}");
+                let whole = g.tile(0, g.zones.0, 0.0, g.zones.1 as f64).pixels;
+                assert_eq!(whole.loc.x - b, mg + LINE, "{case}");
+                assert_eq!(w - (whole.loc.x + whole.size.w + b), mg + LINE, "{case}");
+                assert_eq!(h - (whole.loc.y + whole.size.h + b), mg + LINE, "{case}");
+                for k in 1..g.zones.0 {
+                    let (l, r) = (g.tile(0, k, 0.0, 1.0).pixels, g.tile(k, g.zones.0, 0.0, 1.0).pixels);
+                    let (t, _) = tick(w, mg, g.zones.0, k);
+                    assert_eq!(l.loc.x + l.size.w + b, t, "{case}: left border ends at the tick {k}");
+                    assert_eq!(r.loc.x - b, t + 1, "{case}: right border starts after the tick {k}");
+                }
+                for x0 in 0..g.zones.0 {
+                    for x1 in x0 + 1..=g.zones.0 {
+                        let tile = g.tile(x0, x1, 0.0, g.zones.1 as f64);
+                        let (p, l) = (tile.pixels, tile.logical);
+                        let lx = ((l.loc.x - at.x) as f64 * scale).round() as i32;
+                        assert!((lx - p.loc.x).abs() <= 1, "{case}: logical place {lx} off its pixels {}", p.loc.x);
+                        assert!((l.size.w as f64 * scale).round() as i32 >= p.size.w, "{case}: logical size short of its pixels");
+                        assert!(g.area.contains_rect(l) || (l.size.w as f64 * scale) - p.size.w as f64 <= scale, "{case}");
+                    }
+                }
+            }
         }
     }
 }

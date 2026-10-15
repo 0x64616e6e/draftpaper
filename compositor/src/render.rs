@@ -1,9 +1,9 @@
 //! What an output shows, for every backend, in front-to-back order: the pointer (on the TTY, where
 //! nobody else draws it), the low layers' menus, the overlay and top layer surfaces, the windows (each
 //! through a rescale, a shift and a crop, so a parking window can fly and a workspace slide; at rest
-//! they are the identity), their 1 px borders (in the gutters between tiles, so they never cover
-//! content), the bottom and background layer surfaces (the shell's margins and title block), and the
-//! sheet.
+//! a tile is only moved onto its own physical pixels, layout.rs), their borders (a logical pixel's worth
+//! of whole physical pixels, in the gutters between tiles, so they never cover content), the bottom
+//! and background layer surfaces (the shell's margins and title block), and the sheet.
 
 use std::{cell::RefCell, time::Instant};
 
@@ -149,11 +149,12 @@ pub fn output_elements(
     // `alpha`. A window's own surfaces are clipped to its rectangle (a client that draws more than its
     // tile, as Firefox can while it catches up with a new size, does not spill over its neighbours, even
     // when its buffer goes straight to a display plane); its popups (menus) are not, and are in front.
-    // Everything stays inside `crop`.
-    let draw = |elements: &mut Vec<OutputElements>, renderer: &mut GlesRenderer, window: &Window, at: Rectangle<i32, Logical>, to: Rectangle<f64, Logical>, alpha: f32, crop: Rectangle<i32, Physical>| {
+    // Everything stays inside `crop`. A tile (`exact`, layout.rs) is moved onto its own physical pixels and
+    // cut to them: whole logical pixels cannot always land on them at a scale such as 1.5 or 1.75.
+    let draw = |elements: &mut Vec<OutputElements>, renderer: &mut GlesRenderer, window: &Window, at: Rectangle<i32, Logical>, to: Rectangle<f64, Logical>, alpha: f32, crop: Rectangle<i32, Physical>, exact: Option<Rectangle<i32, Physical>>| {
         use smithay::{backend::renderer::element::surface::render_elements_from_surface_tree, desktop::{PopupManager, WindowSurface}};
         let g = to_phys(at.to_f64());
-        let t = to_phys(to);
+        let t = exact.unwrap_or_else(|| to_phys(to));
         let loc = (at.loc - window.geometry().loc - geometry.loc).to_physical_precise_round(scale);
         let (own, popups): (Vec<WaylandSurfaceRenderElement<GlesRenderer>>, Vec<WaylandSurfaceRenderElement<GlesRenderer>>) =
             match window.underlying_surface() {
@@ -169,7 +170,10 @@ pub fn output_elements(
                 }
                 WindowSurface::X11(_) => (window.render_elements(renderer, loc, Scale::from(scale), alpha), Vec::new()),
             };
-        let rescale = Scale { x: t.size.w as f64 / g.size.w.max(1) as f64, y: t.size.h as f64 / g.size.h.max(1) as f64 };
+        let rescale = match exact {
+            Some(_) => Scale { x: 1.0, y: 1.0 },
+            None => Scale { x: t.size.w as f64 / g.size.w.max(1) as f64, y: t.size.h as f64 / g.size.h.max(1) as f64 },
+        };
         let clip = t.intersection(crop).unwrap_or_default();
         for (e, crop) in popups.into_iter().map(|e| (e, crop)).chain(own.into_iter().map(|e| (e, clip))) {
             let e = RescaleRenderElement::from_element(e, g.loc, rescale);
@@ -184,7 +188,7 @@ pub fn output_elements(
     for f in state.anim.flights.iter().filter(|f| f.output == name) {
         if let Some(to) = f.to {
             let e = f.progress(now);
-            draw(&mut elements, renderer, &f.window, f.from, crate::animation::lerp(f.from, to, e), (1.0 - 0.85 * e) as f32, whole);
+            draw(&mut elements, renderer, &f.window, f.from, crate::animation::lerp(f.from, to, e), (1.0 - 0.85 * e) as f32, whole, None);
         }
     }
     // a workspace switch: the new windows come in from `dir`, the old go out, inside the frame
@@ -210,7 +214,7 @@ pub fn output_elements(
     let focused = state.focused_window();
     let fullscreen: Vec<_> = state.screens.iter().filter_map(|s| s.workspace().fullscreen.clone()).collect();
     let output_scale = output.current_scale().fractional_scale();
-    let border = |elements: &mut Vec<OutputElements>, window: &Window| {
+    let border = |elements: &mut Vec<OutputElements>, window: &Window, exact: Option<Rectangle<i32, Physical>>| {
         let Some((focused_colour, colour)) = colours else { return };
         if fullscreen.contains(window) || animated(window) {
             return;
@@ -221,19 +225,18 @@ pub fn output_elements(
         let colour = [c[0], c[1], c[2], 1.0];
         let border = window.user_data().get_or_insert(|| Border(RefCell::new(Default::default())));
         let mut edges = border.0.borrow_mut();
-        let rects = [
-            ((loc.x - 1, loc.y - 1), (size.w + 2, 1)),
-            ((loc.x - 1, loc.y + size.h), (size.w + 2, 1)),
-            ((loc.x - 1, loc.y), (1, size.h)),
-            ((loc.x + size.w, loc.y), (1, size.h)),
-        ];
+        // in physical pixels, around the pixels the window covers (its tile's, or its own rounded): a
+        // logical pixel's worth wide, whole pixels
+        let p = exact.unwrap_or_else(|| to_phys(Rectangle::new(loc + geometry.loc, size).to_f64()));
+        let b = (output_scale.round() as i32).max(1);
+        let (x, y, w, h) = (p.loc.x, p.loc.y, p.size.w, p.size.h);
+        let rects = [((x - b, y - b), (w + 2 * b, b)), ((x - b, y + h), (w + 2 * b, b)), ((x - b, y), (b, h)), ((x + w, y), (b, h))];
         for (edge, (at, wh)) in edges.iter_mut().zip(rects) {
             edge.update(wh, colour);
-            let at: Point<i32, Logical> = at.into();
             elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(
                 edge,
-                at.to_physical_precise_round(output_scale),
-                output_scale,
+                Point::<i32, Physical>::from(at),
+                1.0,
                 1.0,
                 Kind::Unspecified,
             )));
@@ -244,25 +247,30 @@ pub fn output_elements(
     for window in state.space.elements_for_output(output).rev() {
         let Some(loc) = state.space.element_location(window) else { continue };
         let at = Rectangle::new(loc, window.geometry().size);
+        let tile = crate::layout::tile_of(window, at);
         match (state.anim.flight(window), shift) {
             // unparking: from its cell into its place, appearing
             (Some(f), _) if f.to.is_none() => {
                 let e = f.progress(now);
-                draw(&mut elements, renderer, window, at, crate::animation::lerp(f.from, at, e), (0.15 + 0.85 * e) as f32, whole);
+                draw(&mut elements, renderer, window, at, crate::animation::lerp(f.from, at, e), (0.15 + 0.85 * e) as f32, whole, None);
             }
             (_, Some((sl, e, w))) => {
-                let to = Rectangle::new(at.loc.to_f64() + Point::from((sl.dir as f64 * (1.0 - e) * w, 0.0)), at.size.to_f64());
-                draw(&mut elements, renderer, window, at, to, 1.0, frame);
+                let dx = sl.dir as f64 * (1.0 - e) * w;
+                let to = Rectangle::new(at.loc.to_f64() + Point::from((dx, 0.0)), at.size.to_f64());
+                let exact = tile.map(|t| Rectangle::new(t.pixels.loc + Point::from(((dx * scale).round() as i32, 0)), t.pixels.size));
+                draw(&mut elements, renderer, window, at, to, 1.0, frame, exact);
             }
-            _ => draw(&mut elements, renderer, window, at, at.to_f64(), 1.0, whole),
+            _ => draw(&mut elements, renderer, window, at, at.to_f64(), 1.0, whole, tile.map(|t| t.pixels)),
         }
-        border(&mut elements, window);
+        border(&mut elements, window, tile.map(|t| t.pixels));
     }
     if let Some((sl, e, w)) = shift {
         for (window, loc) in &sl.outgoing {
             let at = Rectangle::new(*loc, window.geometry().size);
-            let to = Rectangle::new(at.loc.to_f64() - Point::from((sl.dir as f64 * e * w, 0.0)), at.size.to_f64());
-            draw(&mut elements, renderer, window, at, to, 1.0, frame);
+            let dx = -(sl.dir as f64) * e * w;
+            let to = Rectangle::new(at.loc.to_f64() + Point::from((dx, 0.0)), at.size.to_f64());
+            let exact = crate::layout::tile_of(window, at).map(|t| Rectangle::new(t.pixels.loc + Point::from(((dx * scale).round() as i32, 0)), t.pixels.size));
+            draw(&mut elements, renderer, window, at, to, 1.0, frame, exact);
         }
     }
 
