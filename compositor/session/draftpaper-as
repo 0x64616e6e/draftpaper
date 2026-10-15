@@ -1,0 +1,31 @@
+#!/bin/sh
+# draftpaper-as USER [COMMAND...]: runs a program as another user on this Draftpaper session, or that
+# user's login shell if no command is given. For work kept under a separate account:
+#   draftpaper-as client /usr/bin/chromium --ozone-platform=wayland
+#   alacritty --class client-term -e draftpaper-as client
+# You must be allowed to sudo to that user. The other user is let onto the display: an access entry
+# on the Wayland socket, which lasts until the session ends. As on X with xhost, that is no security
+# boundary.
+[ $# -ge 1 ] || { echo "usage: draftpaper-as USER [COMMAND...]" >&2; exit 2; }
+[ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ] || {
+	echo "draftpaper-as: not in a Wayland session" >&2
+	exit 1
+}
+user=$1
+shift
+socket=$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY
+setfacl -m "u:$user:x" "$XDG_RUNTIME_DIR" && setfacl -m "u:$user:rw" "$socket" || {
+	echo "draftpaper-as: cannot let $user onto the display" >&2
+	exit 1
+}
+runtime=/run/user/$(id -u "$user")
+[ $# -ge 1 ] || set -- "$(getent passwd "$user" | cut -d: -f7)" -l
+# That user's own background services, the desktop portal above all, take the display from their
+# service manager: tell it, or their GTK programs wait most of a minute for a portal that cannot
+# start. As a login of its own, which starts the manager if need be; the manager outlives a login by
+# some seconds, so it is still there for the program started next.
+sudo -iu "$user" systemctl --user set-environment WAYLAND_DISPLAY="$socket" \
+	XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Draftpaper 2>/dev/null &&
+	sudo -iu "$user" systemctl --user unset-environment DISPLAY 2>/dev/null
+exec sudo -iu "$user" env XDG_RUNTIME_DIR="$runtime" WAYLAND_DISPLAY="$socket" \
+	XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=Draftpaper "$@"

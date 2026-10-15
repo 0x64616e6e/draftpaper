@@ -186,6 +186,20 @@ unplugged; when every display left is off, they come on again.
 Actions: `focus|move|resize left|right|up|down`, `workspace N`, `send N`, `fullscreen`, `close`, `park`,
 `park_next`, `park_prev`, `screenshot`, `power off|on`, `reload`, `quit`, `spawn COMMAND`.
 
+## Another account
+
+For work kept under a separate unix account, `draftpaper-as USER [COMMAND...]` runs a program as that
+user on the session, or their login shell with no command:
+
+```sh
+draftpaper-as client chromium --ozone-platform=wayland --class=client-browser
+alacritty --class client-term -e draftpaper-as client
+```
+
+It needs sudo to that user and `setfacl` (package `acl`). The user is let onto the display through an
+access entry on the Wayland socket, which lasts until the session ends; as with `xhost` on X, that is no
+security boundary between the two.
+
 ## Themes
 
 Four themes ship: **Soft Glow** (warm greige paper, above), **Blueprint** (a dark sheet: Prussian-blue

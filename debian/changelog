@@ -10,6 +10,8 @@ draftpaper (0.3.0) unstable; urgency=medium
   * Touchscreens: a finger goes to the surface under it (wl_touch), and
     a tap focuses the window as a click does; the touch follows the
     laptop panel's rotation.
+  * draftpaper-as USER [COMMAND]: a program, or a shell, as another user on
+    the session, for work kept under a separate account.
 
  -- 0x64616e6e <daniel@este.systems>  Thu, 15 Oct 2026 03:15:13 +0300
 

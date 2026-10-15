@@ -1,6 +1,6 @@
 .TH DRAFTPAPER 1 "2026-10-15" "draftpaper 0.3.0" "User Commands"
 .SH NAME
-draftpaper, draftpaper-compositor, draftpaper-session \- the Wayland desktop drawn as a drafting sheet
+draftpaper, draftpaper-compositor, draftpaper-session, draftpaper-as \- the Wayland desktop drawn as a drafting sheet
 .SH SYNOPSIS
 .B draftpaper
 .I COMMAND
@@ -15,6 +15,10 @@ draftpaper, draftpaper-compositor, draftpaper-session \- the Wayland desktop dra
 .br
 .B draftpaper-compositor msg
 .I REQUEST
+.br
+.B draftpaper-as
+.I USER
+.RI [ COMMAND ...]
 .SH DESCRIPTION
 Draftpaper is a tiling Wayland compositor whose desktop is a drafting sheet: paper with a frame, zone
 ticks and a dot grid (or a wallpaper in the frame), a live title block carrying the readings, lettered
@@ -33,6 +37,15 @@ runs nested in a window of the running desktop.
 .B draftpaper
 is the rest: themes, the generated files for the shell, the launcher, the lock screen and the
 applications, and the readings.
+.PP
+.B draftpaper-as
+runs a program as another user on the session (that user's login shell if no command is given), for
+work kept under a separate account; it needs sudo to that user and
+.BR setfacl (1).
+The user is let onto the display through an access entry on the Wayland socket, which lasts until the
+session ends: as with
+.BR xhost (1)
+on X, that is no security boundary.
 .SH COMMANDS
 .TP
 .B start

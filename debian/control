@@ -28,6 +28,7 @@ Depends: ${shlibs:Depends},
          xwayland,
          fonts-dejavu-core
 Recommends: fonts-ibm-plex,
+            acl,
             alacritty | foot,
             fuzzel,
             swaylock,

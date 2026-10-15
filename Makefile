@@ -18,6 +18,7 @@ install: $(COMPOSITOR)
 	install -Dm755 bin/draftpaper $(DESTDIR)$(PREFIX)/bin/draftpaper
 	install -Dm755 $(COMPOSITOR) $(DESTDIR)$(PREFIX)/bin/draftpaper-compositor
 	install -Dm755 compositor/session/draftpaper-session $(DESTDIR)$(PREFIX)/bin/draftpaper-session
+	install -Dm755 compositor/session/draftpaper-as $(DESTDIR)$(PREFIX)/bin/draftpaper-as
 	install -d $(LIB)/draftpaper $(SHARE)/qml $(SHARE)/themes $(SHARE)/apps
 	install -m644 lib/draftpaper/*.py $(LIB)/draftpaper/
 	# the shell, the themes and the applications' templates
