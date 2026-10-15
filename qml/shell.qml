@@ -206,11 +206,27 @@ ShellRoot {
 
     // the theme picker (Mod+t: `draftpaper picker`, which calls this handler; or the theme cell)
     ThemePicker { id: themePicker; shell: root }
+    // the theme editor (`draftpaper theme edit [NAME]`, or E in the picker)
+    ThemeEditor { id: themeEditor; shell: root }
+    function editTheme(name, back, fromPicker) { themeEditor.open(name, back, fromPicker) }
+    function resumePicker(name) { themePicker.resume(name) }
+    IpcHandler {
+        target: "editor"
+        function open(name: string): void { if (themePicker.visible) themePicker.cancel(); themeEditor.open(name, "", false) }
+        // what the keys do, for scripts
+        function pick(n: int): void { if (themeEditor.visible) themeEditor.pickRow(themeEditor.row + n) }
+        function nudge(n: int): void { if (themeEditor.visible) themeEditor.nudge(n > 0 ? 1 : -1, Math.abs(n) >= 10) }
+        function scale(i: int): void { if (themeEditor.visible) themeEditor.scale = i }
+        function colour(hex: string): void { if (themeEditor.visible && themeEditor.isColour) { themeEditor.set(themeEditor.current, hex.toUpperCase()); themeEditor.pickRow(themeEditor.row) } }
+        function save(): void { if (themeEditor.visible) themeEditor.save() }
+        function discard(): void { if (themeEditor.visible) themeEditor.discard() }
+    }
     IpcHandler {
         target: "themes"
-        function toggle(): void { themePicker.visible ? themePicker.cancel() : themePicker.open() }
+        function toggle(): void { if (themeEditor.visible) return; themePicker.visible ? themePicker.cancel() : themePicker.open() }
         function step(n: int): void { if (themePicker.visible) themePicker.pick(themePicker.selected + n) }
         function keep(): void { if (themePicker.visible) themePicker.keep() }
+        function edit(): void { if (themePicker.visible) themePicker.edit() }
         function cancel(): void { if (themePicker.visible) themePicker.cancel() }
     }
 
@@ -313,7 +329,7 @@ ShellRoot {
                                 // the theme picker is open, its keys instead.
                     id: noticeZone
                     band: topMargin; index: -2
-                    readonly property string hint: themePicker.hint
+                    readonly property string hint: themePicker.hint || themeEditor.hint
                     readonly property bool here: (root.notice !== null || hint !== "") && (!edge.output || edge.output.focused)
                     readonly property int room: Math.max(1, topMargin.zones - 1 - spacesZone.span)
                     readonly property real pad: 3 * edge.mm

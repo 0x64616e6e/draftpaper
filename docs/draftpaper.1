@@ -63,8 +63,17 @@ the applications; with
 .B --preview
 the sheet only).
 .TP
+.BR "theme edit" " [" \fINAME\fR ]
+Open the theme editor on NAME (the current theme): the sheet's colours and shading and the window
+colours, previewed live on the sheet. Saving writes your own copy to
+.IR ~/.config/draftpaper/themes/NAME.toml ,
+which a shipped theme of that name yields to.
+.TP
+.BR "theme revert" " \fINAME\fR"
+A shipped theme as shipped again: your copy of it removed.
+.TP
 .B picker
-Open or close the theme picker (Super+T).
+Open or close the theme picker (Super+T; E there edits the picked theme).
 .TP
 .BR wallpaper " [" \fIFILE\fR "|" none ]
 A picture in the frame, or none.

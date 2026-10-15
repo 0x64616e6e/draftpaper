@@ -11,6 +11,11 @@
                               runs after a full switch
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
+  draftpaper theme edit [<name>]
+                              open the theme editor on a theme (the current one); it saves your own
+                              copy in ~/.config/draftpaper/themes, which a shipped theme yields to
+  draftpaper theme revert <name>
+                              a shipped theme as shipped again: your copy of it removed
   draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
   draftpaper audio save|restore
                               the default output's volume and mute, kept from one session to the next
@@ -87,21 +92,51 @@ def stop():
 
 
 def themes(args):
+    import json
     current = config.load()["theme"]
-    names = sorted(theme.available())
+    names = theme.listed()
     if args and args[0] == "json":
-        import json
-        print(json.dumps([dict(theme.load(n), current=(n == current)) for n in names]))
+        print(json.dumps([dict(theme.load(n), current=(n == current), own=theme.own(n).is_file(), shipped=theme.shipped(n))
+                          for n in names]))
         return
     if not args or args[0] == "list":
         for n in names:
             print(("* " if n == current else "  ") + n)
+        return
+    # the theme editor (qml/ThemeEditor.qml)
+    if args[0] == "edit":
+        sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "editor", "open", args[1] if len(args) > 1 else ""]).returncode)
+    if args[0] in ("draft", "save") and len(args) == 3:
+        name, values = args[1], json.loads(args[2])
+        if args[0] == "draft":          # the sheet previews the values, from a draft beside the user's themes
+            theme.write(name, values, theme.own(name + theme.DRAFT))
+            switch(name + theme.DRAFT, preview=True)
+        else:                           # the user's own file, then the theme as a whole
+            theme.write(name, values, theme.own(name))
+            switch(name, preview=False)
+            theme.own(name + theme.DRAFT).unlink(missing_ok=True)
+        return
+    if args[0] == "discard" and len(args) == 3:     # back to a theme, the draft gone
+        switch(args[2], preview=True)
+        theme.own(args[1] + theme.DRAFT).unlink(missing_ok=True)
+        return
+    if args[0] == "revert" and len(args) == 2:      # the shipped theme again, the user's copy gone
+        name = args[1]
+        if not theme.shipped(name):
+            sys.exit(f"draftpaper: {name} is not a shipped theme")
+        theme.own(name).unlink(missing_ok=True)
+        switch(name, preview=False)
         return
     preview = "--preview" in args
     args = [a for a in args if a != "--preview"]
     name = args[0]
     if name == "next":
         name = names[(names.index(current) + 1) % len(names)] if current in names else names[0]
+    switch(name, preview)
+
+
+def switch(name, preview):
+    """Switch to theme `name`: the sheet; and unless a preview, the applications and [hooks] theme."""
     t = theme.apply(name, apps_too=not preview)     # a preview (the picker browsing) leaves the applications
     config.set_theme(name)
     compositor("reload")          # the sheet at once, not at the compositor's next look at the file
