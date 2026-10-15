@@ -68,6 +68,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Mod+Escape | Park the focused window in the side margin; with every window parked, bring them all back |
 | Mod+Left / Mod+Right | Bring back the parked window in the first / last cell, parking the focused one; with nothing parked, move the focus |
 | Mod+t | The theme picker |
+| Mod+Shift+t | The theme editor, on the current theme |
 | Mod+Shift+x | Lock the screen (swaylock) |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Print | A region to swappy (slurp, grim) |

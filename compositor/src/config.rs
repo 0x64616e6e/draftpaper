@@ -124,6 +124,8 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+p", "spawn draftpaper lock-on-sleep toggle"),
     // the theme picker (the shell's)
     ("Mod+t", "spawn draftpaper picker"),
+    // the theme editor on the current theme; again, it closes (dropping the changes)
+    ("Mod+Shift+t", "spawn draftpaper theme edit"),
     ("Mod+Return", "spawn alacritty"),
     // the launcher, themed like the sheet by `draftpaper apply`
     ("Mod+d", r#"spawn fuzzel --config "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/fuzzel.ini""#),
@@ -365,7 +367,7 @@ mod tests {
     #[test]
     fn default_bindings_parse() {
         let config = Config::default_config();
-        for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print"] {
+        for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print", "t"] {
             let sym = xkb::keysym_from_name(key, xkb::KEYSYM_CASE_INSENSITIVE);
             assert!(config.bindings.iter().any(|b| b.key == sym), "{key} is bound");
         }

@@ -212,7 +212,12 @@ ShellRoot {
     function resumePicker(name) { themePicker.resume(name) }
     IpcHandler {
         target: "editor"
-        function open(name: string): void { if (themePicker.visible) themePicker.cancel(); themeEditor.open(name, "", false) }
+        // open on a theme (the current one); open already, it closes, dropping the changes (Mod+Shift+t again)
+        function open(name: string): void {
+            if (themeEditor.visible) { themeEditor.discard(); return }
+            if (themePicker.visible) themePicker.cancel()
+            themeEditor.open(name, "", false)
+        }
         // what the keys do, for scripts
         function pick(n: int): void { if (themeEditor.visible) themeEditor.pickRow(themeEditor.row + n) }
         function nudge(n: int): void { if (themeEditor.visible) themeEditor.nudge(n > 0 ? 1 : -1, Math.abs(n) >= 10) }

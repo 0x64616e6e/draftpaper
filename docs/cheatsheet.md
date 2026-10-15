@@ -54,6 +54,7 @@ the touchscreen, wakes them.
 | Enter · click the picked one | Keep it (the applications too) |
 | Esc · click elsewhere | Back to the theme you had |
 | E | Edit the picked theme |
+| Mod+Shift+t | The theme editor on the current theme (again: close it, dropping the changes) |
 
 In the theme editor (E in the picker, or `draftpaper theme edit [NAME]`):
 
