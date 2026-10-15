@@ -1,5 +1,7 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * Mod+z: a magnifier. A region picked with slurp is shown in feh, its
+    pixels as blocks, to check a line down to the pixel (q closes it).
   * The sheet is measured once, in the display's own pixels (title.rs): the
     frame, the margins' ticks, the title block's rules and cells, the
     wallpaper's frost. The compositor draws the title block's rules and the

@@ -73,6 +73,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Print | A region to swappy (slurp, grim) |
 | Shift+Print | The screen you are on to ~/Pictures |
 | Mod+Print | Every screen to ~/Pictures |
+| Mod+z | A region magnified, pixel by pixel (slurp, grim, feh) |
 | Volume, brightness keys | wpctl, brightnessctl |
 | Mod+Shift+e | Leave the session |
 | Ctrl+Alt+F1 … F12 | Switch virtual terminal |

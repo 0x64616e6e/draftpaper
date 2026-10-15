@@ -140,6 +140,9 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Print", r#"spawn g=$(slurp) && grim -g "$g" - | swappy -f -"#),
     ("Shift+Print", r#"spawn mkdir -p ~/Pictures && grim -o "$(draftpaper-compositor msg focused-output)" ~/Pictures/screenshot-$(date +%Y%m%d-%H%M%S).png"#),
     ("Mod+Print", "screenshot"),
+    // a magnifier: a region picked with slurp, shown in feh with its pixels as blocks, to check a line
+    // down to the pixel (q or Escape closes it)
+    ("Mod+z", r#"spawn f="${XDG_RUNTIME_DIR:-/tmp}/draftpaper-zoom.png"; g=$(slurp) && grim -g "$g" "$f" && feh --auto-zoom --force-aliasing --image-bg black --title "zoom $g" "$f"; rm -f "$f""#),
     // the laptop's media keys: PipeWire's wpctl (up to 150%, as the shell's volume cell), brightnessctl
     ("XF86AudioRaiseVolume", "spawn wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"),
     ("XF86AudioLowerVolume", "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
@@ -373,7 +376,7 @@ mod tests {
     #[test]
     fn default_bindings_parse() {
         let config = Config::default_config();
-        for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print", "t"] {
+        for key in ["XF86AudioRaiseVolume", "XF86AudioMute", "XF86MonBrightnessUp", "Escape", "Print", "t", "z"] {
             let sym = xkb::keysym_from_name(key, xkb::KEYSYM_CASE_INSENSITIVE);
             assert!(config.bindings.iter().any(|b| b.key == sym), "{key} is bound");
         }
