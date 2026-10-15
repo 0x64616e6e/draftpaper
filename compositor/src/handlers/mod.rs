@@ -14,7 +14,6 @@ use crate::Draftpaper;
 //
 
 use smithay::input::{Seat, SeatHandler, SeatState};
-use smithay::reexports::wayland_server::protocol::wl_surface::WlSurface;
 use smithay::reexports::wayland_server::Resource;
 use smithay::wayland::output::OutputHandler;
 use smithay::wayland::selection::data_device::{
@@ -26,7 +25,7 @@ use smithay::{delegate_data_device, delegate_output, delegate_seat};
 impl SeatHandler for Draftpaper {
     type KeyboardFocus = crate::focus::KeyboardFocusTarget;
     type PointerFocus = crate::focus::PointerFocusTarget;
-    type TouchFocus = WlSurface;
+    type TouchFocus = crate::focus::PointerFocusTarget;
 
     fn seat_state(&mut self) -> &mut SeatState<Draftpaper> {
         &mut self.seat_state

@@ -1,7 +1,8 @@
-//! What the keyboard and the pointer can be on. The keyboard: a window (Wayland or X11; an X11 window
-//! needs the window manager to set X input focus, which Smithay's X11Surface target does) or a bare
-//! surface (a layer surface such as a launcher, the lock surface). The pointer: a Wayland surface or an
-//! X11 window. Each delegates to Smithay's own targets. Follows anvil's focus.rs (Smithay v0.7.0, MIT).
+//! What the keyboard, the pointer and a finger can be on. The keyboard: a window (Wayland or X11; an
+//! X11 window needs the window manager to set X input focus, which Smithay's X11Surface target does) or
+//! a bare surface (a layer surface such as a launcher, the lock surface). The pointer, and a finger on
+//! the touchscreen: a Wayland surface or an X11 window. Each delegates to Smithay's own targets.
+//! Follows anvil's focus.rs (Smithay v0.7.0, MIT).
 
 use std::borrow::Cow;
 
@@ -15,6 +16,7 @@ use smithay::{
             GesturePinchEndEvent, GesturePinchUpdateEvent, GestureSwipeBeginEvent, GestureSwipeEndEvent,
             GestureSwipeUpdateEvent, MotionEvent, PointerTarget, RelativeMotionEvent,
         },
+        touch::{self, TouchTarget},
         Seat,
     },
     reexports::wayland_server::{backend::ObjectId, protocol::wl_surface::WlSurface},
@@ -180,5 +182,38 @@ impl PointerTarget<Draftpaper> for PointerFocusTarget {
     }
     fn gesture_hold_end(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &GestureHoldEndEvent) {
         pointer!(self, gesture_hold_end, seat, data, event)
+    }
+}
+
+macro_rules! touch {
+    ($self:ident, $method:ident, $($arg:expr),*) => {
+        match $self {
+            PointerFocusTarget::Surface(s) => TouchTarget::$method(s, $($arg),*),
+            PointerFocusTarget::X11(x) => TouchTarget::$method(x, $($arg),*),
+        }
+    };
+}
+
+impl TouchTarget<Draftpaper> for PointerFocusTarget {
+    fn down(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &touch::DownEvent, seq: Serial) {
+        touch!(self, down, seat, data, event, seq)
+    }
+    fn up(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &touch::UpEvent, seq: Serial) {
+        touch!(self, up, seat, data, event, seq)
+    }
+    fn motion(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &touch::MotionEvent, seq: Serial) {
+        touch!(self, motion, seat, data, event, seq)
+    }
+    fn frame(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, seq: Serial) {
+        touch!(self, frame, seat, data, seq)
+    }
+    fn cancel(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, seq: Serial) {
+        touch!(self, cancel, seat, data, seq)
+    }
+    fn shape(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &touch::ShapeEvent, seq: Serial) {
+        touch!(self, shape, seat, data, event, seq)
+    }
+    fn orientation(&self, seat: &Seat<Draftpaper>, data: &mut Draftpaper, event: &touch::OrientationEvent, seq: Serial) {
+        touch!(self, orientation, seat, data, event, seq)
     }
 }

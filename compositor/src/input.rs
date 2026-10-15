@@ -1,14 +1,15 @@
 // Adapted from smallvil (Smithay v0.7.0, MIT; see compositor/NOTICE).
 use smithay::{
     backend::input::{
-        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent, PointerMotionEvent,
-        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Device, DeviceCapability, Event, InputBackend,
+        InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent, PointerMotionEvent, TouchEvent,
     },
     input::{
         keyboard::FilterResult,
         pointer::{AxisFrame, ButtonEvent, MotionEvent},
+        touch,
     },
-    utils::SERIAL_COUNTER,
+    utils::{Logical, Point, SERIAL_COUNTER},
 };
 
 use smithay::backend::input::KeyState;
@@ -179,6 +180,45 @@ impl Draftpaper {
                 pointer.axis(self, frame);
                 pointer.frame(self);
             }
+            // the seat has touch once a touchscreen is plugged in, and keeps it
+            InputEvent::DeviceAdded { device } => {
+                if device.has_capability(DeviceCapability::Touch) && self.seat.get_touch().is_none() {
+                    self.seat.add_touch();
+                }
+            }
+            // a finger down focuses the window under it, as a click does; the surface under it has the
+            // finger until it lifts
+            InputEvent::TouchDown { event } => {
+                let (Some(touch), Some(pos)) = (self.seat.get_touch(), self.touch_location(&event)) else { return };
+                if !touch.is_grabbed() {
+                    if let Some(window) = self.space.element_under(pos).map(|(w, _)| w.clone()) {
+                        self.focus(Some(window));
+                    }
+                }
+                let under = self.surface_under(pos);
+                let serial = SERIAL_COUNTER.next_serial();
+                touch.down(self, under, &touch::DownEvent { slot: event.slot(), location: pos, serial, time: event.time_msec() });
+            }
+            InputEvent::TouchMotion { event } => {
+                let (Some(touch), Some(pos)) = (self.seat.get_touch(), self.touch_location(&event)) else { return };
+                let under = self.surface_under(pos);
+                touch.motion(self, under, &touch::MotionEvent { slot: event.slot(), location: pos, time: event.time_msec() });
+            }
+            InputEvent::TouchUp { event } => {
+                let Some(touch) = self.seat.get_touch() else { return };
+                let serial = SERIAL_COUNTER.next_serial();
+                touch.up(self, &touch::UpEvent { slot: event.slot(), serial, time: event.time_msec() });
+            }
+            InputEvent::TouchFrame { .. } => {
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.frame(self);
+                }
+            }
+            InputEvent::TouchCancel { .. } => {
+                if let Some(touch) = self.seat.get_touch() {
+                    touch.cancel(self);
+                }
+            }
             _ => {}
         }
     }
@@ -214,6 +254,17 @@ impl Draftpaper {
                 self.focus(w);
             }
         }
+    }
+
+    /// Where a finger is: the touchscreen is the laptop's own panel (or, with none, the first output),
+    /// and the panel's corners turn with the output's transform.
+    fn touch_location<I: InputBackend, E: AbsolutePositionEvent<I>>(&self, event: &E) -> Option<Point<f64, Logical>> {
+        let internal = |o: &&smithay::output::Output| ["eDP", "LVDS", "DSI"].iter().any(|p| o.name().starts_with(p));
+        let output = self.space.outputs().find(internal).or_else(|| self.space.outputs().next())?;
+        let geometry = self.space.output_geometry(output)?;
+        let transform = output.current_transform();
+        let size = transform.invert().transform_size(geometry.size);
+        Some(transform.transform_point_in(event.position_transformed(size), &size.to_f64()) + geometry.loc.to_f64())
     }
 
     /// Run `action` again while its key is held: after the keyboard's repeat delay, then at its rate.

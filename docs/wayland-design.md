@@ -189,7 +189,7 @@ covers panels that report nonsense.
 | Need | How |
 |---|---|
 | Session, devices | libseat (logind or seatd), udev, DRM/KMS with atomic modesetting; GBM + EGL/GLES renderer from Smithay |
-| Input | libinput: keyboards with xkb layouts, touchpad (tap, natural scroll, two-finger gestures for workspaces), TrackPoint |
+| Input | libinput: keyboards with xkb layouts, touchpad (tap, natural scroll, two-finger gestures for workspaces), TrackPoint, touchscreen (on the laptop panel, turning with its transform) |
 | Clients | xdg-shell, xdg-decoration (server-side: a 1 px border, no titles), wlr-layer-shell, xdg-output, viewporter, fractional-scale-v1, presentation-time, linux-dmabuf, single-pixel-buffer, cursor-shape |
 | X11 apps | Xwayland (Debian's `xwayland`) started with the compositor as a rootless client, and Smithay's built-in X11 window manager: X11 windows tile like Wayland ones, transient windows and dialogs float, menus and tooltips place themselves; clipboard and primary selection bridged both ways, X11 clients reading them only while an X11 window has the keyboard. Chosen over niri's xwayland-satellite, which is neither in Debian nor on crates.io and would be a second program to ship in the one package |
 | Clipboard | wl_data_device, primary selection, data-control (for clipboard managers) |
