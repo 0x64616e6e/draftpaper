@@ -95,6 +95,8 @@ pub struct Draftpaper {
     pub key_repeat: Option<smithay::reexports::calloop::RegistrationToken>,
     /// screencopy frames waiting for the backend's next frame (screencopy.rs)
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
+    /// the output-management clients and what they were last told (output_management.rs)
+    pub output_management: crate::output_management::OutputManagement,
 }
 
 impl Draftpaper {
@@ -110,6 +112,8 @@ impl Draftpaper {
         smithay::wayland::fractional_scale::FractionalScaleManagerState::new::<Self>(&dh);
         // screenshots for clients (grim, slurp, the screenshot portal)
         crate::screencopy::init(&dh);
+        // displays arranged by kanshi, wlr-randr, wdisplays
+        crate::output_management::init(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
         let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
         let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
@@ -199,6 +203,7 @@ impl Draftpaper {
             key_repeat: None,
             pointer_over: (None, None),
             screencopies: Vec::new(),
+            output_management: Default::default(),
         }
     }
 

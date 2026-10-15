@@ -45,7 +45,7 @@ Recommends: fonts-ibm-plex,
             upower,
             power-profiles-daemon,
             bluez
-Suggests: adw-gtk3, qt5ct, qt6ct
+Suggests: kanshi, wlr-randr, wdisplays, adw-gtk3, qt5ct, qt6ct
 Description: Wayland desktop drawn as a drafting sheet
  Draftpaper is a tiling Wayland compositor whose desktop is a drafting
  sheet: there is no bar, the screen is a sheet of paper with a frame, zone

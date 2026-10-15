@@ -49,6 +49,8 @@ pub struct Screen {
     pub current: usize,
     /// logical pixels per millimetre (for the grid when the output changes size or scale)
     pub mm: f64,
+    /// physical pixels per millimetre: `mm` again when the scale changes
+    pub phys_mm: f64,
     pub margin_mm: f64,
     /// the margins' ticks the shell's merged cells leave out (sheet.rs), top, bottom, left, right
     pub hidden_ticks: [u32; 4],
@@ -59,11 +61,12 @@ impl Draftpaper {
     pub fn add_screen(&mut self, output: Output, mm: f64, margin_mm: f64) {
         let scale = output.current_scale().fractional_scale();
         let geometry = self.space.output_geometry(&output).unwrap();
+        let phys_mm = mm;
         let mm = mm / scale;
         let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm);
         // the lowest number not yet in use
         let number = (1..).find(|n| !self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.number == *n))).unwrap();
-        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, margin_mm, hidden_ticks: [0; 4] });
+        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, hidden_ticks: [0; 4] });
         self.screens.sort_by_key(|s| s.grid.area.loc.x);
     }
 
@@ -84,6 +87,7 @@ impl Draftpaper {
     pub fn update_screen(&mut self, output: &Output) {
         let Some(geometry) = self.space.output_geometry(output) else { return };
         if let Some(s) = self.screens.iter_mut().find(|s| &s.output == output) {
+            s.mm = s.phys_mm / output.current_scale().fractional_scale();
             s.grid = Grid::new(geometry.loc, geometry.size, s.mm, s.margin_mm);
         }
         self.relayout();

@@ -2,7 +2,9 @@
 //! (logind or seatd) opens the devices; the primary GPU renders with GLES and drives every connected
 //! display at its preferred mode through Smithay's DRM compositor; libinput reads keyboards, touchpads
 //! and the TrackPoint. One GPU only. Displays plugged in or out later are picked up from udev; each has
-//! its own screen (screens.rs), with scale and position from config.toml ([outputs.<name>]).
+//! its own screen (screens.rs), with scale and position from config.toml ([outputs.<name>]). Tools
+//! that speak wlr-output-management (kanshi, wlr-randr) change modes, positions and scales, and turn
+//! displays off and on again (configure; output_management.rs).
 //!
 //! Clients render on the GPU: linux-dmabuf is offered with the GPU's render node and formats as its
 //! default feedback (without it Mesa falls back to llvmpipe, rendering on the CPU).
@@ -72,6 +74,8 @@ pub struct TtyData {
     libinput: Libinput,
     /// input devices, for touchpad settings
     devices: Vec<smithay::reexports::input::Device>,
+    /// displays connected but turned off through output management (by name); the scan leaves them be
+    disabled: std::collections::HashSet<String>,
 }
 
 impl TtyData {
@@ -154,7 +158,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new() });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default() });
 
     let handle = event_loop.handle();
     handle
@@ -230,6 +234,35 @@ fn scan_outputs(data: &mut Draftpaper) {
     for crtc in started {
         render(data, crtc);
     }
+    data.refresh_output_management();
+}
+
+/// "eDP-1", "DP-3": the connector's name as the kernel and other compositors give it.
+fn connector_name(info: &connector::Info) -> String {
+    format!("{}-{}", info.interface().as_str(), info.interface_id())
+}
+
+/// The displays connected now (with at least one mode).
+fn connected(tty: &TtyData) -> Vec<connector::Info> {
+    let device = tty.manager.device();
+    let Ok(resources) = device.resource_handles() else { return Vec::new() };
+    resources
+        .connectors()
+        .iter()
+        .filter_map(|&h| device.get_connector(h, false).ok())
+        .filter(|i| i.state() == connector::State::Connected && !i.modes().is_empty())
+        .collect()
+}
+
+/// Withdraw an output: its global, its place in the space, its screen (its windows move to another).
+fn remove_output(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) {
+    if let Some((output, _surface, _)) = tty.outputs.remove(&crtc) {
+        if let Some(global) = output.user_data().get::<OutputGlobal>() {
+            data.display_handle.remove_global::<Draftpaper>(global.0.clone());
+        }
+        data.space.unmap_output(&output);
+        data.remove_screen(&output);
+    }
 }
 
 fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
@@ -245,6 +278,13 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
             }
         }
     }
+    // a display turned off and then unplugged is forgotten; and if every display left is off (the laptop
+    // panel off while docked, then undocked), they come on again: there is always a screen
+    tty.disabled.retain(|n| connected.iter().any(|i| connector_name(i) == *n));
+    if connected.iter().all(|i| tty.disabled.contains(&connector_name(i))) {
+        tty.disabled.clear();
+    }
+    connected.retain(|i| !tty.disabled.contains(&connector_name(i)));
 
     // gone
     let gone: Vec<crtc::Handle> = tty
@@ -254,14 +294,10 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         .map(|(crtc, _)| *crtc)
         .collect();
     for crtc in gone {
-        if let Some((output, _surface, _)) = tty.outputs.remove(&crtc) {
+        if let Some((output, _, _)) = tty.outputs.get(&crtc) {
             eprintln!("draftpaper: output {} gone", output.name());
-            if let Some(global) = output.user_data().get::<OutputGlobal>() {
-                data.display_handle.remove_global::<Draftpaper>(global.0.clone());
-            }
-            data.space.unmap_output(&output);
-            data.remove_screen(&output);
         }
+        remove_output(data, tty, crtc);
     }
 
     // new
@@ -283,7 +319,8 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         let mode = *info.modes().iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)).unwrap_or(&info.modes()[0]);
         let (w, h) = (mode.size().0 as i32, mode.size().1 as i32);
         let (phys_w, phys_h) = info.size().unwrap_or((0, 0));
-        let name = format!("{}-{}", info.interface().as_str(), info.interface_id());
+        let name = connector_name(&info);
+        let edid = Edid::read(device, info.handle());
         let settings = output_settings(&name);
         let mm = settings.mm.unwrap_or(if phys_w > 0 { w as f32 / phys_w as f32 } else { FALLBACK_MM });
         let scale = settings.scale.unwrap_or(1.0);
@@ -295,7 +332,12 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
 
         let output = Output::new(
             name,
-            PhysicalProperties { size: (phys_w as i32, phys_h as i32).into(), subpixel: Subpixel::Unknown, make: "Unknown".into(), model: "Unknown".into() },
+            PhysicalProperties {
+                size: (phys_w as i32, phys_h as i32).into(),
+                subpixel: Subpixel::Unknown,
+                make: if edid.make.is_empty() { "Unknown".into() } else { edid.make.clone() },
+                model: if edid.model.is_empty() { "Unknown".into() } else { edid.model.clone() },
+            },
         );
         // kept with the output, to withdraw it from clients when the output goes
         let global = output.create_global::<Draftpaper>(&data.display_handle);
@@ -478,4 +520,210 @@ pub fn set_power(data: &mut Draftpaper, on: bool) {
             }
         }
     }
+}
+
+/// Make, model and serial number from a display's EDID (what kanshi matches displays by). The make is the
+/// three-letter PNP id ("DEL", "BOE"); model and serial are the monitor's name and serial descriptors,
+/// or the product code and serial number when it has none.
+#[derive(Debug, Clone, Default)]
+struct Edid {
+    make: String,
+    model: String,
+    serial: String,
+}
+
+impl Edid {
+    fn read(device: &smithay::backend::drm::DrmDevice, conn: connector::Handle) -> Edid {
+        let blob = (|| {
+            let props = device.get_properties(conn).ok()?;
+            let (handles, values) = props.as_props_and_values();
+            handles.iter().zip(values).find_map(|(&h, &v)| {
+                let info = device.get_property(h).ok()?;
+                (info.name().to_str().ok()? == "EDID" && v != 0).then(|| device.get_property_blob(v).ok()).flatten()
+            })
+        })();
+        blob.map(|b| Edid::parse(&b)).unwrap_or_default()
+    }
+
+    fn parse(b: &[u8]) -> Edid {
+        if b.len() < 128 || b[0..8] != [0, 255, 255, 255, 255, 255, 255, 0] {
+            return Edid::default();
+        }
+        let id = u16::from_be_bytes([b[8], b[9]]);
+        let letter = |v: u16| char::from(b'@' + (v & 31) as u8);
+        let make: String = [letter(id >> 10), letter(id >> 5), letter(id)].iter().collect();
+        let product = u16::from_le_bytes([b[10], b[11]]);
+        let number = u32::from_le_bytes([b[12], b[13], b[14], b[15]]);
+        // display descriptors: 18 bytes each from 54; tag 0xFC the name, 0xFF the serial
+        let text = |tag: u8| {
+            (0..4).map(|i| &b[54 + i * 18..72 + i * 18]).find(|d| d[0] == 0 && d[1] == 0 && d[3] == tag).map(|d| {
+                let t: String = d[5..].iter().take_while(|&&c| c != 0x0a && c != 0).map(|&c| c as char).collect();
+                t.trim().to_string()
+            })
+        };
+        Edid {
+            make,
+            model: text(0xfc).filter(|t| !t.is_empty()).unwrap_or_else(|| format!("0x{product:04X}")),
+            serial: text(0xff).filter(|t| !t.is_empty()).unwrap_or_else(|| if number != 0 { number.to_string() } else { String::new() }),
+        }
+    }
+}
+
+/// The displays for output management: every connected one, on or off.
+pub fn heads(data: &Draftpaper) -> Vec<crate::output_management::HeadInfo> {
+    use crate::output_management::{HeadInfo, ModeInfo};
+    let Some(tty) = data.tty_data.as_ref() else { return Vec::new() };
+    let device = tty.manager.device();
+    let mut heads: Vec<HeadInfo> = connected(tty)
+        .into_iter()
+        .map(|info| {
+            let name = connector_name(&info);
+            let edid = Edid::read(device, info.handle());
+            let mut modes: Vec<ModeInfo> = Vec::new();
+            for m in info.modes() {
+                let wl = WlMode::from(*m);
+                let mode = ModeInfo { w: wl.size.w, h: wl.size.h, refresh: wl.refresh, preferred: m.mode_type().contains(ModeTypeFlags::PREFERRED) };
+                match modes.iter_mut().find(|x| x.w == mode.w && x.h == mode.h && x.refresh == mode.refresh) {
+                    Some(x) => x.preferred |= mode.preferred,
+                    None => modes.push(mode),
+                }
+            }
+            let output = tty.outputs.values().find(|(_, _, c)| *c == info.handle()).map(|(o, _, _)| o);
+            let (phys_w, phys_h) = info.size().unwrap_or((0, 0));
+            let mut head = HeadInfo {
+                name,
+                make: edid.make,
+                model: edid.model,
+                serial: edid.serial,
+                physical: (phys_w as i32, phys_h as i32),
+                modes,
+                enabled: output.is_some(),
+                current: None,
+                position: (0, 0),
+                transform: smithay::utils::Transform::Normal,
+                scale: 1.0,
+            };
+            if let Some(output) = output {
+                head.current = output.current_mode().and_then(|m| head.modes.iter().find(|x| x.w == m.size.w && x.h == m.size.h && x.refresh == m.refresh).copied());
+                let loc = output.current_location();
+                head.position = (loc.x, loc.y);
+                head.transform = output.current_transform();
+                head.scale = output.current_scale().fractional_scale();
+            }
+            head
+        })
+        .collect();
+    heads.sort_by(|a, b| a.name.cmp(&b.name));
+    heads
+}
+
+/// Carry out (or, for `test`, only check) an output configuration: displays off, displays on, then
+/// each one's mode, position, scale and transform.
+pub fn configure(data: &mut Draftpaper, changes: &[crate::output_management::HeadChange], test: bool) -> Result<(), String> {
+    let Some(mut tty) = data.tty_data.take() else { return Err("no TTY".into()) };
+    let result = configure_with(data, &mut tty, changes, test);
+    data.tty_data = Some(tty);
+    let (started, changed) = result?;
+    for output in changed {
+        data.update_screen(&output);
+    }
+    data.relayout();
+    for crtc in started {
+        render(data, crtc);
+    }
+    Ok(())
+}
+
+/// The display mode `want` names on this connector: the same size and refresh (a custom mode with no
+/// refresh: the fastest at that size).
+fn find_mode(info: &connector::Info, want: &crate::output_management::ModeInfo) -> Option<smithay::reexports::drm::control::Mode> {
+    let at_size = info.modes().iter().filter(|m| {
+        let wl = WlMode::from(**m);
+        wl.size.w == want.w && wl.size.h == want.h
+    });
+    if want.refresh == 0 {
+        return at_size.max_by_key(|m| WlMode::from(**m).refresh).copied();
+    }
+    // a custom refresh within 0.5 Hz of the display's own
+    at_size.min_by_key(|m| (WlMode::from(**m).refresh - want.refresh).abs()).filter(|m| (WlMode::from(**m).refresh - want.refresh).abs() <= 500).copied()
+}
+
+#[allow(clippy::type_complexity)]
+fn configure_with(
+    data: &mut Draftpaper,
+    tty: &mut TtyData,
+    changes: &[crate::output_management::HeadChange],
+    test: bool,
+) -> Result<(Vec<crtc::Handle>, Vec<Output>), String> {
+    let connected = connected(tty);
+    let info_of = |name: &str| connected.iter().find(|i| connector_name(i) == name);
+    // check everything first
+    if !changes.iter().any(|c| c.config.is_some()) {
+        return Err("every display would be off".into());
+    }
+    for change in changes {
+        let info = info_of(&change.name).ok_or_else(|| format!("{} is not connected", change.name))?;
+        let Some(config) = &change.config else { continue };
+        if let Some(mode) = &config.mode {
+            find_mode(info, mode).ok_or_else(|| format!("{} has no mode {}x{}@{}", change.name, mode.w, mode.h, mode.refresh as f64 / 1000.0))?;
+        }
+        if let Some(scale) = config.scale {
+            if !(0.25..=4.0).contains(&scale) {
+                return Err(format!("scale {scale} for {} (0.25 to 4)", change.name));
+            }
+        }
+        if config.adaptive_sync == Some(true) {
+            return Err("adaptive sync is not supported".into());
+        }
+    }
+    if test {
+        return Ok((Vec::new(), Vec::new()));
+    }
+
+    let crtc_of = |tty: &TtyData, name: &str| tty.outputs.iter().find(|(_, (o, _, _))| o.name() == name).map(|(c, _)| *c);
+    // off
+    for change in changes.iter().filter(|c| c.config.is_none()) {
+        if let Some(crtc) = crtc_of(tty, &change.name) {
+            eprintln!("draftpaper: output {} off", change.name);
+            remove_output(data, tty, crtc);
+        }
+        tty.disabled.insert(change.name.clone());
+    }
+    // on: the scan brings them up at their preferred mode
+    let mut started = Vec::new();
+    if changes.iter().any(|c| c.config.is_some() && tty.disabled.remove(&c.name)) {
+        started = scan_with(data, tty);
+    }
+    // each one's settings
+    let mut changed = Vec::new();
+    for change in changes {
+        let Some(config) = &change.config else { continue };
+        let crtc = crtc_of(tty, &change.name).ok_or_else(|| format!("{} could not be turned on", change.name))?;
+        let info = info_of(&change.name).unwrap();
+        let (output, surface, _) = tty.outputs.get_mut(&crtc).unwrap();
+        let output = output.clone();
+        if let Some(want) = &config.mode {
+            let mode = find_mode(info, want).unwrap();
+            let wl = WlMode::from(mode);
+            if output.current_mode() != Some(wl) {
+                surface.use_mode(mode, &mut tty.renderer, &DrmOutputRenderElements::<GlesRenderer, OutputElements>::default()).map_err(|e| format!("{}: mode: {e:?}", change.name))?;
+                output.change_current_state(Some(wl), None, None, None);
+                eprintln!("draftpaper: output {} mode {}x{}@{:.3}", change.name, wl.size.w, wl.size.h, wl.refresh as f64 / 1000.0);
+            }
+        }
+        let scale = config.scale.map(Scale::Fractional);
+        let position = config.position.map(smithay::utils::Point::from);
+        output.change_current_state(None, config.transform, scale, position);
+        if let Some(p) = position {
+            data.space.map_output(&output, p);
+        } else {
+            // the size may have changed: map it again where it is
+            data.space.map_output(&output, output.current_location());
+        }
+        changed.push(output);
+        if !started.contains(&crtc) {
+            started.push(crtc);
+        }
+    }
+    Ok((started, changed))
 }

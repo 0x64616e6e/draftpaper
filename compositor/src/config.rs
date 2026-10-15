@@ -324,6 +324,7 @@ impl crate::state::Draftpaper {
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
             self.update_screen(&output);
         }
+        self.refresh_output_management();
     }
 
     /// Keyboard layout and repeat, and touchpad settings on the devices the TTY backend knows.

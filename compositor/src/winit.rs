@@ -74,6 +74,7 @@ pub fn init_winit(
                     None,
                 );
                 state.update_screen(&output);
+                state.refresh_output_management();
             }
             WinitEvent::Input(event) => state.process_input_event(event),
             WinitEvent::Redraw => {
@@ -117,5 +118,66 @@ pub fn init_winit(
         };
     })?;
 
+    Ok(())
+}
+
+/// The nested window as the one head of output management: its size is the window's.
+pub fn heads(data: &Draftpaper) -> Vec<crate::output_management::HeadInfo> {
+    data.space
+        .outputs()
+        .map(|o| {
+            let mode = o.current_mode().map(|m| crate::output_management::ModeInfo { w: m.size.w, h: m.size.h, refresh: m.refresh, preferred: true });
+            let loc = o.current_location();
+            crate::output_management::HeadInfo {
+                name: o.name(),
+                make: "Smithay".into(),
+                model: "Winit".into(),
+                serial: String::new(),
+                physical: (0, 0),
+                modes: mode.into_iter().collect(),
+                enabled: true,
+                current: mode,
+                position: (loc.x, loc.y),
+                // drawn flipped into the window; to clients it is upright
+                transform: Transform::Normal,
+                scale: o.current_scale().fractional_scale(),
+            }
+        })
+        .collect()
+}
+
+/// Nested, only the scale and the position change; the size is the window's.
+pub fn configure(data: &mut Draftpaper, changes: &[crate::output_management::HeadChange], test: bool) -> Result<(), String> {
+    let outputs: Vec<Output> = data.space.outputs().cloned().collect();
+    for change in changes {
+        let output = outputs.iter().find(|o| o.name() == change.name).ok_or_else(|| format!("no output {}", change.name))?;
+        let config = change.config.as_ref().ok_or("the nested window cannot be turned off")?;
+        if let Some(mode) = &config.mode {
+            let current = output.current_mode().ok_or("no mode")?;
+            if (mode.w, mode.h) != (current.size.w, current.size.h) {
+                return Err("the nested window's size is the window's own".into());
+            }
+        }
+        if config.transform.is_some_and(|t| t != Transform::Normal) {
+            return Err("the nested window is not rotated".into());
+        }
+        if config.scale.is_some_and(|s| !(0.25..=4.0).contains(&s)) {
+            return Err("scale out of range (0.25 to 4)".into());
+        }
+        if config.adaptive_sync == Some(true) {
+            return Err("adaptive sync is not supported".into());
+        }
+    }
+    if test {
+        return Ok(());
+    }
+    for change in changes {
+        let Some(config) = &change.config else { continue };
+        let output = outputs.iter().find(|o| o.name() == change.name).unwrap();
+        let position = config.position.map(smithay::utils::Point::from);
+        output.change_current_state(None, None, config.scale.map(smithay::output::Scale::Fractional), position);
+        data.space.map_output(output, output.current_location());
+        data.update_screen(output);
+    }
     Ok(())
 }

@@ -131,13 +131,53 @@ focus_follows_mouse = true  # the window the pointer enters takes the focus
 enabled = true             # false: every change at once
 duration_ms = 220
 
-[outputs.eDP-1]
+[outputs.eDP-1]               # when the display is plugged in (see Displays)
 scale = 1.5                # fractional scales work
 position = [0, 0]          # logical pixels
 
 [bindings]                 # key = action; "none" removes a default
 "Mod+Return" = "spawn foot"
 ```
+
+## Displays
+
+A display gets its preferred mode when it is plugged in, right of the others, unless
+`[outputs.<name>]` in config.toml gives its scale and position (`wlr-randr` lists the names).
+
+Tools that speak wlr-output-management arrange the displays while the session runs: `wlr-randr` from
+a shell, wdisplays with a mouse, and kanshi, which switches between profiles as displays come and go
+(docked, undocked). kanshi matches displays by name or by make, model and serial as `wlr-randr` shows
+them:
+
+```
+# ~/.config/kanshi/config
+profile undocked {
+  output eDP-1 enable scale 1.5
+}
+profile docked {
+  output eDP-1 disable
+  output "DEL DELL U2720Q ABC123" mode 3840x2160 position 0,0 scale 1.5
+}
+```
+
+Debian's kanshi has no service of its own; to start it with the session:
+
+```
+# ~/.config/systemd/user/kanshi.service
+[Unit]
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/kanshi
+Restart=on-failure
+
+[Install]
+WantedBy=draftpaper-session.target
+```
+
+then `systemctl --user enable kanshi`. A display turned off stays off until it is turned on again or
+unplugged; when every display left is off, they come on again.
 
 Actions: `focus|move|resize left|right|up|down`, `workspace N`, `send N`, `fullscreen`, `close`, `park`,
 `park_next`, `park_prev`, `screenshot`, `power off|on`, `reload`, `quit`, `spawn COMMAND`.
