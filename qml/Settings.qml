@@ -3,10 +3,12 @@
 // pages run down the left like the title block's cells (Tab, or a click, moves between them): the
 // colour scheme and the wallpaper (more to come, #36: displays, text).
 //
-// The wallpaper: the pictures as drawings (~/Pictures/Wallpapers, the system's backgrounds, and the
-// current one; none first: the paper), the margin cells in the theme's paper or in the picture's
-// colours (ambient), and how much paper tints the picture under the title block. Each change shows on
-// the sheet at once (`draftpaper wallpaper set`); Escape puts back what there was.
+// The wallpaper: the pictures as drawings (config.toml's wallpaper_dirs: ~/Pictures/Wallpapers and the
+// system's backgrounds; and the current one; none first: the paper), then its settings as rows: the
+// margin cells in the theme's paper or in the picture's colours (ambient), how much paper tints the
+// picture under the title block, how it is mounted (fill, fit, its own size) and where, its
+// brightness, a wash of paper over it, and blur. Each change shows on the sheet at once
+// (`draftpaper wallpaper set`); Escape puts back what there was.
 //
 // The colour scheme: the themes as drawings along the top (Desktop.qml), each lettered with its main
 // contrasts, or with how many of its words fall below 4.5:1; and below them the builder, six rows of
@@ -56,12 +58,22 @@ PanelWindow {
     property var wp: null
     property var wpWas: null
     property string wpPicture: ""       // a path, or "" for none
-    property string wpMargins: "paper"
-    property real wpTint: 0.7
-    property int wpRow: 0               // 0: the pictures; 1: the margin cells; 2: the tint
-    readonly property var tints: [0.4, 0.55, 0.7, 0.85]
+    property var wpVals: ({})           // the settings below as picked: margins, tint, fit, position, ...
+    property int wpRow: 0               // 0: the pictures; 1 and on: the rows below
+    // the wallpaper's settings: (key, as `draftpaper wallpaper set` names it; the row's name; the values
+    // offered, each [value, label])
+    readonly property var wpRows: [
+        { key: "margins", name: "MARGIN CELLS", options: [["paper", "paper · the theme's"], ["ambient", "ambient · the picture's colours"]] },
+        { key: "tint", name: "TITLE BLOCK TINT", options: [[0.4, "40% paper"], [0.55, "55%"], [0.7, "70%"], [0.85, "85%"]] },
+        { key: "fit", name: "MOUNTED", options: [["fill", "fill · cropped to the frame"], ["fit", "fit · whole, on the paper"], ["centre", "its own size"]] },
+        { key: "position", name: "POSITION", options: [["centre", "centre"], ["top", "top"], ["bottom", "bottom"], ["left", "left"], ["right", "right"]] },
+        { key: "brightness", name: "BRIGHTNESS", options: [[1.0, "100%"], [0.85, "85%"], [0.7, "70%"], [0.55, "55%"]] },
+        { key: "wash", name: "PAPER WASH", options: [[0.0, "none"], [0.15, "15%"], [0.3, "30%"], [0.45, "45%"]] },
+        { key: "blur", name: "BLUR", options: [[0.0, "none"], [1.0, "soft"], [3.0, "medium"], [8.0, "strong"]] }
+    ]
     readonly property var wpPictures: wp ? [""].concat(wp.pictures) : [""]
-    readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpMargins !== wpWas.margins || wpTint !== wpWas.tint)
+    function wpArgs(picture, vals) { return ["wallpaper", "set", "picture=" + (picture || "none")].concat(wpRows.map(r => r.key + "=" + vals[r.key])) }
+    readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     readonly property var rows: ["paper", "tone", "accent", "windows", "shade", "terminal", "text", "contrast"]
     readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", shade: "WINDOWS SHADE",
@@ -146,27 +158,30 @@ PanelWindow {
         settle.stop()
         wpSettle.stop()
         if (shown !== original) queue(["theme", original, "--preview"], "")
-        if (wpWas && wpApplied) queue(["wallpaper", "set", wpWas.restore || "none", wpWas.margins, String(wpWas.tint)], "")
+        if (wpWas && wpApplied) queue(wpArgs(wpWas.restore, wpWas.vals), "")
         visible = false
     }
 
     // ---- the wallpaper page ----
     function wpPick(path) { wpPicture = path; wpSettle.restart() }
+    function wpSet(key, value) {
+        const v = Object.assign({}, wpVals)
+        v[key] = value
+        wpVals = v
+        wpSettle.restart()
+    }
     function wpStep(dir) {
         if (wpRow === 0) {
             const i = wpPictures.indexOf(wpPicture)
             wpPick(wpPictures[Math.max(0, Math.min(wpPictures.length - 1, i + dir))])
-        } else if (wpRow === 1) {
-            wpMargins = dir > 0 ? "ambient" : "paper"
-            wpSettle.restart()
-        } else {
-            const i = tints.indexOf(wpTint)
-            wpTint = tints[Math.max(0, Math.min(tints.length - 1, (i < 0 ? 2 : i) + dir))]
-            wpSettle.restart()
+            return
         }
+        const r = wpRows[wpRow - 1], vals = r.options.map(o => o[0])
+        const i = vals.indexOf(wpVals[r.key])
+        wpSet(r.key, vals[Math.max(0, Math.min(vals.length - 1, (i < 0 ? 0 : i) + dir))])
     }
     function wpApply() {
-        queue(["wallpaper", "set", wpPicture || "none", wpMargins, String(wpTint)], "wallpaper")
+        queue(wpArgs(wpPicture, wpVals), "wallpaper")
         wpApplied = true
     }
     // the sheet shows the change a moment after the picking pauses
@@ -180,10 +195,11 @@ PanelWindow {
                     const d = JSON.parse(this.text)
                     settings.wp = d
                     // picture: what is shown (none when the file has gone); restore: what config.toml said
-                    settings.wpWas = { picture: d.exists ? d.current : "", restore: d.current, margins: d.margins, tint: d.tint }
+                    const vals = {}
+                    for (const r of settings.wpRows) vals[r.key] = d[r.key]
+                    settings.wpWas = { picture: d.exists ? d.current : "", restore: d.current, vals: vals }
                     settings.wpPicture = settings.wpWas.picture
-                    settings.wpMargins = d.margins
-                    settings.wpTint = d.tint
+                    settings.wpVals = Object.assign({}, vals)
                 } catch (e) {}
             }
         }
@@ -323,7 +339,7 @@ PanelWindow {
             else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) settings.keep()
             else if (k === Qt.Key_Tab || k === Qt.Key_Backtab) settings.page = settings.page === "scheme" ? "wallpaper" : "scheme"
             else if (settings.page === "wallpaper" && (k === Qt.Key_Up || k === Qt.Key_K)) settings.wpRow = Math.max(0, settings.wpRow - 1)
-            else if (settings.page === "wallpaper" && (k === Qt.Key_Down || k === Qt.Key_J)) settings.wpRow = Math.min(2, settings.wpRow + 1)
+            else if (settings.page === "wallpaper" && (k === Qt.Key_Down || k === Qt.Key_J)) settings.wpRow = Math.min(settings.wpRows.length, settings.wpRow + 1)
             else if (k === Qt.Key_Up || k === Qt.Key_K) settings.row = Math.max(0, settings.row - 1)
             else if (k === Qt.Key_Down || k === Qt.Key_J) settings.row = Math.min(settings.rows.length, settings.row + 1)
             else if (k === Qt.Key_Left || k === Qt.Key_H) settings.step(-1)
@@ -378,14 +394,15 @@ PanelWindow {
             readonly property real topY: board.inY + settings.gutter
             // the pictures, a grid of drawings as wide as the page allows
             readonly property real gap: 4 * settings.mm
+            readonly property real rowH: 10 * settings.mm     // a settings row
             readonly property int cols: Math.max(1, Math.floor((settings.cw + gap) / (36 * settings.mm + gap)))
             readonly property real picW: (settings.cw - (cols - 1) * gap) / cols
             readonly property real picH: picW * settings.height / Math.max(1, settings.width)
-            readonly property int rowsShown: Math.max(1, Math.floor((board.inY + board.inH - settings.gutter - topY - 6 * settings.mm - 2 * 14 * settings.mm - 10 * settings.mm) / (picH + 7 * settings.mm)))
+            readonly property int rowsShown: Math.max(1, Math.floor((board.inY + board.inH - settings.gutter - topY - 6 * settings.mm - settings.wpRows.length * rowH - 4 * settings.mm) / (picH + 7 * settings.mm)))
             readonly property int shown: Math.min(settings.wpPictures.length, cols * rowsShown)
             Text {
                 x: settings.x0; y: wallPage.topY
-                text: "PICTURES · " + (settings.wp ? settings.wp.folder : "") + ", and the system's backgrounds"
+                text: "PICTURES · " + (settings.wp ? settings.wp.dirs.join(", ") : "") + " (config.toml: wallpaper_dirs)"
                     + (settings.wp && settings.wp.current && !settings.wp.exists ? " · yours is gone: " + settings.wp.current : "")
                 font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.2 * settings.mm; font.bold: settings.wpRow === 0
                 color: settings.wpRow === 0 ? settings.ink : settings.inkA(0.6)
@@ -436,42 +453,39 @@ PanelWindow {
                     MouseArea { anchors.fill: parent; onPressed: { settings.wpRow = 0; settings.wpPick(pic.path) } }
                 }
             }
-            // the margin cells and the title block's tint, as the builder's rows
+            // the wallpaper's settings, as the builder's rows
             Repeater {
-                model: [
-                    { name: "MARGIN CELLS", row: 1, options: [{ v: "paper", label: "paper · the theme's" }, { v: "ambient", label: "ambient · the picture's colours" }] },
-                    { name: "TITLE BLOCK TINT", row: 2, options: settings.tints.map(t => ({ v: t, label: Math.round(t * 100) + "% paper" })) }
-                ]
+                model: settings.wpRows
                 Item {
                     id: wr
                     required property var modelData
                     required property int index
-                    readonly property bool here: settings.wpRow === modelData.row
+                    readonly property bool here: settings.wpRow === index + 1
                     x: settings.x0
-                    y: wallPage.topY + 6 * settings.mm + Math.ceil(wallPage.shown / wallPage.cols) * (wallPage.picH + 7 * settings.mm) + 2 * settings.mm + index * 14 * settings.mm
-                    width: settings.cw; height: 14 * settings.mm
+                    y: wallPage.topY + 6 * settings.mm + Math.ceil(wallPage.shown / wallPage.cols) * (wallPage.picH + 7 * settings.mm) + 2 * settings.mm + index * wallPage.rowH
+                    width: settings.cw; height: wallPage.rowH
                     Rectangle { width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
                     Text {
-                        y: 4 * settings.mm
+                        y: (wallPage.rowH - height) / 2
                         text: wr.modelData.name
                         font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.bold: wr.here
                         color: wr.here ? settings.ink : settings.inkA(0.75)
                     }
                     Row {          // the options, each as wide as its words
-                        x: 40 * settings.mm; y: 2.5 * settings.mm
-                        spacing: 4 * settings.mm
+                        x: 40 * settings.mm; y: (wallPage.rowH - 7 * settings.mm) / 2
+                        spacing: 3 * settings.mm
                     Repeater {
                         model: wr.modelData.options
                         Item {
                             id: wo
                             required property var modelData
                             required property int index
-                            readonly property bool chosen: wr.modelData.row === 1 ? settings.wpMargins === modelData.v : settings.wpTint === modelData.v
-                            width: optLabel.implicitWidth + 6 * settings.mm; height: 9 * settings.mm
+                            readonly property bool chosen: settings.wpVals[wr.modelData.key] === modelData[0]
+                            width: optLabel.implicitWidth + 5 * settings.mm; height: 7 * settings.mm
                             Text {
                                 id: optLabel
                                 anchors.centerIn: parent
-                                text: wo.modelData.label
+                                text: wo.modelData[1]
                                 font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: wo.chosen
                                 color: wo.chosen ? settings.ink : settings.inkA(0.7)
                             }
@@ -484,12 +498,7 @@ PanelWindow {
                             }
                             MouseArea {
                                 anchors.fill: parent
-                                onPressed: {
-                                    settings.wpRow = wr.modelData.row
-                                    if (wr.modelData.row === 1) settings.wpMargins = wo.modelData.v
-                                    else settings.wpTint = wo.modelData.v
-                                    wpSettle.restart()
-                                }
+                                onPressed: { settings.wpRow = wr.index + 1; settings.wpSet(wr.modelData.key, wo.modelData[0]) }
                             }
                         }
                     }

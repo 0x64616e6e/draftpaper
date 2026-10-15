@@ -65,9 +65,10 @@ charcoal, slate; light: white, paper, mist, grey), terminal background (as the w
 charcoal, graphite, slate, petrol, moss, olive, umber, wine, plum), terminal text, contrast
 (standard about 7:1, high 10:1 and more). Every scheme it builds keeps every word at 4.5:1 or more.
 
-The wallpaper page: the pictures (`~/Pictures/Wallpapers`, the system's backgrounds, none for the
-paper), the margin cells (paper, or ambient: the picture's colours), the title block's tint (40 to
-85% paper); ↑ ↓ between them, ← → along, each change shown at once.
+The wallpaper page: the pictures (`wallpaper_dirs`: `~/Pictures/Wallpapers` and the system's
+backgrounds; none for the paper), the margin cells (paper, or ambient: the picture's colours), the
+title block's tint, mounted (fill, fit, its own size), position, brightness, paper wash, blur; ↑ ↓
+between them, ← → along, each change shown at once.
 
 ## The sheet's margins and title block
 
@@ -121,5 +122,6 @@ Top level: `theme`, `margin`, `glyphs`, `wallpaper`, `margins`, `title_tint`. Ta
 firefox_text, firefox_ui_pt), `[hooks]` (theme), `[commands]` (screenshot), `[input]` (keyboard layout,
 variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[layout]` (new_window), `[[rule]]` (window rules:
 app_id, title, pip; float, sticky, place, focus),
-`[animations]`, `[outputs.NAME]` (scale, position, mm), `[bindings]`. Displays are matched by connector
+`[animations]`, `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
+`wallpaper_position`, `wallpaper_brightness`, `wallpaper_wash`, `wallpaper_blur`, `wallpaper_dirs`, `[bindings]`. Displays are matched by connector
 name (`eDP-1`, `DP-3`); one without settings gets its preferred mode at scale 1, right of the others.

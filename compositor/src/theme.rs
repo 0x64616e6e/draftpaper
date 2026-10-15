@@ -35,6 +35,63 @@ pub struct Theme {
     pub wallpaper: Option<PathBuf>,
     pub ambient: bool,
     pub title_tint: f32,
+    /// how the picture is mounted and how it looks (`wallpaper_fit`, `wallpaper_position`,
+    /// `wallpaper_brightness`, `wallpaper_wash`, `wallpaper_blur`; wallpaper.rs)
+    pub mount: Mount,
+}
+
+/// How a wallpaper is mounted in the frame and how it looks there.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Mount {
+    /// fill (cropped to the interior, as before), fit (whole, paper around it), centre (its own size)
+    pub fit: Fit,
+    /// where the picture sits when it is cropped or smaller than the interior: 0 left/top, 0.5 centre,
+    /// 1 right/bottom
+    pub anchor: (f32, f32),
+    /// 1 as it is, less to darken it
+    pub brightness: f32,
+    /// how much of the paper is laid over it (0 none, 1 all)
+    pub wash: f32,
+    /// blur radius, in millimetres of the screen
+    pub blur_mm: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fit {
+    Fill,
+    Fit,
+    Centre,
+}
+
+impl Default for Mount {
+    fn default() -> Mount {
+        Mount { fit: Fit::Fill, anchor: (0.5, 0.5), brightness: 1.0, wash: 0.0, blur_mm: 0.0 }
+    }
+}
+
+impl Mount {
+    fn from_config(config: &toml::Table) -> Mount {
+        let num = |k: &str| config.get(k).and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64)));
+        let fit = match config.get("wallpaper_fit").and_then(|v| v.as_str()) {
+            Some("fit") => Fit::Fit,
+            Some("centre" | "center") => Fit::Centre,
+            _ => Fit::Fill,
+        };
+        let anchor = match config.get("wallpaper_position").and_then(|v| v.as_str()) {
+            Some("top") => (0.5, 0.0),
+            Some("bottom") => (0.5, 1.0),
+            Some("left") => (0.0, 0.5),
+            Some("right") => (1.0, 0.5),
+            _ => (0.5, 0.5),
+        };
+        Mount {
+            fit,
+            anchor,
+            brightness: num("wallpaper_brightness").unwrap_or(1.0).clamp(0.1, 1.0) as f32,
+            wash: num("wallpaper_wash").unwrap_or(0.0).clamp(0.0, 1.0) as f32,
+            blur_mm: num("wallpaper_blur").unwrap_or(0.0).clamp(0.0, 30.0) as f32,
+        }
+    }
 }
 
 fn rgb(hex: &str) -> Option<[f32; 3]> {
@@ -106,6 +163,7 @@ impl Theme {
             }),
             ambient: config.get("margins").and_then(|v| v.as_str()) == Some("ambient"),
             title_tint: config.get("title_tint").and_then(|v| v.as_float()).unwrap_or(0.7).clamp(0.0, 1.0) as f32,
+            mount: Mount::from_config(&config),
         }
     }
 }

@@ -45,7 +45,11 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               the default output's volume and mute, kept from one session to the next
                               (draftpaper-audio.service: the switch to the login screen mutes it)
   draftpaper wallpaper [FILE   draftpaper wallpaper json   the wallpaper, margins and tint as set, and the pictures to choose from
-  draftpaper wallpaper set FILE|none paper|ambient TINT
+  draftpaper wallpaper set NAME=VALUE ...
+                              picture=FILE|none, margins=paper|ambient, tint, fit=fill|fit|centre,
+                              position=centre|top|bottom|left|right, brightness, wash, blur (mm):
+                              any of them in one write (the settings' wallpaper page)
+|none paper|ambient TINT
                               the three at once (the settings' wallpaper page)
 | none]
                               a picture in the frame, or none (the compositor picks it up at once)
@@ -76,14 +80,7 @@ fn main() {
         ["scheme", rest @ ..] => schemes(&p, rest),
         ["wallpaper"] => println!("{}", config::load(&p).get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("none")),
         ["wallpaper", "json"] => wallpaper_json(&p),
-        ["wallpaper", "set", file, margins, tint] => {
-            // the settings' wallpaper page: the three at once (one reload), as given (a restore may name a
-            // picture that has gone since)
-            let tint: f64 = tint.parse().unwrap_or_else(|_| util::die("draftpaper: the tint is a number from 0 to 1"));
-            let picture = if *file == "none" { None } else { Some(format!("\"{}\"", expand(file, &p).display())) };
-            let margins = if *margins == "ambient" { "ambient" } else { "paper" };
-            config::set_many(&p, &[("wallpaper", picture), ("margins", Some(format!("\"{margins}\""))), ("title_tint", Some(util::float(tint.clamp(0.0, 1.0))))]);
-        }
+        ["wallpaper", "set", pairs @ ..] => wallpaper_set(&p, pairs),
         ["wallpaper", "none", ..] => config::set_value(&p, "wallpaper", None),
         ["wallpaper", file, ..] => {
             let path = expand(file, &p);
@@ -130,13 +127,61 @@ fn expand(file: &str, p: &Paths) -> std::path::PathBuf {
     out
 }
 
-/// What the settings' wallpaper page shows: the wallpaper, the margins and the title block's tint as
-/// set, and the pictures to choose from: ~/Pictures/Wallpapers (a folder for them, so the screenshots in
-/// ~/Pictures stay out), the system's backgrounds, and the current picture wherever it is.
+/// The wallpaper's settings in config.toml: (the settings page's name, config.toml's key, the default).
+/// Strings are quoted when written, numbers not.
+const WALLPAPER: [(&str, &str, &str); 7] = [
+    ("margins", "margins", "paper"),
+    ("tint", "title_tint", "0.7"),
+    ("fit", "wallpaper_fit", "fill"),
+    ("position", "wallpaper_position", "centre"),
+    ("brightness", "wallpaper_brightness", "1.0"),
+    ("wash", "wallpaper_wash", "0.0"),
+    ("blur", "wallpaper_blur", "0.0"),
+];
+const WALLPAPER_DIRS: [&str; 2] = ["~/Pictures/Wallpapers", "/usr/share/backgrounds"];
+
+/// `draftpaper wallpaper set picture=FILE|none margins=paper|ambient tint=0.7 fit=fill|fit|centre
+/// position=centre|top|bottom|left|right brightness=1 wash=0 blur=0`: any of them, all in one write (one
+/// reload), as given (a restore may name a picture that has gone since).
+fn wallpaper_set(p: &Paths, pairs: &[&str]) {
+    let mut values: Vec<(&str, Option<String>)> = Vec::new();
+    for pair in pairs {
+        let Some((k, v)) = pair.split_once('=') else { util::die(format!("draftpaper: wallpaper set NAME=VALUE ..., not {pair}")) };
+        if k == "picture" {
+            values.push(("wallpaper", if v == "none" || v.is_empty() { None } else { Some(format!("\"{}\"", expand(v, p).display())) }));
+            continue;
+        }
+        let Some((_, key, _)) = WALLPAPER.iter().find(|(name, ..)| *name == k) else { util::die(format!("draftpaper: no wallpaper setting {k}")) };
+        let ok = match k {
+            "margins" => ["paper", "ambient"].contains(&v),
+            "fit" => ["fill", "fit", "centre"].contains(&v),
+            "position" => ["centre", "top", "bottom", "left", "right"].contains(&v),
+            _ => v.parse::<f64>().is_ok_and(|x| (0.0..=30.0).contains(&x)),
+        };
+        if !ok {
+            util::die(format!("draftpaper: wallpaper {k} = {v}?"));
+        }
+        let raw = match v.parse::<f64>() {
+            Ok(x) => util::float(x),
+            Err(_) => format!("\"{v}\""),
+        };
+        values.push((key, Some(raw)));
+    }
+    config::set_many(p, &values);
+}
+
+/// What the settings' wallpaper page shows: the wallpaper's settings as they are, and the pictures to
+/// choose from: config.toml's wallpaper_dirs (by default ~/Pictures/Wallpapers, a folder of their own so
+/// the screenshots in ~/Pictures stay out, and the system's backgrounds), and the current picture
+/// wherever it is.
 fn wallpaper_json(p: &Paths) {
     let cfg = config::load(p);
     let current = cfg.get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).map(|s| expand(s, p));
-    let folder = p.home.join("Pictures/Wallpapers");
+    let dirs: Vec<String> = cfg
+        .get("wallpaper_dirs")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|d| d.as_str().map(String::from)).collect())
+        .unwrap_or_else(|| WALLPAPER_DIRS.iter().map(|d| d.to_string()).collect());
     let picture = |f: &std::path::Path| f.is_file() && f.extension().and_then(|e| e.to_str()).is_some_and(|e| ["jpg", "jpeg", "png", "webp"].contains(&e.to_lowercase().as_str()));
     let list = |d: &std::path::Path, depth: usize| {
         let mut out = Vec::new();
@@ -155,25 +200,32 @@ fn wallpaper_json(p: &Paths) {
         out.sort();
         out
     };
-    let mut pictures = list(&folder, 1);
-    pictures.extend(list(std::path::Path::new("/usr/share/backgrounds"), 1));
+    let mut pictures: Vec<std::path::PathBuf> = Vec::new();
+    for d in &dirs {
+        for f in list(&expand(d, p), 1) {
+            if !pictures.contains(&f) {
+                pictures.push(f);
+            }
+        }
+    }
     if let Some(c) = current.as_ref().filter(|c| c.is_file() && !pictures.contains(c)) {
         pictures.insert(0, c.clone());
     }
-    pictures.truncate(60);
-    let tint = cfg.get("title_tint").and_then(Value::as_f64).unwrap_or(0.7);
-    let margins = if cfg.get("margins").and_then(Value::as_str) == Some("ambient") { "ambient" } else { "paper" };
-    println!(
-        "{}",
-        util::dumps(&json!({
-            "current": current.as_ref().map(|c| c.display().to_string()).unwrap_or_default(),
-            "exists": current.as_ref().is_some_and(|c| c.is_file()),
-            "margins": margins,
-            "tint": tint,
-            "folder": "~/Pictures/Wallpapers",
-            "pictures": pictures.iter().map(|f| f.display().to_string()).collect::<Vec<_>>(),
-        }))
-    );
+    pictures.truncate(80);
+    let mut out = Map::new();
+    out.insert("current".into(), json!(current.as_ref().map(|c| c.display().to_string()).unwrap_or_default()));
+    out.insert("exists".into(), json!(current.as_ref().is_some_and(|c| c.is_file())));
+    // each setting as set, or its default (a number as a number)
+    for (name, key, default) in WALLPAPER {
+        let v = match cfg.get(key) {
+            Some(v @ (Value::String(_) | Value::Number(_))) => v.clone(),
+            _ => default.parse::<f64>().map(|x| json!(x)).unwrap_or_else(|_| json!(default)),
+        };
+        out.insert(name.into(), v);
+    }
+    out.insert("dirs".into(), json!(dirs));
+    out.insert("pictures".into(), json!(pictures.iter().map(|f| f.display().to_string()).collect::<Vec<_>>()));
+    println!("{}", util::dumps(&Value::Object(out)));
 }
 
 /// The shell, in the foreground: the session's service keeps it running.

@@ -1,5 +1,8 @@
 //! The wallpaper: a picture mounted in the sheet's frame. config.toml's `wallpaper` names it; it fills
-//! the frame's interior on every output (cropped to the interior's proportions, never letterboxed). The
+//! the frame's interior on every output (cropped to the interior's proportions, where
+//! `wallpaper_position` says), or with `wallpaper_fit` sits whole (`fit`) or at its own size (`centre`)
+//! on the paper; `wallpaper_blur` (mm), `wallpaper_brightness` and `wallpaper_wash` (the paper laid over
+//! it) change how it looks. The
 //! margins stay the theme's paper, or with `margins = "ambient"` take the picture's colours: each margin
 //! cell the average of the picture's edge beside it, neighbouring cells blending softly, and the margins'
 //! lettering in whichever of the theme's inks reads on them (`margin_ink`, sent to the shell). Under the
@@ -76,6 +79,7 @@ struct Key {
     tint: u32,
     paper: [u32; 3],
     ink: [u32; 3],
+    mount: [u32; 6],
 }
 
 /// One output's wallpaper, in its physical pixels, relative to its corner.
@@ -138,6 +142,61 @@ fn buffer(img: &RgbaImage) -> MemoryRenderBuffer {
     MemoryRenderBuffer::from_slice(img.as_raw(), Fourcc::Abgr8888, (img.width() as i32, img.height() as i32), 1, Transform::Normal, None)
 }
 
+/// The picture as the frame's interior (`iw` by `ih` physical pixels) shows it: filled (cropped to the
+/// interior's proportions, where the anchor says), fitted whole or at its own size (on the paper, where
+/// the anchor says); then blurred, darkened and washed with the paper as config.toml asks. The ambient
+/// margins and the title block take their colours from this, as you see it.
+fn mounted(img: &RgbaImage, iw: u32, ih: u32, theme: &Theme, mm: f32) -> RgbaImage {
+    use crate::theme::Fit;
+    let m = &theme.mount;
+    let (ax, ay) = (m.anchor.0 as f64, m.anchor.1 as f64);
+    let (pw, ph) = (img.width(), img.height());
+    let mut out = match m.fit {
+        Fit::Fill => {
+            let scale = (iw as f64 / pw as f64).max(ih as f64 / ph as f64);
+            let (cw, ch) = (((iw as f64 / scale).round() as u32).min(pw), ((ih as f64 / scale).round() as u32).min(ph));
+            let (x, y) = (((pw - cw) as f64 * ax).round() as u32, ((ph - ch) as f64 * ay).round() as u32);
+            let crop = imageops::crop_imm(img, x, y, cw, ch).to_image();
+            imageops::resize(&crop, iw, ih, FilterType::Triangle)
+        }
+        Fit::Fit | Fit::Centre => {
+            // the paper, and the picture on it: scaled to fit whole, or at its own size (cropped where it
+            // is larger than the interior)
+            let mut canvas = RgbaImage::from_pixel(iw, ih, rgba(theme.paper));
+            let pic = if m.fit == Fit::Fit {
+                let scale = (iw as f64 / pw as f64).min(ih as f64 / ph as f64);
+                imageops::resize(img, ((pw as f64 * scale).round() as u32).max(1), ((ph as f64 * scale).round() as u32).max(1), FilterType::Triangle)
+            } else {
+                let (cw, ch) = (pw.min(iw), ph.min(ih));
+                imageops::crop_imm(img, ((pw - cw) as f64 * ax).round() as u32, ((ph - ch) as f64 * ay).round() as u32, cw, ch).to_image()
+            };
+            let x = ((iw - pic.width().min(iw)) as f64 * ax).round() as i64;
+            let y = ((ih - pic.height().min(ih)) as f64 * ay).round() as i64;
+            imageops::overlay(&mut canvas, &pic, x, y);
+            canvas
+        }
+    };
+    if m.blur_mm > 0.0 {
+        // blurred small and scaled back up: a wide blur at full size would take seconds
+        let r = (m.blur_mm * mm).max(1.0);
+        let k = (r / 4.0).max(1.0);
+        let small = imageops::resize(&out, ((iw as f32 / k) as u32).max(2), ((ih as f32 / k) as u32).max(2), FilterType::Triangle);
+        let small = imageops::blur(&small, (r / k).max(0.5));
+        out = imageops::resize(&small, iw, ih, FilterType::Triangle);
+    }
+    if m.brightness < 1.0 || m.wash > 0.0 {
+        let (b, wash, paper) = (m.brightness, m.wash, rgba(theme.paper));
+        for p in out.pixels_mut() {
+            for i in 0..3 {
+                let v = p[i] as f32 * b;
+                p[i] = (v * (1.0 - wash) + paper[i] as f32 * wash).round().clamp(0.0, 255.0) as u8;
+            }
+            p[3] = 255;
+        }
+    }
+    out
+}
+
 /// Prepare (or keep) the wallpaper of an output of `size` physical pixels, its margin `margin` pixels,
 /// `zones` across and down, `mm` pixels per millimetre; false without a wallpaper or when it cannot be read.
 pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: i32, zones: (u32, u32), mm: f32) -> bool {
@@ -160,18 +219,18 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
         tint: theme.title_tint.to_bits(),
         paper: bits(theme.paper),
         ink: bits(theme.ink),
+        mount: {
+            let m = &theme.mount;
+            [m.fit as u32, m.anchor.0.to_bits(), m.anchor.1.to_bits(), m.brightness.to_bits(), m.wash.to_bits(), m.blur_mm.to_bits()]
+        },
     };
     if cache.0.borrow().as_ref().is_some_and(|w| w.key == key) {
         return true;
     }
     let (w, h) = size;
-    // the picture, cropped to the interior's proportions and scaled to fill it
     let interior = Rectangle::<i32, Physical>::new((margin, margin).into(), ((w - 2 * margin).max(1), (h - 2 * margin).max(1)).into());
     let (iw, ih) = (interior.size.w as u32, interior.size.h as u32);
-    let scale = (iw as f64 / img.width() as f64).max(ih as f64 / img.height() as f64);
-    let (cw, ch) = (((iw as f64 / scale).round() as u32).min(img.width()), ((ih as f64 / scale).round() as u32).min(img.height()));
-    let crop = imageops::crop_imm(&*img, (img.width() - cw) / 2, (img.height() - ch) / 2, cw, ch).to_image();
-    let filled = imageops::resize(&crop, iw, ih, FilterType::Triangle);
+    let filled = mounted(&img, iw, ih, theme, mm);
 
     // ambient margins: each cell the average of the picture's edge beside it, at an eighth of the size,
     // softened so that neighbouring cells blend; corners take the picture's corners

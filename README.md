@@ -91,6 +91,13 @@ margin = 6                 # millimetres between the screen edge and the frame (
 glyphs = true              # Nerd Font glyphs before the readings, when a Nerd Font is installed
 wallpaper = "~/Pictures/sea.jpg"   # a picture in the frame (draftpaper wallpaper FILE | none)
 margins = "paper"          # with a wallpaper: "paper", or "ambient" (the picture's colours)
+title_tint = 0.7           # with a wallpaper: how much paper tints the picture under the title block
+wallpaper_fit = "fill"     # "fill" (cropped to the frame), "fit" (whole, on the paper), "centre" (own size)
+wallpaper_position = "centre"  # where it sits when cropped or smaller: centre, top, bottom, left, right
+wallpaper_brightness = 1.0 # less darkens it
+wallpaper_wash = 0.0       # how much paper is laid over it (0 to 1)
+wallpaper_blur = 0.0       # millimetres
+wallpaper_dirs = ["~/Pictures/Wallpapers", "/usr/share/backgrounds"]   # where the settings look
 
 [title]
 project = "WORKSTATION"    # default: the host name
@@ -241,8 +248,9 @@ picked; Enter keeps it (a built scheme is written to `[scheme]` in config.toml a
 Tab (or a click on the page's cell) turns to the wallpaper: the pictures as drawings (put yours in
 `~/Pictures/Wallpapers`; the system's backgrounds and the current picture are there too, and none
 leaves the paper), the margin cells in the theme's paper or in the picture's colours (ambient), and
-how much paper tints the picture under the title block (40 to 85%). Each change shows on the sheet
-at once; Enter keeps the page's changes along with the colour scheme's, Escape puts both back.
+how much paper tints the picture under the title block (40 to 85%), how it is mounted (fill, fit
+whole, or its own size) and where, its brightness, a wash of paper over it, and blur. Each change
+shows on the sheet at once; Enter keeps the page's changes along with the colour scheme's, Escape puts both back.
 `draftpaper theme` lists them and `draftpaper theme <name>`
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'

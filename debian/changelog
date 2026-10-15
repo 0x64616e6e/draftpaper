@@ -9,6 +9,13 @@ draftpaper (0.3.0) unstable; urgency=medium
     under it: a surface that reads keys takes it, else it stays where it
     was. The settings lost every second click to it (Qt cancelled the
     press as the keyboard left); they now also act on the press.
+  * The wallpaper's mounting and look: wallpaper_fit (fill, as before; fit
+    whole on the paper; centre at its own size), wallpaper_position,
+    wallpaper_brightness, wallpaper_wash (paper over it) and wallpaper_blur
+    (mm), applied once when the picture is prepared, the ambient margins
+    and the title block taking their colours from the result; and
+    wallpaper_dirs, where the settings look for pictures. All on the
+    wallpaper page too.
   * Settings: a wallpaper page (Tab): the pictures as drawings
     (~/Pictures/Wallpapers, the system's backgrounds, none), the margin
     cells in paper or the picture's colours, the title block's tint; each

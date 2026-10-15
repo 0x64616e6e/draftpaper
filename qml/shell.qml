@@ -214,7 +214,7 @@ ShellRoot {
         // what the keys do, for scripts: a row (0 the drawings, 1 and on the builder's), a step along it
         function row(n: int): void {
             if (!settings.visible) return
-            if (settings.page === "wallpaper") settings.wpRow = Math.max(0, Math.min(2, n))
+            if (settings.page === "wallpaper") settings.wpRow = Math.max(0, Math.min(settings.wpRows.length, n))
             else settings.row = Math.max(0, Math.min(settings.rows.length, n))
         }
         function page(name: string): void { if (settings.visible) settings.page = name }
