@@ -79,10 +79,18 @@ writes the choices to [scheme] in config.toml and the theme
 A shipped theme as shipped again: your copy of it removed.
 .TP
 .B settings
-Open or close the settings (Super+T): the colour scheme, from the themes or built from choices.
+Open or close the settings (Super+T): the colour scheme, from the themes or built from choices, and
+the wallpaper, the margin cells and the title block's tint.
 .TP
 .BR wallpaper " [" \fIFILE\fR "|" none ]
 A picture in the frame, or none.
+.TP
+.B wallpaper json
+The wallpaper, the margins and the title block's tint as set, and the pictures to choose from
+(~/Pictures/Wallpapers and the system's backgrounds), as JSON.
+.TP
+.BR "wallpaper set" " \fIFILE\fR|none paper|ambient \fITINT\fR"
+The three at once, as the settings' wallpaper page sets them.
 .TP
 .BR margins " " paper "|" ambient
 With a wallpaper: the margins in the theme's paper or in the picture's colours.

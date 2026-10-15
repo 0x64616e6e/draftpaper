@@ -48,21 +48,26 @@ config.toml floats, pins or places other windows.
 The displays turn off after 15 minutes idle (`[idle] screens_off`); any input, a key, the touchpad,
 the touchscreen, wakes them.
 
-## Settings (the colour scheme)
+## Settings (colour scheme, wallpaper)
 
 | Keys | |
 |---|---|
 | Mod+t · click the theme name | Open the settings on the board |
+| Tab · click a page's cell | Colour scheme, wallpaper |
 | ↑ ↓ · k j | Between the drawings (the themes) and the builder's rows |
 | ← → · h l · wheel | Along them: a theme, or a choice (the sheet previews it) |
 | Enter · click the picked drawing | Keep it (the applications too; a built scheme becomes the theme `custom`) |
-| Esc · click elsewhere | Back to the theme you had |
+| Esc · click elsewhere | Back to the theme and wallpaper you had |
 | R twice | Your copy of a shipped theme back to the shipped one |
 
 The builder's rows: paper (light, dark), tone, accent, windows (dark, light), windows shade (deep, dark,
-charcoal, slate; light: white, paper, mist, grey), terminal background (as the windows, neutral, tone,
-blue, green, warm, plum), terminal shade (auto or a shade of its own), terminal text, contrast
+charcoal, slate; light: white, paper, mist, grey), terminal background (as the windows, or a mid tone:
+charcoal, graphite, slate, petrol, moss, olive, umber, wine, plum), terminal text, contrast
 (standard about 7:1, high 10:1 and more). Every scheme it builds keeps every word at 4.5:1 or more.
+
+The wallpaper page: the pictures (`~/Pictures/Wallpapers`, the system's backgrounds, none for the
+paper), the margin cells (paper, or ambient: the picture's colours), the title block's tint (40 to
+85% paper); ↑ ↓ between them, ← → along, each change shown at once.
 
 ## The sheet's margins and title block
 

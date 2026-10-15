@@ -212,7 +212,12 @@ ShellRoot {
         target: "settings"
         function toggle(): void { settings.visible ? settings.cancel() : settings.open() }
         // what the keys do, for scripts: a row (0 the drawings, 1 and on the builder's), a step along it
-        function row(n: int): void { if (settings.visible) settings.row = Math.max(0, Math.min(settings.rows.length, n)) }
+        function row(n: int): void {
+            if (!settings.visible) return
+            if (settings.page === "wallpaper") settings.wpRow = Math.max(0, Math.min(2, n))
+            else settings.row = Math.max(0, Math.min(settings.rows.length, n))
+        }
+        function page(name: string): void { if (settings.visible) settings.page = name }
         function step(n: int): void { if (settings.visible) settings.step(n) }
         function keep(): void { if (settings.visible) settings.keep() }
         function cancel(): void { if (settings.visible) settings.cancel() }

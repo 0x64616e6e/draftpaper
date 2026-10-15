@@ -44,7 +44,10 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper audio save|restore
                               the default output's volume and mute, kept from one session to the next
                               (draftpaper-audio.service: the switch to the login screen mutes it)
-  draftpaper wallpaper [FILE | none]
+  draftpaper wallpaper [FILE   draftpaper wallpaper json   the wallpaper, margins and tint as set, and the pictures to choose from
+  draftpaper wallpaper set FILE|none paper|ambient TINT
+                              the three at once (the settings' wallpaper page)
+| none]
                               a picture in the frame, or none (the compositor picks it up at once)
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
@@ -72,6 +75,15 @@ fn main() {
         ["theme", rest @ ..] => themes(&p, rest),
         ["scheme", rest @ ..] => schemes(&p, rest),
         ["wallpaper"] => println!("{}", config::load(&p).get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("none")),
+        ["wallpaper", "json"] => wallpaper_json(&p),
+        ["wallpaper", "set", file, margins, tint] => {
+            // the settings' wallpaper page: the three at once (one reload), as given (a restore may name a
+            // picture that has gone since)
+            let tint: f64 = tint.parse().unwrap_or_else(|_| util::die("draftpaper: the tint is a number from 0 to 1"));
+            let picture = if *file == "none" { None } else { Some(format!("\"{}\"", expand(file, &p).display())) };
+            let margins = if *margins == "ambient" { "ambient" } else { "paper" };
+            config::set_many(&p, &[("wallpaper", picture), ("margins", Some(format!("\"{margins}\""))), ("title_tint", Some(util::float(tint.clamp(0.0, 1.0))))]);
+        }
         ["wallpaper", "none", ..] => config::set_value(&p, "wallpaper", None),
         ["wallpaper", file, ..] => {
             let path = expand(file, &p);
@@ -116,6 +128,52 @@ fn expand(file: &str, p: &Paths) -> std::path::PathBuf {
         }
     }
     out
+}
+
+/// What the settings' wallpaper page shows: the wallpaper, the margins and the title block's tint as
+/// set, and the pictures to choose from: ~/Pictures/Wallpapers (a folder for them, so the screenshots in
+/// ~/Pictures stay out), the system's backgrounds, and the current picture wherever it is.
+fn wallpaper_json(p: &Paths) {
+    let cfg = config::load(p);
+    let current = cfg.get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).map(|s| expand(s, p));
+    let folder = p.home.join("Pictures/Wallpapers");
+    let picture = |f: &std::path::Path| f.is_file() && f.extension().and_then(|e| e.to_str()).is_some_and(|e| ["jpg", "jpeg", "png", "webp"].contains(&e.to_lowercase().as_str()));
+    let list = |d: &std::path::Path, depth: usize| {
+        let mut out = Vec::new();
+        let mut dirs = vec![(d.to_path_buf(), 0)];
+        while let Some((d, n)) = dirs.pop() {
+            let Ok(entries) = std::fs::read_dir(&d) else { continue };
+            for e in entries.flatten() {
+                let f = e.path();
+                if f.is_dir() && n < depth {
+                    dirs.push((f, n + 1));
+                } else if picture(&f) {
+                    out.push(f);
+                }
+            }
+        }
+        out.sort();
+        out
+    };
+    let mut pictures = list(&folder, 1);
+    pictures.extend(list(std::path::Path::new("/usr/share/backgrounds"), 1));
+    if let Some(c) = current.as_ref().filter(|c| c.is_file() && !pictures.contains(c)) {
+        pictures.insert(0, c.clone());
+    }
+    pictures.truncate(60);
+    let tint = cfg.get("title_tint").and_then(Value::as_f64).unwrap_or(0.7);
+    let margins = if cfg.get("margins").and_then(Value::as_str) == Some("ambient") { "ambient" } else { "paper" };
+    println!(
+        "{}",
+        util::dumps(&json!({
+            "current": current.as_ref().map(|c| c.display().to_string()).unwrap_or_default(),
+            "exists": current.as_ref().is_some_and(|c| c.is_file()),
+            "margins": margins,
+            "tint": tint,
+            "folder": "~/Pictures/Wallpapers",
+            "pictures": pictures.iter().map(|f| f.display().to_string()).collect::<Vec<_>>(),
+        }))
+    );
 }
 
 /// The shell, in the foreground: the session's service keeps it running.

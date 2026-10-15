@@ -98,15 +98,36 @@ fn username() -> String {
 /// Write `key = "value"` (or remove the key, with None) into config.toml, keeping the rest: the first
 /// line starting `key =` is replaced or removed; a new top-level key goes before the first [table].
 pub fn set_value(p: &Paths, key: &str, value: Option<&str>) {
-    let text = util::read(&p.config);
+    set_many(p, &[(key, value.map(|v| format!("\"{v}\"")))]);
+}
+
+/// Several top-level keys at once, each `key = raw` (raw: the TOML value as written, a quoted string or
+/// a number), or removed with None; one write, so the compositor reads the file once.
+pub fn set_many(p: &Paths, values: &[(&str, Option<String>)]) {
+    let mut text = util::read(&p.config);
+    for (key, raw) in values {
+        text = set_line(&text, key, raw.as_deref());
+    }
+    let text = regex::Regex::new(r"\n{3,}").unwrap().replace_all(&text, "\n\n").into_owned();
+    write_config(p, &text);
+}
+
+fn set_line(text: &str, key: &str, raw: Option<&str>) -> String {
+    let text = text.to_string();
     let k = regex::escape(key);
     let any = regex::Regex::new(&format!(r"(?m)^{k}\s*=.*\n?")).unwrap();
-    let text = match value {
+    match raw {
         None => any.replacen(&text, 1, "").into_owned(),
         Some(v) => {
-            let line = format!("{key} = \"{v}\"");
+            let line = format!("{key} = {v}");
             if any.is_match(&text) {
-                regex::Regex::new(&format!(r"(?m)^{k}\s*=.*$")).unwrap().replacen(&text, 1, regex::NoExpand(&line)).into_owned()
+                // a comment after the value stays
+                let re = regex::Regex::new(&format!(r#"(?m)^{k}\s*=\s*(?:"(?:[^"\\]|\\.)*"|[^#\n]*?)(\s+#.*)?$"#)).unwrap();
+                re.replacen(&text, 1, |c: &regex::Captures| format!("{line}{}", c.get(1).map_or("", |m| m.as_str()))).into_owned()
+            } else if let Some(c) = regex::Regex::new(&format!(r#"(?m)^#\s*{k}\s*=\s*(?:"(?:[^"\\]|\\.)*"|[^#\n]*?)(\s+#.*)?$"#)).unwrap().captures(&text) {
+                // a commented-out example of the key (config.toml lists them all): set in its place
+                let m = c.get(0).unwrap();
+                format!("{}{line}{}{}", &text[..m.start()], c.get(1).map_or("", |m| m.as_str()), &text[m.end()..])
             } else {
                 let table = regex::Regex::new(r"(?m)^\[").unwrap().find(&text).map(|m| m.start());
                 let at = table.unwrap_or(text.len());
@@ -121,9 +142,7 @@ pub fn set_value(p: &Paths, key: &str, value: Option<&str>) {
                 out
             }
         }
-    };
-    let text = regex::Regex::new(r"\n{3,}").unwrap().replace_all(&text, "\n\n").into_owned();
-    write_config(p, &text);
+    }
 }
 
 /// Write `theme = "name"` into config.toml, keeping everything else in the file.

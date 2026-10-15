@@ -228,14 +228,21 @@ the focused workspace and window lit in amber, warnings in red).
 Super+T opens the settings on the board: the inside of the frame is cleared (with a wallpaper, the
 picture blurred), and the colour scheme lies on it. Along the top, the themes as drawings, each lettered
 with its main contrasts (or with how many of its words fall below 4.5:1); below them, a scheme built
-from nine choices: paper light or dark, its tone, the accent, windows dark or light and their shade
+from eight choices: paper light or dark, its tone, the accent, windows dark or light and their shade
 (from the deepest to a mid grey: deep, dark, charcoal, slate; on the light side white, paper, mist,
-grey), the terminal's background (as the windows, or tinted), its shade and its text, and the contrast (about 7:1, or 10:1 and more). The choices pick hues; the lightnesses are worked out so
+grey), the terminal's background (as the windows, or one of nine mid tones: charcoal, graphite, slate,
+petrol, moss, olive, umber, wine, plum) and its text, and the contrast (about 7:1, or 10:1 and more). The choices pick hues; the lightnesses are worked out so
 that every word, the 16 terminal colours included, reads at 4.5:1 or more and dimmed text at 3:1. The
 contrast between text and background carries legibility, its hue does not. The sheet previews what is
 picked; Enter keeps it (a built scheme is written to `[scheme]` in config.toml and to the theme
 `custom`), Escape goes back. R twice on your copy of a shipped theme brings the shipped one back
 (`draftpaper theme revert NAME`). `draftpaper theme check` holds any theme to the same rules.
+
+Tab (or a click on the page's cell) turns to the wallpaper: the pictures as drawings (put yours in
+`~/Pictures/Wallpapers`; the system's backgrounds and the current picture are there too, and none
+leaves the paper), the margin cells in the theme's paper or in the picture's colours (ambient), and
+how much paper tints the picture under the title block (40 to 85%). Each change shows on the sheet
+at once; Enter keeps the page's changes along with the colour scheme's, Escape puts both back.
 `draftpaper theme` lists them and `draftpaper theme <name>`
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'

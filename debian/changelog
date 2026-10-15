@@ -9,6 +9,12 @@ draftpaper (0.3.0) unstable; urgency=medium
     under it: a surface that reads keys takes it, else it stays where it
     was. The settings lost every second click to it (Qt cancelled the
     press as the keyboard left); they now also act on the press.
+  * Settings: a wallpaper page (Tab): the pictures as drawings
+    (~/Pictures/Wallpapers, the system's backgrounds, none), the margin
+    cells in paper or the picture's colours, the title block's tint; each
+    change shown at once, Escape putting back what there was. Setting a key
+    keeps the comment after it, and takes the place of its commented-out
+    example in config.toml.
   * Settings: one terminal row of mid tones (charcoal, graphite, slate,
     petrol, moss, olive, umber, wine, plum, or as the windows), in place
     of near-black tints and a separate terminal shade; the settings take a
