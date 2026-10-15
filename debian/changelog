@@ -12,6 +12,13 @@ draftpaper (0.3.0) unstable; urgency=medium
     laptop panel's rotation.
   * A window of one fixed size (swappy's) floats, centred at its size,
     rather than leaving empty paper in a tile.
+  * Window rules ([[rule]] in config.toml): match a window's app id or
+    title (patterns) or a browser's picture-in-picture, and float it, keep
+    it on every workspace (sticky), place it centred or in the corner, or
+    open it without the focus. Built in: picture-in-picture (Meet's, a
+    video's) floats in the bottom-right corner, sticky, leaving the focus.
+  * A window whose maximum size is below its tile floats rather than
+    leaving paper around it.
   * A floating window's border shows over the windows under it (it was
     drawn behind every window, so only tiles, bordered in the gutters,
     showed theirs).

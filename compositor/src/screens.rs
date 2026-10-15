@@ -118,7 +118,7 @@ impl Draftpaper {
         // the windows leaving the screen, where they are, to slide them out
         let outgoing: Vec<(Window, Point<i32, Logical>)> = if self.screens[i].current != k {
             let ws = self.screens[i].workspace();
-            ws.layout.windows().chain(ws.floating.iter()).filter_map(|w| Some((w.clone(), self.space.element_location(w)?))).collect()
+            ws.layout.windows().chain(ws.floating.iter().filter(|w| !crate::rules::is_sticky(w))).filter_map(|w| Some((w.clone(), self.space.element_location(w)?))).collect()
         } else {
             Vec::new()
         };
@@ -126,6 +126,12 @@ impl Draftpaper {
         let s = &mut self.screens[i];
         let old = s.current;
         s.current = k;
+        // sticky windows (picture-in-picture) come along to the workspace shown
+        if old != k {
+            let sticky: Vec<Window> = s.workspaces[old].floating.iter().filter(|w| crate::rules::is_sticky(w)).cloned().collect();
+            s.workspaces[old].floating.retain(|w| !crate::rules::is_sticky(w));
+            s.workspaces[k].floating.extend(sticky);
+        }
         // an empty workspace that is left behind goes away
         if old != k && s.workspaces[old].is_empty() {
             s.workspaces.remove(old);

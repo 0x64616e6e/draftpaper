@@ -18,6 +18,8 @@ thiserror = "2"
 xcursor = "0.3"
 png = "0.17"
 serde_json = "1"
+# window rules: app id and title patterns ([[rule]] in config.toml)
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
 # the wallpaper: decoding, cropping, the ambient colours and the frosted title block
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
 # signals: SIGTERM ends the session cleanly, SIGUSR1 takes a screenshot

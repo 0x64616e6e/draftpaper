@@ -19,6 +19,7 @@ mod animation;
 mod screencopy;
 mod output_management;
 mod wallpaper;
+mod rules;
 mod tty;
 mod winit;
 

@@ -17,6 +17,10 @@
 //!     [layout]
 //!     new_window = "column"            # a third window: a new column, or "row" (under the focused one)
 //!
+//!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,
+//!     title = "^Picture"               # sticky, place = "centre"|"corner", focus
+//!     float = true
+//!
 //!     [bindings]                       # key = action; "none" removes a default
 //!     "Mod+Return" = "spawn foot"      # Mod is Super on the TTY, Alt when nested
 //!     "Mod+d" = "spawn fuzzel"
@@ -98,6 +102,8 @@ pub struct Config {
     pub animations: Option<std::time::Duration>,
     /// where a third window goes: a new column, or a row in the focused column (layout.rs)
     pub new_window: crate::layout::NewWindow,
+    /// window rules: the built-in ones, then config.toml's [[rule]]s (rules.rs)
+    pub rules: Vec<crate::rules::Rule>,
 }
 
 pub fn path() -> PathBuf {
@@ -263,7 +269,9 @@ impl Config {
             Some("row") => crate::layout::NewWindow::Row,
             Some(other) => return Err(format!("[layout] new_window = \"{other}\": \"column\" or \"row\"")),
         };
-        Ok(Config { input, bindings, animations, new_window })
+        let mut rules = crate::rules::defaults();
+        rules.extend(crate::rules::parse(table)?);
+        Ok(Config { input, bindings, animations, new_window, rules })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

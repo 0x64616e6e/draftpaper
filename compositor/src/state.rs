@@ -356,16 +356,23 @@ impl Draftpaper {
                 }
             }
             s.layout().arrange(&mut self.space, &grid, ws.fullscreen.as_ref());
-            // dialogs: centred inside the frame at their own size, above the tiles
+            // floating windows, above the tiles, at their own size: centred inside the frame, or (a rule's
+            // "corner": picture-in-picture) in its bottom-right corner, above the title block
             for window in &ws.floating {
                 let size = window.geometry().size;
                 let a = s.grid.area;
+                let loc = if crate::rules::is_cornered(window) {
+                    let gap = (4.0 * s.mm).round() as i32;
+                    let block = (36.0 * s.mm).round() as i32;
+                    let x = (a.loc.x + a.size.w - size.w - gap).max(a.loc.x);
+                    let y = (a.loc.y + a.size.h - block - gap - size.h).max(a.loc.y);
+                    (x, y)
+                } else {
+                    (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2)
+                };
                 if let Some(x11) = window.x11_surface() {
-                    let loc = (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2);
                     let _ = x11.configure(smithay::utils::Rectangle::new(loc.into(), size));
                 }
-                let a = s.grid.area;
-                let loc = (a.loc.x + (a.size.w - size.w).max(0) / 2, a.loc.y + (a.size.h - size.h).max(0) / 2);
                 self.space.map_element(window.clone(), loc, false);
                 self.space.raise_element(window, false);
             }
@@ -438,7 +445,7 @@ impl Draftpaper {
     }
 
     /// The first window, mapped, on a workspace not shown or parked, for which `f` holds.
-    pub fn window_where(&self, f: impl Fn(&Window) -> bool) -> Option<Window> {
+    pub fn window_where(&self, mut f: impl FnMut(&Window) -> bool) -> Option<Window> {
         self.space
             .elements()
             .chain(self.screens.iter().flat_map(|s| {
@@ -496,22 +503,55 @@ impl Draftpaper {
         keyboard.set_focus(self, window.map(crate::focus::KeyboardFocusTarget::Window), serial);
     }
 
-    /// Place a new Wayland window: a dialog (a window with a parent) floats, anything else joins the
-    /// layout (until it turns out to be of one fixed size: float_if_fixed).
+    /// Place a new Wayland window: a dialog (a window with a parent) floats, and so does one the window
+    /// rules float (rules.rs: picture-in-picture, by default, in the corner and on every workspace);
+    /// anything else joins the layout (until it turns out not to fit a tile: float_if_fixed).
     pub fn place(&mut self, window: Window) {
         let dialog = window.toplevel().is_some_and(|t| t.parent().is_some());
-        self.place_as(window, dialog);
+        let d = self.decide(&window);
+        self.place_as(window, dialog || d.float, d);
     }
 
-    /// A tiled Wayland window of one fixed size (its smallest and largest the same, as swappy's) floats,
-    /// centred at that size: a tile would only leave empty paper around it. Clients say so with their
-    /// first frame, after the window was placed, so this runs on every commit.
+    /// What the window rules decide for `window`, as it is now (rules.rs).
+    pub fn decide(&self, window: &Window) -> crate::rules::Decision {
+        let (app_id, title, _) = crate::ipc::names(window);
+        let bounded = window.toplevel().is_some_and(|t| {
+            smithay::wayland::compositor::with_states(t.wl_surface(), |states| {
+                let mut cached = states.cached_state.get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
+                let max = cached.current().max_size;
+                max.w > 0 || max.h > 0
+            })
+        });
+        // the titles of the other windows of the same client (the browser's own, for a picture-in-picture)
+        use smithay::{reexports::wayland_server::Resource, wayland::seat::WaylandFocus};
+        let client = window.wl_surface().and_then(|s| s.client()).map(|c| c.id());
+        let mut siblings = Vec::new();
+        if client.is_some() {
+            self.window_where(|w| {
+                if w != window && w.wl_surface().and_then(|s| s.client()).map(|c| c.id()) == client {
+                    siblings.push(crate::ipc::names(w).1);
+                }
+                false
+            });
+        }
+        let pip = window.toplevel().is_some() && crate::rules::looks_like_pip(&title, bounded, &siblings);
+        crate::rules::decide(&self.config.rules, &crate::rules::Facts { app_id, title, pip })
+    }
+
+    /// A tiled Wayland window that cannot fill its tile floats, centred at its own size: one of one fixed
+    /// size (its smallest and largest the same, as swappy's), or one whose largest is smaller than the
+    /// tile (a tile would only leave empty paper around it). Clients say so with their first frame,
+    /// after the window was placed, so this runs on every commit.
     pub fn float_if_fixed(&mut self, window: &Window) {
         let Some(t) = window.toplevel() else { return };
+        let tile = t.with_pending_state(|state| state.size);
         let fixed = smithay::wayland::compositor::with_states(t.wl_surface(), |states| {
             let mut cached = states.cached_state.get::<smithay::wayland::shell::xdg::SurfaceCachedState>();
             let size = cached.current();
-            size.min_size.w > 0 && size.min_size.h > 0 && size.min_size == size.max_size
+            let (min, max) = (size.min_size, size.max_size);
+            let one_size = min.w > 0 && min.h > 0 && min == max;
+            let too_small = tile.is_some_and(|tile| (max.w > 0 && max.w < tile.w) || (max.h > 0 && max.h < tile.h));
+            one_size || too_small
         });
         if !fixed {
             return;
@@ -527,9 +567,16 @@ impl Draftpaper {
         self.relayout();
     }
 
-    /// Place a new window, floating (`dialog`) or in the layout of the active screen.
-    pub fn place_as(&mut self, window: Window, dialog: bool) {
+    /// Place a new window, floating (`dialog`) or in the layout of the active screen, as the window
+    /// rules decided (`d`: sticky, the corner, the keyboard or not).
+    pub fn place_as(&mut self, window: Window, dialog: bool, d: crate::rules::Decision) {
         let mode = self.config.new_window;
+        if dialog && d.sticky {
+            window.user_data().insert_if_missing(|| crate::rules::Sticky);
+        }
+        if dialog && d.place == crate::rules::Place::Corner {
+            window.user_data().insert_if_missing(|| crate::rules::Cornered);
+        }
         if let Some(screen) = self.active_screen() {
             let grid = screen.grid;
             if dialog {
@@ -538,7 +585,9 @@ impl Draftpaper {
                 screen.layout_mut().add(window.clone(), &grid, mode);
             }
             self.relayout();
-            self.focus(Some(window));
+            if d.focus {
+                self.focus(Some(window));
+            }
         } else {
             self.space.map_element(window, (0, 0), false);
         }

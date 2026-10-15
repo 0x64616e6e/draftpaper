@@ -402,7 +402,7 @@ fn margin_ink(output: &smithay::output::Output) -> Value {
 }
 
 /// app_id (X11: the class), title, and whether it is an X11 window.
-fn names(window: &Window) -> (String, String, bool) {
+pub fn names(window: &Window) -> (String, String, bool) {
     match window.underlying_surface() {
         WindowSurface::Wayland(t) => with_states(t.wl_surface(), |states| {
             let data = states.data_map.get::<XdgToplevelSurfaceData>().map(|d| d.lock().unwrap());

@@ -132,6 +132,15 @@ focus_follows_mouse = true  # the window the pointer enters takes the focus
 new_window = "column"      # a third window and on: a new column beside the focused one, or "row":
                            # a new row under the focused window (the first two are side by side)
 
+[[rule]]                   # window rules, in order, later ones winning; match on any of:
+app_id = "^pavucontrol$"   #   a pattern for the app id (X11: the class)
+title = "Volume"           #   a pattern for the title
+                           #   pip = true: a browser's picture-in-picture window
+float = true               # then: float (at its own size, above the tiles)
+sticky = false             #   follow you to every workspace of its screen
+place = "centre"           #   or "corner": the frame's bottom-right, above the title block
+focus = true               #   false: open without taking the keyboard
+
 [animations]
 enabled = true             # false: every change at once
 duration_ms = 220

@@ -20,7 +20,10 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Ctrl+Alt+F1 … F12 | Virtual terminal |
 
 The first two windows sit side by side; a third opens a new column, or a row under the focused one
-(`[layout] new_window`). Windows of one fixed size, and dialogs, float centred.
+(`[layout] new_window`). Dialogs, and windows that cannot fill a tile (one fixed size, or a maximum
+below the tile), float centred. A browser's picture-in-picture (Meet, videos) floats in the bottom-right
+corner, follows you from workspace to workspace and leaves the focus where it was. `[[rule]]` in
+config.toml floats, pins or places other windows.
 
 ## Parking (the side margins)
 
@@ -110,6 +113,7 @@ windows, neutral, tone, blue, green, warm, plum), terminal text, contrast
 Top level: `theme`, `margin`, `glyphs`, `wallpaper`, `margins`, `title_tint`. Tables: `[title]`
 (project, drawn), `[[cell]]` (cells of your own), `[alerts]`, `[idle]`, `[apps]` (theme, skip,
 firefox_text, firefox_ui_pt), `[hooks]` (theme), `[commands]` (screenshot), `[input]` (keyboard layout,
-variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[layout]` (new_window),
+variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[layout]` (new_window), `[[rule]]` (window rules:
+app_id, title, pip; float, sticky, place, focus),
 `[animations]`, `[outputs.NAME]` (scale, position, mm), `[bindings]`. Displays are matched by connector
 name (`eDP-1`, `DP-3`); one without settings gets its preferred mode at scale 1, right of the others.

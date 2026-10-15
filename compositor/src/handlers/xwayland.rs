@@ -135,7 +135,9 @@ impl XwmHandler for Draftpaper {
         let dialog = surface.is_transient_for().is_some()
             || fixed
             || matches!(surface.window_type(), Some(WmWindowType::Dialog | WmWindowType::Utility | WmWindowType::Splash | WmWindowType::Toolbar));
-        self.place_as(Window::new_x11_window(surface), dialog);
+        let window = Window::new_x11_window(surface);
+        let d = self.decide(&window);
+        self.place_as(window, dialog || d.float, d);
     }
 
     fn mapped_override_redirect_window(&mut self, _xwm: XwmId, surface: X11Surface) {
