@@ -12,8 +12,12 @@ lightness looks like the same step whatever the hue.
     tone      greige sand clay sage teal blueprint slate graphite
     accent    amber orange red rose violet blue teal green
     windows   dark | light            the applications: terminals, GTK, Qt, Firefox
+    shade     deep dark charcoal slate    the windows' lightness on their side: from the deepest to a
+                                      mid grey (light windows: white paper mist grey)
     terminal  windows neutral tone blue green warm plum    the terminal's background, on the windows'
-                                      side (dark or light): as the windows, or deeper and tinted
+                                      side (dark or light): as the windows, or tinted
+    terminal_shade  auto deep dark charcoal slate    its lightness: auto, as the windows (a tinted one a
+                                      step deeper); or a shade of its own
     text      neutral cream lime amber ice    the terminal's text
     contrast  standard | high         main text at about 7:1 (softer), or 10:1 and more
 
@@ -35,12 +39,18 @@ TEXTS = {"neutral": None, "cream": (85, 0.03), "lime": (125, 0.08), "amber": (75
 # the terminal's background: None, as the windows; "tone", the paper's hue; else (hue, chroma)
 TERMINALS = {"windows": None, "neutral": (0, 0.0), "tone": "tone", "blue": (255, 0.045), "green": (155, 0.035),
              "warm": (60, 0.03), "plum": (320, 0.035)}
+# the lightness (OKLCH L) of each shade, on the dark side and on the light; "dark" is the windows' as
+# they were before shades were a choice
+SHADES = {"deep": (0.16, 0.995), "dark": (0.22, 0.975), "charcoal": (0.30, 0.92), "slate": (0.38, 0.86)}
+# what each shade is called on the light side
+LIGHT_NAMES = {"deep": "white", "dark": "paper", "charcoal": "mist", "slate": "grey"}
 CHOICES = {
     "paper": ["light", "dark"], "tone": list(TONES), "accent": list(ACCENTS), "windows": ["dark", "light"],
-    "terminal": list(TERMINALS), "text": list(TEXTS), "contrast": ["standard", "high"],
+    "shade": list(SHADES), "terminal": list(TERMINALS), "terminal_shade": ["auto"] + list(SHADES),
+    "text": list(TEXTS), "contrast": ["standard", "high"],
 }
-DEFAULT = {"paper": "light", "tone": "greige", "accent": "amber", "windows": "dark", "terminal": "windows", "text": "cream",
-           "contrast": "standard"}
+DEFAULT = {"paper": "light", "tone": "greige", "accent": "amber", "windows": "dark", "shade": "dark", "terminal": "windows",
+           "terminal_shade": "auto", "text": "cream", "contrast": "standard"}
 MAIN = {"standard": 7.0, "high": 10.0}
 WORDS, DIM, BORDER = 4.5, 3.0, 3.0
 
@@ -155,11 +165,14 @@ def build(choices):
 
     # the windows
     nh, nc = th, min(tc, 0.012)
+    # the windows' lightness: the shade chosen, the surfaces stepping away from it (lighter on dark
+    # windows, darker on light ones)
+    wL = SHADES[ch["shade"]][0 if dark_windows else 1]
     if dark_windows:
-        bg, bg_alt, surface, surface_alt, border = (oklch(L, nc, nh) for L in (0.22, 0.245, 0.27, 0.31, 0.42))
+        bg, bg_alt, surface, surface_alt, border = (oklch(wL + d, nc, nh) for d in (0, 0.025, 0.05, 0.09, 0.20))
         fg_pref, dim_pref, muted_pref = 0.93, 0.80, 0.68
     else:
-        bg, bg_alt, surface, surface_alt, border = (oklch(L, nc, nh) for L in (0.975, 0.95, 0.925, 0.89, 0.76))
+        bg, bg_alt, surface, surface_alt, border = (oklch(wL - d, nc, nh) for d in (0, 0.025, 0.05, 0.085, 0.215))
         fg_pref, dim_pref, muted_pref = 0.22, 0.38, 0.50
     texts = [(bg, main), (bg_alt, main), (surface, WORDS)]
     # standard: the main text only as far from its background as 7:1 takes it (softer); high: near the
@@ -170,13 +183,19 @@ def build(choices):
     fg_dim = solve(nh, nc, dim_pref, [(bg, WORDS), (surface, WORDS)])
     fg_muted = solve(nh, nc, muted_pref, [(bg, DIM), (surface, DIM)])
     # the terminal's background: as the windows', or a deeper one of its own, tinted; on the same side
+    # its lightness: auto follows the windows (a tinted terminal a step deeper, as before shades were a
+    # choice), or a shade of its own
     tb = TERMINALS[ch["terminal"]]
-    if tb is None:
-        term_bg, term_bg_alt = bg, surface
-        tbh, tbc, tb_L = nh, nc, bg_L
+    tbh, tbc = (nh, nc) if tb is None else (th, min(tc, 0.035)) if tb == "tone" else tb
+    if ch["terminal_shade"] != "auto":
+        tb_L = SHADES[ch["terminal_shade"]][0 if dark_windows else 1]
+    elif tb is None:
+        tb_L = bg_L
     else:
-        tbh, tbc = (th, min(tc, 0.035)) if tb == "tone" else tb
-        tb_L = 0.18 if dark_windows else 0.985
+        tb_L = wL - 0.04 if dark_windows else min(1.0, wL + 0.01)
+    if tb is None and tb_L == bg_L:
+        term_bg, term_bg_alt = bg, surface
+    else:
         term_bg, term_bg_alt = oklch(tb_L, tbc, tbh), oklch(tb_L + (0.05 if dark_windows else -0.04), tbc, tbh)
     th_text = TEXTS[ch["text"]] or (nh, nc)
     term_fg = solve(th_text[0], th_text[1], tb_L if soft else fg_pref, [(term_bg, main), (term_bg_alt, WORDS)])

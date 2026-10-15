@@ -5,8 +5,8 @@
 //
 // The colour scheme: the themes as drawings along the top (Desktop.qml), each lettered with its main
 // contrasts, or with how many of its words fall below 4.5:1; and below them the builder, six rows of
-// discrete choices (paper, tone, accent, windows, the terminal's background and text, contrast) from
-// which `draftpaper scheme`
+// discrete choices (paper, tone, accent, windows and their shade, the terminal's background, shade and
+// text, contrast) from which `draftpaper scheme`
 // derives a whole theme whose every word is readable (scheme.py). Building shapes the last drawing,
 // Custom. Whatever is picked, a drawing or a choice, the sheet previews a moment later; Enter keeps it
 // (the applications too: a theme switch, or `draftpaper scheme keep`, which writes [scheme] and the
@@ -38,15 +38,15 @@ PanelWindow {
     property var custom: null           // the scheme the choices build (`draftpaper scheme json`)
     property var options: ({})         // each choice's values, with their colours and contrasts
     property var choices: ({})
-    property int row: 0                 // 0: the drawings; 1 to 7: the builder's rows
+    property int row: 0                 // 0: the drawings; 1 and on: the builder's rows
     property int card: 0                // the drawing picked
     property string original: ""        // the theme when it opened: Escape goes back to it
     property string shown: ""           // the theme the sheet previews
     property string wallpaper: ""
     property bool reverting: false
-    readonly property var rows: ["paper", "tone", "accent", "windows", "terminal", "text", "contrast"]
-    readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", terminal: "TERMINAL",
-                                       text: "TERMINAL TEXT", contrast: "CONTRAST" })
+    readonly property var rows: ["paper", "tone", "accent", "windows", "shade", "terminal", "terminal_shade", "text", "contrast"]
+    readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", shade: "WINDOWS SHADE",
+                                       terminal: "TERMINAL", terminal_shade: "TERMINAL SHADE", text: "TERMINAL TEXT", contrast: "CONTRAST" })
     // the drawings: the themes, then the one the choices build
     readonly property var cards: custom ? themes.concat([custom]) : themes
     readonly property var picked: cards[card] || null
@@ -218,7 +218,9 @@ PanelWindow {
     readonly property real cardGap: 5 * mm
     readonly property real cardW: Math.min(70 * mm, (cw - (cards.length - 1) * cardGap) / Math.max(1, cards.length))
     readonly property real cardH: cardW * height / Math.max(1, width)
-    readonly property real rowH: 12 * mm
+    // the builder's rows: 12 mm each, less when they would run past the frame (the laptop's panel)
+    readonly property real builderY: board.inY + gutter + 6 * mm + cardH + 16 * mm
+    readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (board.inY + board.inH - gutter - builderY - 6 * mm) / rows.length))
     readonly property real cellW: Math.min(24 * mm, (cw - 34 * mm) / 8)
 
     Item {
@@ -318,7 +320,7 @@ PanelWindow {
         Item {
             id: builder
             x: settings.x0
-            y: board.inY + settings.gutter + 6 * settings.mm + settings.cardH + 16 * settings.mm
+            y: settings.builderY
             width: settings.cw
             Text {
                 text: "BUILD A SCHEME · the last drawing, every word readable"
@@ -370,7 +372,7 @@ PanelWindow {
                             }
                             Text {
                                 anchors { left: parent.left; top: sw.bottom; topMargin: 0.6 * settings.mm }
-                                text: o.modelData.value
+                                text: o.modelData.label || o.modelData.value
                                 font.family: Fonts.mono; font.pixelSize: settings.font * 0.75; font.bold: o.chosen
                                 color: o.chosen ? settings.ink : settings.inkA(0.7)
                             }

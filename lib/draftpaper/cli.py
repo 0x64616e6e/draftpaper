@@ -15,7 +15,8 @@
                               the themes against the contrast rules (words 4.5:1, dimmed text 3:1)
   draftpaper scheme options|json|preview|keep [choice=value ...]
                               a colour scheme built from choices (the settings tool): paper, tone,
-                              accent, windows, terminal, text, contrast; keep writes [scheme] and the
+                              accent, windows, shade, terminal, terminal_shade, text, contrast; keep
+                              writes [scheme] and the
                               "custom" theme
   draftpaper theme revert <name>
                               a shipped theme as shipped again: your copy of it removed
@@ -147,11 +148,15 @@ def schemes(args):
             for v in values:
                 t = scheme.build({**choices, k: v})
                 colour = (t[show] if show else t["windows"]["focused"] if k == "accent"
-                          else t["apps"]["bg"] if k == "windows" else t["apps"]["term_fg"])     # text, terminal: Aa on it
+                          else t["apps"]["bg"] if k in ("windows", "shade") else t["apps"]["term_fg"])  # the terminal's: Aa on it
                 f = scheme.figures(t)
-                ratio = f["ink"] if k in ("paper", "tone") else f["terminal"] if k in ("text", "terminal", "contrast") else \
+                ratio = f["ink"] if k in ("paper", "tone") else f["terminal"] if k in ("text", "terminal", "terminal_shade", "contrast") else \
                     round(scheme.contrast(t["windows"]["focused"], t["apps"]["bg"]), 1) if k == "accent" else f["text"]
-                opts.append({"value": v, "colour": colour, "on": t["apps"]["term_bg"] if k in ("text", "terminal") else None, "ratio": ratio})
+                # a shade is called by its light-side name when the windows are light
+                light = t["choices"]["windows"] == "light"
+                label = scheme.LIGHT_NAMES.get(v, v) if light and k in ("shade", "terminal_shade") else v
+                opts.append({"value": v, "label": label, "colour": colour, "ratio": ratio,
+                             "on": t["apps"]["term_bg"] if k in ("text", "terminal", "terminal_shade") else None})
             out[k] = opts
         print(json.dumps({"choices": scheme.build(choices)["choices"], "options": out}))
         return
