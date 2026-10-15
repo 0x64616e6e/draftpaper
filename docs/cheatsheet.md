@@ -45,28 +45,19 @@ The first two windows sit side by side; a third opens a new column, or a row und
 The displays turn off after 15 minutes idle (`[idle] screens_off`); any input, a key, the touchpad,
 the touchscreen, wakes them.
 
-## Themes
+## Settings (the colour scheme)
 
 | Keys | |
 |---|---|
-| Mod+t | The theme picker: the themes as drawings on the board |
-| ← → ↑ ↓ · h j k l · wheel | Browse (the sheet previews the picked one) |
-| Enter · click the picked one | Keep it (the applications too) |
+| Mod+t · click the theme name | Open the settings on the board |
+| ↑ ↓ · k j | Between the drawings (the themes) and the builder's rows |
+| ← → · h l · wheel | Along them: a theme, or a choice (the sheet previews it) |
+| Enter · click the picked drawing | Keep it (the applications too; a built scheme becomes the theme `custom`) |
 | Esc · click elsewhere | Back to the theme you had |
-| E | Edit the picked theme |
-| Mod+Shift+t | The theme editor on the current theme (again: close it, dropping the changes) |
+| R twice | Your copy of a shipped theme back to the shipped one |
 
-In the theme editor (E in the picker, or `draftpaper theme edit [NAME]`):
-
-| Keys | |
-|---|---|
-| ↑ ↓ · k j | Pick a value |
-| ← → · h l | Adjust it; with Shift, ten times as far |
-| Tab · Shift+Tab | Hue, saturation, lightness |
-| # | Type the colour as hex (Enter uses it, Esc leaves it) |
-| Enter | Save your copy (`~/.config/draftpaper/themes/NAME.toml`) and switch to it |
-| Esc | Drop the changes, back to where you came from |
-| R twice | A shipped theme as shipped again (your copy removed) |
+The builder's rows: paper (light, dark), tone, accent, windows (dark, light), terminal text, contrast
+(standard about 7:1, high 10:1 and more). Every scheme it builds keeps every word at 4.5:1 or more.
 
 ## The sheet's margins and title block
 
@@ -78,7 +69,7 @@ In the theme editor (E in the picker, or `draftpaper theme edit [NAME]`):
 | Tray icons (top right) | The application's own; right click: its menu |
 | BT (bottom left) | blueman-manager |
 | SHOT (bottom right) | A region into swappy (`[commands] screenshot`) |
-| The theme name (bottom right) | Left: the picker; right: the next theme |
+| The theme name (bottom right) | Left: the settings; right: the next theme |
 | PROFILE (title block) | Cycle power-saver, balanced, performance |
 | A cell of your own | Its `left` / `right` commands |
 
@@ -89,9 +80,10 @@ In the theme editor (E in the picker, or `draftpaper theme edit [NAME]`):
 | `draftpaper theme [list]` | The themes, the current one marked |
 | `draftpaper theme NAME [--preview]` | Switch (the sheet only, with `--preview`) |
 | `draftpaper theme next` | The next theme |
-| `draftpaper theme edit [NAME]` | The theme editor |
+| `draftpaper theme check [NAME]` | Themes against the contrast rules |
+| `draftpaper scheme options\|json\|preview\|keep [choice=value]` | A scheme built from choices, as the settings build it |
 | `draftpaper theme revert NAME` | A shipped theme as shipped again |
-| `draftpaper picker` | Open or close the theme picker |
+| `draftpaper settings` | Open or close the settings |
 | `draftpaper wallpaper [FILE \| none]` | A picture in the frame, or none |
 | `draftpaper margins paper\|ambient` | With a wallpaper: the margins in paper, or the picture's colours |
 | `draftpaper lock-on-sleep [on\|off\|toggle]` | Lock before every suspend |

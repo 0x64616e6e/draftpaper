@@ -12,16 +12,15 @@ draftpaper (0.3.0) unstable; urgency=medium
     laptop panel's rotation.
   * A window of one fixed size (swappy's) floats, centred at its size,
     rather than leaving empty paper in a tile.
-  * The theme picker lays the themes out as drawings on the board: the
-    inside of the frame cleared to the sheet's paper (with a wallpaper, the
-    picture blurred), all the same size, the picked one outlined in heavier
-    ink; the keys are lettered in the top margin.
-  * A theme editor on the same board (Mod+Shift+t, draftpaper theme edit,
-    or E in the picker): the sheet's colours and shading, the window
-    borders, and the terminal's colours and ANSI palette, on ruled scales
-    or as hex, the sheet previewed live and the terminals restyled on
-    saving; saving writes your own copy, which shadows a shipped theme
-    until draftpaper theme revert.
+  * Settings on the board (Mod+t, draftpaper settings; it replaces the
+    theme picker): the inside of the frame cleared to the sheet's paper
+    (with a wallpaper, the picture blurred), the themes as drawings with
+    their contrasts, and a colour scheme built from six choices whose
+    lightnesses are solved so that every word reads at 4.5:1 or more
+    (#36); a built scheme is kept in [scheme] and the theme "custom".
+  * draftpaper theme check: themes against the contrast rules, run by
+    make check on the shipped ones. Soft Glow's sheet ink darkened to
+    6.6:1, Day Panel's terminal red lightened to 4.5:1.
   * Mod+Ctrl+h/j/k/l resize, as the arrows do.
   * A cheatsheet: every key, click, command and file on one page
     (/usr/share/doc/draftpaper/cheatsheet.md).

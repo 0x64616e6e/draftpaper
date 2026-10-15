@@ -1,4 +1,4 @@
-// The board the theme picker and the theme editor lay their drawings on: the inside of the sheet's frame,
+// The board the settings (Settings.qml) lay their drawings on: the inside of the sheet's frame,
 // cleared of windows. board.frag draws it: the sheet's own paper in theme `t` (worked out over the whole
 // output, so it meets the margins without a seam), or with a wallpaper the picture blurred and tinted a
 // little with the paper so lettering reads on it. Outside the frame's interior, and over the title block
@@ -13,6 +13,7 @@ Item {
     required property var out                   // the output, from Compositor.qml
     property var t: null                        // the theme whose paper the board is
     property string wallpaper: ""               // a file URL, or "" for none
+    property bool keepBlock: true               // leave the title block showing when no window covers it
     anchors.fill: parent
 
     readonly property real mm: out ? out.px_per_mm : 4.2
@@ -72,7 +73,7 @@ Item {
         property vector4d physical: Qt.vector4d(board.width * board.dpr, board.height * board.dpr, picture.status === Image.Ready ? 1 : 0, 0)
         property vector4d interior: Qt.vector4d(board.margin * board.dpr + 2, board.margin * board.dpr + 2,
                                                 (board.width - board.margin) * board.dpr - 2, (board.height - board.margin) * board.dpr - 2)
-        property vector4d hole: board.blockCovered ? Qt.vector4d(0, 0, 0, 0)
+        property vector4d hole: board.blockCovered || !board.keepBlock ? Qt.vector4d(0, 0, 0, 0)
             : Qt.vector4d(board.block.x * board.dpr, board.block.y * board.dpr, (board.block.x + board.block.width) * board.dpr, (board.block.y + board.block.height) * board.dpr)
         property var picture: ShaderEffectSource {
             sourceItem: blurred

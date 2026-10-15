@@ -74,6 +74,25 @@ def load():
     return cfg
 
 
+def set_table(name, values):
+    """Write table [name] with `values` (strings) into config.toml, in place of the one there (its lines
+    up to the next table), or at the end; the rest of the file as it was."""
+    import re
+    paths.CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    lines = (paths.CONFIG.read_text() if paths.CONFIG.exists() else "").splitlines()
+    block = [f"[{name}]"] + [f'{k} = "{v}"' for k, v in values.items()]
+    start = next((i for i, l in enumerate(lines) if re.match(rf"\s*\[{re.escape(name)}\]\s*(#.*)?$", l)), None)
+    if start is None:
+        lines += ([""] if lines and lines[-1].strip() else []) + block
+    else:
+        end = next((i for i in range(start + 1, len(lines)) if re.match(r"\s*\[", lines[i])), len(lines))
+        # keep the blank lines and comments that lead into the next table
+        while end > start + 1 and (not lines[end - 1].strip() or lines[end - 1].lstrip().startswith("#")):
+            end -= 1
+        lines[start:end] = block
+    paths.CONFIG.write_text("\n".join(lines) + "\n")
+
+
 def set_value(key, value):
     """Write key = value (a TOML string, or removed when None) into config.toml, keeping the rest."""
     import re

@@ -63,18 +63,22 @@ the applications; with
 .B --preview
 the sheet only).
 .TP
-.BR "theme edit" " [" \fINAME\fR ]
-Open the theme editor on NAME (the current theme; Super+Shift+T): the sheet's colours and shading, the
-window borders, and the terminal's colours and ANSI palette; the sheet previews live, the terminals take
-the colours on saving. Saving writes your own copy to
-.IR ~/.config/draftpaper/themes/NAME.toml ,
-which a shipped theme of that name yields to.
+.BR "theme check" " [" \fINAME\fR ...]
+Hold themes (all of them, by default) to the contrast rules: words at least 4.5:1 against what they sit
+on, dimmed text 3:1; a focused border under 3:1 against its window is reported as advice.
+.TP
+.BR scheme " " options | json | preview | keep " [" \fICHOICE\fR = \fIVALUE\fR ...]
+A colour scheme built from choices (paper, tone, accent, windows, text, contrast), as the settings
+build it;
+.B keep
+writes the choices to [scheme] in config.toml and the theme
+.BR custom .
 .TP
 .BR "theme revert" " \fINAME\fR"
 A shipped theme as shipped again: your copy of it removed.
 .TP
-.B picker
-Open or close the theme picker (Super+T; E there edits the picked theme).
+.B settings
+Open or close the settings (Super+T): the colour scheme, from the themes or built from choices.
 .TP
 .BR wallpaper " [" \fIFILE\fR "|" none ]
 A picture in the frame, or none.

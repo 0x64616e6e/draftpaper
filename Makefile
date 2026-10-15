@@ -42,6 +42,8 @@ install: $(COMPOSITOR) $(SHADERS)
 
 check:
 	python3 -m py_compile lib/draftpaper/*.py bin/draftpaper
+	# the shipped themes against the contrast rules
+	PYTHONPATH=lib python3 -m draftpaper.scheme themes/*.toml
 	cd compositor && $(CARGO) test --release --locked
 
 clean:

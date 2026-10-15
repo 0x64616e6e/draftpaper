@@ -204,35 +204,20 @@ ShellRoot {
         n.dismiss()
     }
 
-    // the theme picker (Mod+t: `draftpaper picker`, which calls this handler; or the theme cell)
-    ThemePicker { id: themePicker; shell: root }
-    // the theme editor (`draftpaper theme edit [NAME]`, or E in the picker)
-    ThemeEditor { id: themeEditor; shell: root }
-    function editTheme(name, back, fromPicker, onScreen) { themeEditor.open(name, back, fromPicker, onScreen) }
-    function resumePicker(name) { themePicker.resume(name) }
+    // the settings (Mod+t: `draftpaper settings`, which calls this handler; or the theme cell)
+    Settings { id: settings; shell: root }
     IpcHandler {
-        target: "editor"
-        // open on a theme (the current one); open already, it closes, dropping the changes (Mod+Shift+t again)
-        function open(name: string): void {
-            if (themeEditor.visible) { themeEditor.discard(); return }
-            if (themePicker.visible) themePicker.cancel()
-            themeEditor.open(name, "", false)
-        }
-        // what the keys do, for scripts
-        function pick(n: int): void { if (themeEditor.visible) themeEditor.pickRow(themeEditor.row + n) }
-        function nudge(n: int): void { if (themeEditor.visible) themeEditor.nudge(n > 0 ? 1 : -1, Math.abs(n) >= 10) }
-        function scale(i: int): void { if (themeEditor.visible) themeEditor.scale = i }
-        function colour(hex: string): void { if (themeEditor.visible && themeEditor.isColour) { themeEditor.set(themeEditor.current, hex.toUpperCase()); themeEditor.pickRow(themeEditor.row) } }
-        function save(): void { if (themeEditor.visible) themeEditor.save() }
-        function discard(): void { if (themeEditor.visible) themeEditor.discard() }
+        target: "settings"
+        function toggle(): void { settings.visible ? settings.cancel() : settings.open() }
+        // what the keys do, for scripts: a row (0 the drawings, 1 to 6 the builder's), a step along it
+        function row(n: int): void { if (settings.visible) settings.row = Math.max(0, Math.min(settings.rows.length, n)) }
+        function step(n: int): void { if (settings.visible) settings.step(n) }
+        function keep(): void { if (settings.visible) settings.keep() }
+        function cancel(): void { if (settings.visible) settings.cancel() }
     }
-    IpcHandler {
+    IpcHandler {        // the name the theme picker had (`draftpaper picker`, an installed 0.3.0 binding)
         target: "themes"
-        function toggle(): void { if (themeEditor.visible) return; themePicker.visible ? themePicker.cancel() : themePicker.open() }
-        function step(n: int): void { if (themePicker.visible) themePicker.pick(themePicker.selected + n) }
-        function keep(): void { if (themePicker.visible) themePicker.keep() }
-        function edit(): void { if (themePicker.visible) themePicker.edit() }
-        function cancel(): void { if (themePicker.visible) themePicker.cancel() }
+        function toggle(): void { settings.visible ? settings.cancel() : settings.open() }
     }
 
     property bool volumeLit: false
@@ -334,7 +319,7 @@ ShellRoot {
                                 // the theme picker is open, its keys instead.
                     id: noticeZone
                     band: topMargin; index: -2
-                    readonly property string hint: themePicker.hint || themeEditor.hint
+                    readonly property string hint: settings.hint
                     readonly property bool here: (root.notice !== null || hint !== "") && (!edge.output || edge.output.focused)
                     readonly property int room: Math.max(1, topMargin.zones - 1 - spacesZone.span)
                     readonly property real pad: 3 * edge.mm
@@ -473,7 +458,7 @@ ShellRoot {
                         }
                         Cell {      // the theme: left, the picker; right, the next theme
                             size: edge.fontPx; text: theme.label.toUpperCase(); color: edge.ink
-                            onLeft: () => themePicker.visible ? themePicker.cancel() : themePicker.open()
+                            onLeft: () => settings.visible ? settings.cancel() : settings.open()
                             onRight: () => root.run([root.bin, "theme", "next"])
                         }
                     }

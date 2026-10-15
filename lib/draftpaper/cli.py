@@ -11,12 +11,14 @@
                               runs after a full switch
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
-  draftpaper theme edit [<name>]
-                              open the theme editor on a theme (the current one); it saves your own
-                              copy in ~/.config/draftpaper/themes, which a shipped theme yields to
+  draftpaper theme check [<name> ...]
+                              the themes against the contrast rules (words 4.5:1, dimmed text 3:1)
+  draftpaper scheme options|json|preview|keep [choice=value ...]
+                              a colour scheme built from choices (the settings tool): paper, tone,
+                              accent, windows, text, contrast; keep writes [scheme] and the "custom" theme
   draftpaper theme revert <name>
                               a shipped theme as shipped again: your copy of it removed
-  draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
+  draftpaper settings         open or close the settings (Mod+t, the theme cell): the colour scheme
   draftpaper audio save|restore
                               the default output's volume and mute, kept from one session to the next
                               (draftpaper-audio.service: the switch to the login screen mutes it)
@@ -96,30 +98,22 @@ def themes(args):
     current = config.load()["theme"]
     names = theme.listed()
     if args and args[0] == "json":
-        print(json.dumps([dict(theme.load(n), current=(n == current), own=theme.own(n).is_file(), shipped=theme.shipped(n))
-                          for n in names]))
+        from . import scheme
+        print(json.dumps([dict(t, current=(n == current), own=theme.own(n).is_file(), shipped=theme.shipped(n),
+                               figures=scheme.figures(t)) for n in names for t in [theme.load(n)]]))
         return
     if not args or args[0] == "list":
         for n in names:
             print(("* " if n == current else "  ") + n)
         return
-    # the theme editor (qml/ThemeEditor.qml)
-    if args[0] == "edit":
-        sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "editor", "open", args[1] if len(args) > 1 else ""]).returncode)
-    if args[0] in ("draft", "save") and len(args) == 3:
-        name, values = args[1], json.loads(args[2])
-        if args[0] == "draft":          # the sheet previews the values, from a draft beside the user's themes
-            theme.write(name, values, theme.own(name + theme.DRAFT))
-            switch(name + theme.DRAFT, preview=True)
-        else:                           # the user's own file, then the theme as a whole
-            theme.write(name, values, theme.own(name))
-            switch(name, preview=False)
-            theme.own(name + theme.DRAFT).unlink(missing_ok=True)
-        return
-    if args[0] == "discard" and len(args) == 3:     # back to a theme, the draft gone
-        switch(args[2], preview=True)
-        theme.own(args[1] + theme.DRAFT).unlink(missing_ok=True)
-        return
+    if args[0] == "check":          # the contrast rules (scheme.py), for the named themes or all of them
+        from . import scheme
+        failed = False
+        for n in args[1:] or names:
+            for what, r, m, hard in scheme.check(theme.load(n)):
+                print(f"{n}: {what} {r:.2f}:1, {'needs' if hard else 'advised'} {m:g}:1")
+                failed |= hard
+        sys.exit(1 if failed else 0)
     if args[0] == "revert" and len(args) == 2:      # the shipped theme again, the user's copy gone
         name = args[1]
         if not theme.shipped(name):
@@ -133,6 +127,50 @@ def themes(args):
     if name == "next":
         name = names[(names.index(current) + 1) % len(names)] if current in names else names[0]
     switch(name, preview)
+
+
+def schemes(args):
+    """draftpaper scheme options | json | preview | keep [CHOICE=VALUE ...]: a colour scheme built from
+    choices (scheme.py), for the settings tool. The choices given override config.toml's [scheme]."""
+    import json
+    from . import scheme
+    have = dict(config.load().get("scheme") or {})
+    sub, pairs = (args[0] if args else "json"), args[1:]
+    choices = {**scheme.DEFAULT, **have, **dict(p.split("=", 1) for p in pairs if "=" in p)}
+    if sub == "options":
+        # each choice's values, with a colour that stands for each (the scheme with that value swapped in)
+        out = {}
+        for k, values in scheme.CHOICES.items():
+            show = {"paper": "paper", "tone": "paper", "accent": None, "windows": None, "text": None, "contrast": None}[k]
+            opts = []
+            for v in values:
+                t = scheme.build({**choices, k: v})
+                colour = (t[show] if show else t["windows"]["focused"] if k == "accent"
+                          else t["apps"]["bg"] if k == "windows" else t["apps"]["term_fg"])
+                f = scheme.figures(t)
+                ratio = f["ink"] if k in ("paper", "tone") else f["terminal"] if k in ("text", "contrast") else \
+                    round(scheme.contrast(t["windows"]["focused"], t["apps"]["bg"]), 1) if k == "accent" else f["text"]
+                opts.append({"value": v, "colour": colour, "on": t["apps"]["term_bg"] if k == "text" else None, "ratio": ratio})
+            out[k] = opts
+        print(json.dumps({"choices": scheme.build(choices)["choices"], "options": out}))
+        return
+    t = scheme.build(choices)
+    if sub == "json":
+        print(json.dumps(dict(t, name="custom", figures=scheme.figures(t))))
+        return
+    draft = theme.own("custom" + theme.DRAFT)
+    if sub == "preview":                # the sheet only, from a draft (theme.py)
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(scheme.toml(t))
+        switch("custom" + theme.DRAFT, preview=True)
+    elif sub == "keep":                 # the choices kept, the theme written, switched to whole
+        config.set_table("scheme", t["choices"])
+        theme.own("custom").parent.mkdir(parents=True, exist_ok=True)
+        theme.own("custom").write_text(scheme.toml(t))
+        switch("custom", preview=False)
+        draft.unlink(missing_ok=True)
+    else:
+        sys.exit("draftpaper scheme options | json | preview | keep [CHOICE=VALUE ...]")
 
 
 def switch(name, preview):
@@ -195,9 +233,11 @@ def main(argv=None):
         config.set_value("margins", rest[0])
     elif c == "audio":
         audio(rest[0] if rest else "")
-    elif c == "picker":
-        # the shell's IpcHandler "themes" (qml/shell.qml)
-        sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "themes", "toggle"]).returncode)
+    elif c == "scheme":
+        schemes(rest)
+    elif c in ("settings", "picker"):
+        # the shell's IpcHandler "settings" (qml/shell.qml); `picker` is the name it had
+        sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "settings", "toggle"]).returncode)
     elif c == "lock-on-sleep":
         lock_on_sleep(rest[0] if rest else "toggle")
     elif c == "readings":

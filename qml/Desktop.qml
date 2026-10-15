@@ -1,4 +1,4 @@
-// A miniature desktop in theme `t` (the theme picker's drawings, the theme editor's): the sheet's paper,
+// A miniature desktop in theme `t` (the drawings in the settings, Settings.qml): the sheet's paper,
 // glow, frame and ticks, the margins lettered (workspaces, a notification, the bottom cells, a parked
 // window), two windows with a terminal and a file list, the title block filled in.
 import QtQuick

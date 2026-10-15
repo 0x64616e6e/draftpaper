@@ -122,10 +122,8 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     // lock now (swaylock, themed by `draftpaper apply`); lock before suspend for the day, or not
     ("Mod+Shift+x", r#"spawn swaylock -f -C "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/swaylock.conf""#),
     ("Mod+Shift+p", "spawn draftpaper lock-on-sleep toggle"),
-    // the theme picker (the shell's)
-    ("Mod+t", "spawn draftpaper picker"),
-    // the theme editor on the current theme; again, it closes (dropping the changes)
-    ("Mod+Shift+t", "spawn draftpaper theme edit"),
+    // the settings: the colour scheme (the shell's)
+    ("Mod+t", "spawn draftpaper settings"),
     ("Mod+Return", "spawn alacritty"),
     // the launcher, themed like the sheet by `draftpaper apply`
     ("Mod+d", r#"spawn fuzzel --config "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/fuzzel.ini""#),

@@ -67,8 +67,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Mod+Shift+q | Close the window |
 | Mod+Escape | Park the focused window in the side margin; with every window parked, bring them all back |
 | Mod+Left / Mod+Right | Bring back the parked window in the first / last cell, parking the focused one; with nothing parked, move the focus |
-| Mod+t | The theme picker |
-| Mod+Shift+t | The theme editor, on the current theme |
+| Mod+t | Settings: the colour scheme (presets, or one built from checked choices) |
 | Mod+Shift+x | Lock the screen (swaylock) |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Print | A region to swappy (slurp, grim) |
@@ -213,18 +212,21 @@ the focused workspace and window lit in amber, warnings in red).
 
 *Blueprint, with the terminal and the editor in the theme's colours; `build.log` parked on the right.*
 
-![The theme picker: the four themes as drawings on the board, Blueprint picked](docs/picker.jpg)
+![The settings: the themes as drawings on the board, and the scheme builder below them](docs/picker.jpg)
 
-*The theme picker (Super+T): the themes laid out on the board; the sheet around them previews the picked one.*
+*The settings (Super+T): the themes along the top, the builder below; the sheet around them previews what is picked.*
 
-Super+T opens the theme picker: the inside of the frame is cleared (with a wallpaper, the picture
-blurred) and the themes lie on it as drawings, the sheet previewing each as you move (the arrows or
-h j k l; Enter keeps one, Escape goes back). E there, or `draftpaper theme edit [NAME]`, opens the theme
-editor on the same cleared board: a schedule of the sheet's colours and shading, the window borders, and
-the terminal's colours and 16 ANSI colours (alacritty, foot, tmux), each set on ruled scales (hue,
-saturation, lightness) or typed as hex (#). The sheet previews every change, the miniature drawing the
-terminal too; the terminals take the new colours when you save. Enter saves your own copy in `~/.config/draftpaper/themes/`, which shadows a shipped theme of the
-same name (R twice, or `draftpaper theme revert NAME`, brings the shipped one back). `draftpaper theme` lists them and `draftpaper theme <name>`
+Super+T opens the settings on the board: the inside of the frame is cleared (with a wallpaper, the
+picture blurred), and the colour scheme lies on it. Along the top, the themes as drawings, each lettered
+with its main contrasts (or with how many of its words fall below 4.5:1); below them, a scheme built
+from six choices: paper light or dark, its tone, the accent, windows dark or light, the terminal's text,
+and the contrast (about 7:1, or 10:1 and more). The choices pick hues; the lightnesses are worked out so
+that every word, the 16 terminal colours included, reads at 4.5:1 or more and dimmed text at 3:1. The
+contrast between text and background carries legibility, its hue does not. The sheet previews what is
+picked; Enter keeps it (a built scheme is written to `[scheme]` in config.toml and to the theme
+`custom`), Escape goes back. R twice on your copy of a shipped theme brings the shipped one back
+(`draftpaper theme revert NAME`). `draftpaper theme check` holds any theme to the same rules.
+`draftpaper theme` lists them and `draftpaper theme <name>`
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'
 palette (`[apps]`; see `/usr/share/draftpaper/themes/softglow.toml`); your own go in

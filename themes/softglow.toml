@@ -5,7 +5,7 @@ paper       = "#C9BDAE"   # the middle of the sheet
 paper_light = "#DAD0C5"   # top left
 paper_shade = "#8C7C6C"   # bottom right
 glow        = "#F6CFA0"   # the blooms
-ink         = "#62574C"   # lines and lettering
+ink         = "#3E342A"   # lines and lettering (6.6:1 on `paper`, 3:1 on `paper_shade`)
 alert       = "#8A140D"   # alert lettering: TrackPoint red, darkened for this paper (5.2:1 on `paper`)
 
 [sheet]                   # how the paper is shaded and how strongly the pattern is drawn

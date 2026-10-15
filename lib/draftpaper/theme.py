@@ -16,12 +16,10 @@ theme named in config.toml itself (the sheet and the window borders, again whene
 
 The sheet's geometry (margin, px/mm, zones per output) is the compositor's, over its IPC.
 
-The theme editor (qml/ThemeEditor.qml) writes its values into a copy of the theme's file, line by line so
-the comments and the [apps] palette stay as they were (`write`): while editing, a draft beside the user's
-themes (<name>.draft.toml) that the sheet previews; on saving, the user's own <name>.toml, which shadows a
-shipped theme of that name until it is reverted.
+Previews that are not a theme on disk (the settings tool's scheme being built) go through a draft beside
+the user's own themes, <name>.draft.toml, left out of the lists.
 """
-import json, re, shutil, subprocess, tomllib
+import json, shutil, subprocess, tomllib
 from . import config, paths
 
 SHEET_DEFAULTS = {"angle": 54.0, "midpoint": 0.45, "blend": 1.0, "shading": 1.0,
@@ -52,71 +50,6 @@ def own(name):
 
 def shipped(name):
     return (paths.THEMES[-1] / f"{name}.toml").is_file()
-
-
-# the values the editor sets: (section, key); None is the top of the file
-EDITABLE = ([(None, k) for k in ("paper", "paper_light", "paper_shade", "glow", "ink", "alert", "strong")]
-            + [("sheet", k) for k in SHEET_DEFAULTS] + [("windows", k) for k in WINDOW_KEYS]
-            # the terminal's colours (alacritty, foot, tmux): the rest of [apps] is left as the file has it
-            + [("apps", k) for k in ("term_bg", "term_fg", "cursor", "cursor_text", "sel_bg", "sel_fg")]
-            + [("apps", p + k) for p in ("", "br_") for k in ("black", "red", "green", "yellow", "blue", "magenta", "cyan", "white")])
-
-
-def _toml_value(key, v):
-    if isinstance(v, str):
-        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", v):
-            raise SystemExit(f"draftpaper: {key} = {v!r} is not a colour (#RRGGBB)")
-        return f'"{v.upper()}"'
-    if key == "angle":
-        return str(round(float(v)))
-    return repr(round(float(v), 2))
-
-
-def write(name, values, to):
-    """Write theme `name`'s file to `to` with `values` ({"paper": .., "sheet": {..}, "windows": {..}})
-    in place of its own, line by line: comments, alignment and the other tables stay as they were;
-    a value the file lacks goes at the end of its table."""
-    lines = available()[name].read_text().splitlines()
-    wanted = {}
-    for section, key in EDITABLE:
-        v = values.get(key) if section is None else (values.get(section) or {}).get(key)
-        if v is not None:
-            wanted[(section, key)] = _toml_value(key, v)
-    section, ends = None, {None: 0}
-    for i, line in enumerate(lines):
-        head = re.match(r"\s*\[([^\]]+)\]", line)
-        if head:
-            section = head.group(1).strip()
-            ends[section] = i + 1
-            continue
-        m = re.match(r"(\s*([A-Za-z_]+)\s*=\s*)(\"[^\"]*\"|[^\s#]+)(.*)$", line)
-        if m:
-            ends[section] = i + 1
-            key = (section, m.group(2))
-            if key in wanted:
-                old, new = m.group(3), wanted.pop(key)
-                rest = m.group(4)
-                # keep a trailing comment where it was: the value's width changes, the padding gives
-                pad = len(rest) - len(rest.lstrip())
-                if rest.strip().startswith("#"):
-                    rest = " " * max(1, pad + len(old) - len(new)) + rest.lstrip()
-                lines[i] = m.group(1) + new + rest
-    # what the file lacked, at the end of its table (a missing table, at the end of the file)
-    for (section, key), v in wanted.items():
-        if section in ends:
-            at = ends[section]
-            lines.insert(at, f"{key} = {v}")
-            for s in ends:
-                if ends[s] >= at and s != section:
-                    ends[s] += 1
-            ends[section] += 1
-        else:
-            lines += ["", f"[{section}]", f"{key} = {v}"]
-            ends[section] = len(lines)
-    to.parent.mkdir(parents=True, exist_ok=True)
-    tmp = to.with_suffix(".tmp")
-    tmp.write_text("\n".join(lines) + "\n")
-    tmp.replace(to)
 
 
 def load(name):
