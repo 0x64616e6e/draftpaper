@@ -5,9 +5,9 @@
 //
 // The colour scheme: the themes as drawings along the top (Desktop.qml), each lettered with its main
 // contrasts, or with how many of its words fall below 4.5:1; and below them the builder, six rows of
-// discrete choices (paper, tone, accent, windows and their shade, the terminal's background, shade and
-// text, contrast) from which `draftpaper scheme`
-// derives a whole theme whose every word is readable (scheme.py). Building shapes the last drawing,
+// discrete choices (paper, tone, accent, windows and their shade, the terminal's background and text,
+// contrast) from which `draftpaper scheme`
+// derives a whole theme whose every word is readable (cli/src/scheme.rs). Building shapes the last drawing,
 // Custom. Whatever is picked, a drawing or a choice, the sheet previews a moment later; Enter keeps it
 // (the applications too: a theme switch, or `draftpaper scheme keep`, which writes [scheme] and the
 // custom theme); Escape goes back to the theme it was. R twice on your copy of a shipped theme puts the
@@ -44,9 +44,9 @@ PanelWindow {
     property string shown: ""           // the theme the sheet previews
     property string wallpaper: ""
     property bool reverting: false
-    readonly property var rows: ["paper", "tone", "accent", "windows", "shade", "terminal", "terminal_shade", "text", "contrast"]
+    readonly property var rows: ["paper", "tone", "accent", "windows", "shade", "terminal", "text", "contrast"]
     readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", shade: "WINDOWS SHADE",
-                                       terminal: "TERMINAL", terminal_shade: "TERMINAL SHADE", text: "TERMINAL TEXT", contrast: "CONTRAST" })
+                                       terminal: "TERMINAL", text: "TERMINAL TEXT", contrast: "CONTRAST" })
     // the drawings: the themes, then the one the choices build
     readonly property var cards: custom ? themes.concat([custom]) : themes
     readonly property var picked: cards[card] || null
@@ -64,6 +64,7 @@ PanelWindow {
         reverting = false
         themes = []
         custom = null
+        loaded = false
         loadThemes.running = true
         wall.running = true
         visible = true
@@ -76,9 +77,9 @@ PanelWindow {
     function choose(k, v) {
         const c = Object.assign({}, choices)
         c[k] = v
-        choices = c
+        choices = c                                    // at once: the outline moves with the click
         card = cards.length - 1                        // Custom
-        reloadScheme()
+        requestScheme()
         settle.restart()
     }
     function step(dir) {
@@ -92,7 +93,7 @@ PanelWindow {
     }
     // the sheet previews what is picked once the picking pauses
     Timer {
-        id: settle; interval: 350
+        id: settle; interval: 200
         onTriggered: {
             if (!settings.picked) return
             if (settings.isCustom) { settings.queue(["scheme", "preview"].concat(settings.args()), true); settings.shown = "custom.draft" }
@@ -152,42 +153,44 @@ PanelWindow {
                     const at = settings.cards.findIndex(t => t.name === (keepName || settings.original))
                     settings.card = at >= 0 ? at : 0
                 } catch (e) {}
-                if (!settings.custom) loadOptions.running = true
+                if (!settings.custom) settings.requestScheme()
             }
         }
     }
-    function reloadScheme() {
-        loadOptions.command = [shell.bin, "scheme", "options"].concat(args())
+    // the builder's options and the scheme they build, from one `draftpaper scheme options`. A click
+    // while one runs is not lost: the request runs again with the latest choices when it ends, and an
+    // answer never undoes a choice made since (only the first, on opening, sets them)
+    property int wanted: 0
+    property int asked: 0
+    property bool loaded: false
+    function requestScheme() {
+        wanted++
+        if (!loadOptions.running) startScheme()
+    }
+    function startScheme() {
+        asked = wanted
+        loadOptions.command = [shell.bin, "scheme", "options"].concat(loaded ? args() : [])
         loadOptions.running = true
     }
     Process {
         id: loadOptions
-        command: [settings.shell.bin, "scheme", "options"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
                     const d = JSON.parse(this.text)
                     settings.options = d.options
-                    settings.choices = d.choices
-                    loadCustom.command = [settings.shell.bin, "scheme", "json"].concat(settings.args())
-                    loadCustom.running = true
+                    if (!settings.loaded) { settings.choices = d.choices; settings.loaded = true }
+                    if (settings.asked === settings.wanted) {
+                        const t = d.theme
+                        t.label = "Custom · " + t.label
+                        const wasCustom = settings.isCustom
+                        settings.custom = t
+                        if (wasCustom) settings.card = settings.cards.length - 1
+                        // the current theme is the custom one: pick it
+                        else if (settings.original === "custom" && settings.row === 0) settings.card = settings.cards.length - 1
+                    }
                 } catch (e) {}
-            }
-        }
-    }
-    Process {
-        id: loadCustom
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const t = JSON.parse(this.text)
-                    t.label = "Custom · " + t.label
-                    const wasCustom = settings.isCustom
-                    settings.custom = t
-                    if (wasCustom) settings.card = settings.cards.length - 1
-                    // the current theme is the custom one: pick it
-                    if (settings.original === "custom" && settings.row === 0 && !wasCustom) settings.card = settings.cards.length - 1
-                } catch (e) {}
+                if (settings.asked < settings.wanted) settings.startScheme()
             }
         }
     }
@@ -279,11 +282,11 @@ PanelWindow {
             color: settings.row === 0 ? settings.ink : settings.inkA(0.6)
         }
         Repeater {
-            model: settings.cards
+            model: settings.cards.length           // a count, so delegates stay and only a changed drawing repaints
             Item {
                 id: c
-                required property var modelData
                 required property int index
+                readonly property var modelData: settings.cards[index]
                 readonly property bool picked: index === settings.card
                 x: settings.x0 + index * (settings.cardW + settings.cardGap)
                 y: board.inY + settings.gutter + 6 * settings.mm

@@ -3,6 +3,5 @@ debian/debhelper-build-stamp
 debian/draftpaper/
 debian/files
 debian/*.substvars
-__pycache__/
 target/
 qml/*.qsb

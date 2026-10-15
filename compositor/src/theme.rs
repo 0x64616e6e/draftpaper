@@ -87,7 +87,7 @@ impl Theme {
             paper_light: colour("paper_light", "#DAD0C5"),
             paper_shade,
             glow: colour("glow", "#F6CFA0"),
-            // as theme.py: without an ink, a darker paper_shade
+            // as the draftpaper command does: without an ink, a darker paper_shade
             ink: table.get("ink").and_then(|v| v.as_str()).and_then(rgb).unwrap_or([paper_shade[0] * 0.7, paper_shade[1] * 0.7, paper_shade[2] * 0.7]),
             sheet: Sheet {
                 angle: num("angle", 54.0),

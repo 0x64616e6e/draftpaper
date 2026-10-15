@@ -256,12 +256,13 @@ frame and keeps the parked windows. Once it is up it starts `draftpaper-session.
 The shell letters the margins and the title block as layer-shell surfaces and talks to the compositor
 over a JSON socket (`$DRAFTPAPER_SOCKET`; `draftpaper-compositor msg …` from a shell).
 
-`draftpaper` (Python) is the rest: themes, the generated files for the launcher, the lock screen and
-the applications, the readings the shell polls.
+`draftpaper` (Rust, `cli/`) is the rest: themes and colour schemes, the generated files for the
+launcher, the lock screen and the applications, the readings the shell polls.
 
 ## Building
 
-    make                         # the compositor (cargo; a recent Rust, e.g. from rustup), the shaders (qsb)
+    make                         # the compositor and the draftpaper command (cargo; a recent Rust, e.g.
+                                 # from rustup), the shaders (qsb)
     dpkg-buildpackage -us -uc -b # the package
 
 The build needs the development packages in `debian/control` and fetches the crates with cargo.

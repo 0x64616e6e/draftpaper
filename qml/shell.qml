@@ -28,7 +28,9 @@ ShellRoot {
     function profileNext() {
         const order = ["power-saver", "balanced", "performance"]
         const i = order.indexOf(readings.profile)
-        if (i >= 0) run(["powerprofilesctl", "set", order[(i + 1) % order.length]])
+        // over D-Bus (busctl), as the readings read it: powerprofilesctl is a Python script
+        if (i >= 0) run(["busctl", "set-property", "net.hadess.PowerProfiles", "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles",
+                         "ActiveProfile", "s", order[(i + 1) % order.length]])
     }
     function spaceLabel(space) { return space ? String(space.number) : "" }
 

@@ -3,7 +3,6 @@ Section: x11
 Priority: optional
 Maintainer: 0x64616e6e <daniel@este.systems>
 Build-Depends: debhelper-compat (= 13),
-               python3,
                qt6-shader-baker,
                pkg-config,
                libseat-dev,
@@ -22,7 +21,6 @@ Package: draftpaper
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends},
-         python3,
          quickshell (>= 0.3.0),
          qml6-module-qtquick-effects,
          libegl1,

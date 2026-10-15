@@ -1,0 +1,22 @@
+[package]
+name = "draftpaper"
+version = "0.3.0"
+edition = "2021"
+description = "Draftpaper's command: themes, colour schemes, the shell's readings, the applications' colours"
+license = "MIT"
+
+[[bin]]
+name = "draftpaper"
+path = "src/main.rs"
+
+[dependencies]
+# order kept as written: themes and config are read and written back in their own order
+toml = { version = "0.8", features = ["preserve_order"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+regex = { version = "1", default-features = false, features = ["std", "unicode-perl"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

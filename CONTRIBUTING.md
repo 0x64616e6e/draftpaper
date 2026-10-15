@@ -26,9 +26,9 @@ Build the package with `dpkg-buildpackage -us -uc -b` (needs `debhelper`); check
 ## Pull requests
 
 - One change per pull request, with a description of what it changes for the person using it.
-- Keep to the existing style: Python 3 with the standard library plus numpy, Pillow and python-xlib; QML
-  for the shell; comments that say why, at the density of the surrounding code.
-- Run `make check`, and try the change on a real i3 session; say in the pull request what you tested
+- Keep to the existing style: Rust for the compositor and the `draftpaper` command (no Python), QML for
+  the shell; comments that say why, at the density of the surrounding code.
+- Run `make check`, and try the change in a Draftpaper session (or a nested one); say in the pull request what you tested
   and what you could not (one screen or two, HiDPI or not, laptop or desktop).
 - Update `README.md` and `docs/draftpaper.1` when you change commands, keys or configuration.
 - New dependencies need a reason: every one becomes a Debian package dependency.
