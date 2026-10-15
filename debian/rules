@@ -1,4 +1,9 @@
 #!/usr/bin/make -f
+# The compositor is built with cargo from the PATH, which may be rustup's: debhelper points HOME
+# elsewhere while it builds, so keep the builder's own cargo and rustup homes (and their crates).
+export CARGO_HOME ?= $(HOME)/.cargo
+export RUSTUP_HOME ?= $(HOME)/.rustup
+
 %:
 	dh $@
 
@@ -7,3 +12,6 @@ override_dh_auto_install:
 
 override_dh_auto_test:
 	$(MAKE) check
+
+override_dh_auto_clean:
+	$(MAKE) clean || true

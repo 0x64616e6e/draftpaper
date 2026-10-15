@@ -155,7 +155,9 @@ PanelWindow {
             style: Text.Raised; styleColor: Qt.rgba(0, 0, 0, 0.5)
         }
         Text {
-            anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 10 * picker.mm }
+            // above the cards, clear of the title block in the corner
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: parent.height / 2 - parent.height * 0.04 - picker.cardH / 2 - 8 * picker.mm - height
             text: "←  →  browse     enter  keep     esc  back to " + (picker.themes.find(t => t.name === picker.original) || { label: "" }).label
             font.family: Fonts.mono; font.pixelSize: 3 * picker.mm
             color: Qt.rgba(0.95, 0.93, 0.9, 0.75)

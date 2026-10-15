@@ -17,7 +17,7 @@ theme named in config.toml itself (the sheet and the window borders, again whene
 The sheet's geometry (margin, px/mm, zones per output) is the compositor's, over its IPC.
 """
 import json, shutil, subprocess, tomllib
-from . import config, paths, render
+from . import config, paths
 
 SHEET_DEFAULTS = {"angle": 54.0, "midpoint": 0.45, "blend": 1.0, "shading": 1.0,
                   "glow_strength": 1.0, "glow_size": 1.0, "pattern_strength": 0.5}
@@ -42,7 +42,8 @@ def load(name):
     t.setdefault("label", name)
     t["sheet"] = {**SHEET_DEFAULTS, **t.get("sheet", {})}
     if "ink" not in t:
-        t["ink"] = "#" + "".join(f"{round(v * 0.7):02X}" for v in render.rgb(t["paper_shade"]))
+        shade = t["paper_shade"].lstrip("#")
+        t["ink"] = "#" + "".join(f"{round(int(shade[i:i + 2], 16) * 0.7):02X}" for i in (0, 2, 4))
     t.setdefault("alert", "#E2231A")
     for k in WINDOW_KEYS:
         if k not in t.get("windows", {}):

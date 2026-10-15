@@ -2,11 +2,13 @@
 
   draftpaper start            apply the theme and run the shell (draftpaper-shell.service, in the session)
   draftpaper stop             stop the shell
-  draftpaper apply            write the shell's theme file again
+  draftpaper apply            write the theme's files again (the shell, launcher, lock screen, idle,
+                              applications)
   draftpaper theme [list]     list the themes, the current one marked
   draftpaper theme <name> [--preview]
-                              switch theme; config.toml's [hooks] theme runs after it (the
-                              applications), but not for a --preview (the picker while browsing)
+                              switch theme: the sheet and the applications; a --preview (the picker
+                              while browsing) switches the sheet only; config.toml's [hooks] theme
+                              runs after a full switch
   draftpaper theme next       the next theme (the shell's theme cell, right click)
   draftpaper theme json       every theme's values, for the theme picker
   draftpaper picker           open or close the theme picker (Mod+t, the theme cell)
@@ -17,7 +19,6 @@
                               a picture in the frame, or none (the compositor picks it up at once)
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
-  draftpaper park ...         park windows in the side margins (draftpaper park, without arguments, explains)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
@@ -162,9 +163,6 @@ def main(argv=None):
     elif c == "picker":
         # the shell's IpcHandler "themes" (qml/shell.qml)
         sys.exit(subprocess.run(["qs", "ipc", "-p", str(paths.QML), "call", "themes", "toggle"]).returncode)
-    elif c == "park":
-        from . import park
-        park.main(rest)
     elif c == "lock-on-sleep":
         lock_on_sleep(rest[0] if rest else "toggle")
     elif c == "readings":

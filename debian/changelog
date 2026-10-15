@@ -1,3 +1,25 @@
+draftpaper (0.2.0) unstable; urgency=medium
+
+  * Draftpaper is now a Wayland compositor of its own (Smithay), started as
+    the "Draftpaper" session from the display manager; the i3 edition is
+    dropped (#31).
+  * The sheet's margins, title block, side cells and notifications are drawn
+    by the shell over the compositor's IPC; merged cells, Nerd Font glyphs.
+  * Parking in the side margins, animated; focus follows the mouse.
+  * A wallpaper in the frame, with the paper's or the picture's colours in the
+    margins.
+  * Screenshots, wlr-screencopy (grim, slurp) and screen sharing through
+    xdg-desktop-portal-wlr; data control (clipboard managers); fractional
+    scaling; linux-dmabuf; Xwayland.
+  * Locking (ext-session-lock: swaylock), idle (swayidle): the screens off
+    after 15 minutes, locking before sleep on request.
+  * Volume and brightness keys; the volume is kept from one session to the
+    next.
+  * A theme picker (Super+T) with a live preview; a theme also colours
+    alacritty, foot, tmux, Neovim, Emacs, GTK 3 and 4, Qt and Firefox (#35).
+
+ -- 0x64616e6e <daniel@este.systems>  Thu, 15 Oct 2026 02:53:59 +0300
+
 draftpaper (0.1.1) unstable; urgency=medium
 
   * Redraw the sheet when screens are added, removed or change mode (#4).

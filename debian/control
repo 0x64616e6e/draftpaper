@@ -2,36 +2,60 @@ Source: draftpaper
 Section: x11
 Priority: optional
 Maintainer: 0x64616e6e <daniel@este.systems>
-Build-Depends: debhelper-compat (= 13), python3
+Build-Depends: debhelper-compat (= 13),
+               python3,
+               pkg-config,
+               libseat-dev,
+               libudev-dev,
+               libinput-dev,
+               libgbm-dev,
+               libdrm-dev,
+               libxkbcommon-dev,
+               libegl-dev,
+               libgles-dev
 Standards-Version: 4.7.0
 Homepage: https://github.com/0x64616e6e/draftpaper
 Rules-Requires-Root: no
 
 Package: draftpaper
-Architecture: all
-Depends: ${misc:Depends},
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
          python3,
-         python3-numpy,
-         python3-pil,
-         python3-xlib,
          quickshell (>= 0.3.0),
-         i3-wm,
-         x11-xserver-utils,
-         xwallpaper | feh,
+         libegl1,
+         libgl1-mesa-dri,
+         xwayland,
          fonts-dejavu-core
-Recommends: picom,
-            fonts-ibm-plex,
+Recommends: fonts-ibm-plex,
+            alacritty | foot,
+            fuzzel,
+            swaylock,
+            swayidle,
+            grim,
+            slurp,
+            swappy,
+            wl-clipboard,
+            xdg-desktop-portal-wlr,
+            xdg-desktop-portal-gtk,
+            wireplumber,
+            brightnessctl,
+            libnotify-bin,
             network-manager,
             upower,
             power-profiles-daemon,
             bluez
-Suggests: flameshot, blueman
-Description: i3 desktop drawn as a drafting sheet
- Draftpaper replaces the bar of an i3 desktop with a drafting sheet: the
- wallpaper is a sheet of paper with a frame, zone ticks and a dot grid, and
- windows end exactly on the frame line. The title block in the corner carries
- the readings a bar would show (time, battery, power, CPU and memory, network,
- temperatures); the margins letter the workspaces and alerts, and windows can
- be parked in the side margins and brought back.
+Suggests: adw-gtk3, qt5ct, qt6ct
+Description: Wayland desktop drawn as a drafting sheet
+ Draftpaper is a tiling Wayland compositor whose desktop is a drafting
+ sheet: there is no bar, the screen is a sheet of paper with a frame, zone
+ ticks and a dot grid, and windows end exactly on the frame line. The title
+ block in the corner carries the readings a bar would show (time, battery,
+ power, CPU and memory, network, temperatures); the margins letter the
+ workspaces, notifications and alerts, and windows can be parked in the
+ side margins and brought back.
  .
- It runs on i3 under X11, with Quickshell for the live parts.
+ Everything is sized in millimetres of the screen. Four themes ship, and a
+ theme also colours the terminal, the editor, GTK and Qt applications and
+ Firefox. The session is started from the display manager ("Draftpaper");
+ the live parts of the sheet are drawn with Quickshell.

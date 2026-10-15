@@ -1,49 +1,103 @@
-.TH DRAFTPAPER 1 "2026-10-14" "draftpaper 0.1.1" "User Commands"
+.TH DRAFTPAPER 1 "2026-10-15" "draftpaper 0.2.0" "User Commands"
 .SH NAME
-draftpaper \- the i3 desktop drawn as a drafting sheet
+draftpaper, draftpaper-compositor, draftpaper-session \- the Wayland desktop drawn as a drafting sheet
 .SH SYNOPSIS
 .B draftpaper
-.RI start | stop | apply | theme " " [ list | next | NAME ] | park " " [ toggle | at " " CELL | next | prev | show " " ID ] | readings | version
+.I COMMAND
+.br
+.B draftpaper-session
+.br
+.B draftpaper-compositor
+.RB [ --tty ]
+.RB [ --session ]
+.RB [ --command
+.IR PROGRAM ]
+.br
+.B draftpaper-compositor msg
+.I REQUEST
 .SH DESCRIPTION
-Draftpaper replaces the i3 bar with a drafting sheet: a wallpaper with a frame, zone ticks and a dot grid,
-a live title block carrying the readings, lettered margins, and side-margin cells for parked windows.
-Include
-.I /usr/share/draftpaper/i3/draftpaper.conf
-from the i3 configuration; it runs
-.B draftpaper start
-and binds Super+Escape (park);
-.I /usr/share/draftpaper/i3/draftpaper-cycle.conf
-adds Super+Left/Right to cycle through parked windows (they replace i3's default focus keys).
+Draftpaper is a tiling Wayland compositor whose desktop is a drafting sheet: paper with a frame, zone
+ticks and a dot grid (or a wallpaper in the frame), a live title block carrying the readings, lettered
+margins with the workspaces and notifications, and side-margin cells for parked windows.
+.PP
+.B draftpaper-session
+is the session the display manager starts ("Draftpaper"), or that runs from a text console: it sets the
+session's environment and runs
+.BR "draftpaper-compositor --tty --session" ,
+which starts the systemd user target
+.B draftpaper-session.target
+(the shell, swayidle, the volume keeper) once it is up. Without a TTY,
+.B draftpaper-compositor
+runs nested in a window of the running desktop.
+.PP
+.B draftpaper
+is the rest: themes, the generated files for the shell, the launcher, the lock screen and the
+applications, and the readings.
 .SH COMMANDS
 .TP
 .B start
-Apply the theme and start the shell.
+Apply the theme and run the shell (draftpaper-shell.service does this in the session).
 .TP
 .B stop
 Stop the shell.
 .TP
 .B apply
-Re-render the sheet and the generated i3 and shell files after a change to the configuration.
+Write the theme's files again: the shell, the launcher, the lock screen, idle, the applications.
 .TP
-.BR theme " [" list "|" next "|" \fINAME\fR]
-List the themes, switch to the next one, or switch to NAME.
+.BR theme " [" list "|" next "|" json "|" \fINAME\fR " [" --preview ]]
+List the themes, switch to the next one, print every theme's values, or switch to NAME (the sheet and
+the applications; with
+.B --preview
+the sheet only).
 .TP
-.BR park " " toggle "|" at " " \fICELL\fR "|" next "|" prev "|" show " " \fIID\fR
-Park the focused window in the first free side-margin cell or in CELL (or bring every parked window back
-on a workspace with none showing), cycle through the parked windows, or bring one back.
+.B picker
+Open or close the theme picker (Super+T).
+.TP
+.BR wallpaper " [" \fIFILE\fR "|" none ]
+A picture in the frame, or none.
+.TP
+.BR margins " " paper "|" ambient
+With a wallpaper: the margins in the theme's paper or in the picture's colours.
+.TP
+.BR lock-on-sleep " [" on "|" off "|" toggle ]
+Lock before every suspend, until turned off or the next login.
+.TP
+.BR audio " " save "|" restore
+Keep the default output's volume and mute from one session to the next.
 .TP
 .B readings
 Print the readings the shell polls, as JSON.
+.TP
+.B version
+Print the version.
+.SH COMPOSITOR REQUESTS
+.B draftpaper-compositor msg
+talks to the running compositor over
+.BR $DRAFTPAPER_SOCKET :
+.BR version ", " outputs ", " workspaces ", " windows ", " focused-output ,
+.B subscribe
+.IR EVENT ...,
+or any action a key can be bound to, such as
+.B workspace 3
+or
+.BR "power off" .
 .SH FILES
 .TP
 .I ~/.config/draftpaper/config.toml
-Settings: theme, margin, title block, a custom cell, alert thresholds, commands.
+Settings: theme, margin, wallpaper, title block, custom cells, alerts, idle, applications, input,
+animations, outputs, key bindings. Read again when it changes.
 .TP
 .I ~/.config/draftpaper/themes/
-Themes of your own.
+Themes of your own, beside those in
+.IR /usr/share/draftpaper/themes/ .
 .TP
 .I ~/.cache/draftpaper/
-Generated sheets, theme.json and i3.conf.
+Generated files: the shell's theme, the launcher's, the lock screen's and swayidle's configuration.
+.TP
+.I /usr/share/doc/draftpaper/README.md
+The keys and every setting.
 .SH SEE ALSO
-.BR i3 (1),
-.BR qs (1)
+.BR qs (1),
+.BR swaylock (1),
+.BR swayidle (1),
+.BR fuzzel (1)
