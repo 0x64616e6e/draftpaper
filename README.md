@@ -59,7 +59,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Mod+Return | Terminal (alacritty) |
 | Mod+d | Launcher (fuzzel) |
 | Mod+h/j/k/l, Mod+Up/Down | Move the focus |
-| Mod+Shift+h/j/k/l, Mod+Shift+arrows | Move the window |
+| Mod+Shift+h/j/k/l, Mod+Shift+arrows | Move the window; a window alone smaller than the frame moves a zone at a time |
 | Mod+Ctrl+h/j/k/l, Mod+Ctrl+arrows | Resize by a zone (hold to repeat); a window alone moves its right or bottom edge in from the frame |
 | Mod+1 … Mod+0 | Workspace 1 to 10 |
 | Mod+Shift+1 … Mod+Shift+0 | Send the window to a workspace |

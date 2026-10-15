@@ -48,10 +48,12 @@ check: $(CLI)
 	# the shipped themes against the contrast rules (a home of its own: only the shipped themes)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
-# the sheet at every scale, pixel by pixel, headless: nothing is shown on any display (compositor/tests/pixels.sh)
+# the sheet at every scale, pixel by pixel, and windows in zones, headless: nothing is shown on any
+# display (compositor/tests/pixels.sh, zones.sh)
 pixels: $(COMPOSITOR) $(CLI)
 	cd compositor && $(CARGO) build --release --locked --example sheetcheck
 	compositor/tests/pixels.sh
+	compositor/tests/zones.sh
 
 clean:
 	cd compositor && $(CARGO) clean

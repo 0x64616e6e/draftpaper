@@ -165,7 +165,11 @@ impl Draftpaper {
             (i, s.workspaces.iter().position(|w| w.number == number).unwrap())
         });
         let g = self.screens[j].grid;
-        self.screens[j].workspaces[k].layout.add(window, &g, self.config.new_window);
+        let ws = &mut self.screens[j].workspaces[k];
+        // with no zone left for it there (Layout::add), it floats
+        if !ws.layout.add(window.clone(), &g, self.config.new_window) {
+            ws.floating.push(window);
+        }
         self.relayout();
         let next = self.screens[i].layout().focused();
         self.focus(next);

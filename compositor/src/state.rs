@@ -600,8 +600,9 @@ impl Draftpaper {
             let grid = screen.grid;
             if dialog {
                 screen.workspace_mut().floating.push(window.clone());
-            } else {
-                screen.layout_mut().add(window.clone(), &grid, mode);
+            } else if !screen.layout_mut().add(window.clone(), &grid, mode) {
+                // every zone taken (Layout::add): it floats
+                screen.workspace_mut().floating.push(window.clone());
             }
             self.relayout();
             if d.focus {

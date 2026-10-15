@@ -1,5 +1,12 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * Every window is a zone at least. A window alone on the sheet (or alone
+    in its column) resizes in zones from the frame, Mod+Ctrl+Left/Up
+    pulling its right or bottom edge in, Right/Down pushing it back out,
+    and moves about the empty zones a zone at a time (Mod+Shift+arrows),
+    keeping its size, before it moves to the next screen. A move with
+    nowhere to go, or into a full column, changes nothing. With every zone
+    taken, a new window floats.
   * Mod+z (the zoom action): a magnifier on the pointer, each pixel a
     block with a faint grid between them and the one under the pointer
     outlined, to check a line down to the pixel. Scrolling zooms (2 to 64

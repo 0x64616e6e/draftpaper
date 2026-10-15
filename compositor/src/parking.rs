@@ -90,8 +90,9 @@ impl Draftpaper {
         let ws = &mut self.screens[i].workspaces[k];
         let parked = ws.parked.remove(p);
         match &parked.spot {
-            Spot::Tiled(placeholder) => ws.layout.unpark(parked.window.clone(), placeholder, &grid, mode),
-            Spot::Floating => ws.floating.push(parked.window.clone()),
+            // with no zone left for it (Layout::add), it floats
+            Spot::Tiled(placeholder) if ws.layout.unpark(parked.window.clone(), placeholder, &grid, mode) => {}
+            _ => ws.floating.push(parked.window.clone()),
         }
         (parked.window, parked.cell)
     }
