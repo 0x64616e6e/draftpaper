@@ -329,16 +329,16 @@ impl Draftpaper {
                 self.focus(w);
             }
             Action::Move(d) => {
-                // a window alone with empty zones that way moves into them (Layout::move_dir) before it leaves
-                let alone = self.screens[i].layout().at_edge(d) && !self.screens[i].layout().can_shift(d);
-                match self.neighbour(i, d).filter(|_| alone) {
+                // a window against the frame that way goes on to the neighbouring screen (Layout::move_dir
+                // moves it about this one)
+                let off = self.screens[i].layout().against_frame(d);
+                match self.neighbour(i, d).filter(|_| off) {
                     Some(n) => {
-                        // to the neighbouring screen, as a new column there
+                        // to the neighbouring screen, placed there as a new window
                         if let Some(w) = self.screens[i].layout().focused() {
                             let (g, gn) = (self.screens[i].grid, self.screens[n].grid);
                             self.screens[i].layout_mut().remove(&w, &g);
-                            let mode = self.config.new_window;
-                            if !self.screens[n].layout_mut().add(w.clone(), &gn, mode) {
+                            if !self.screens[n].layout_mut().add(w.clone(), &gn) {
                                 // every zone taken there (Layout::add): it floats
                                 self.screens[n].workspace_mut().floating.push(w.clone());
                             }

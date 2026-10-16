@@ -1,18 +1,20 @@
-//! The layout: a workspace is a row of columns, a column a stack of rows, and both are measured in the
-//! sheet's zones (widths in the zones across, heights in the zones down), so every window edge falls on
-//! a zone boundary and lines up with the ticks in the margins, and every window is a zone at least. The
-//! last column and the last row end on the frame, except a window alone across or down: resized in from
-//! it (Layout::resize), it can be moved about the empty zones in zone steps (Layout::move_dir).
+//! The layout: every window takes a rectangle of the sheet's zones, so every window edge falls on a zone
+//! boundary and lines up with the ticks in the margins, and every window is a zone at least. Windows
+//! never overlap; zones nobody takes stay paper.
 //!
-//! The first window takes the frame and the second opens a column beside it. After that, config.toml's
-//! `[layout] new_window` decides (issue #12): "column", a new column to the right of the focused one
-//! (rows in the focused column once there are as many columns as zones across); or "row", a new row
-//! under the focused window (a new column once the column has as many rows as zones down). With every
-//! zone taken, a new window floats.
+//! A new window takes the largest free rectangle; with none free, the focused window is cut in half
+//! along its longer side and the new one takes the second half (the right or the lower one). With every
+//! window a single zone, a new window floats.
 //!
-//! A parked window leaves the layout and leaves a placeholder (Placeholder): its neighbours and the
-//! layout's sizes then, so it comes back to the same place, and to the same sizes when nothing else
-//! changed meanwhile.
+//! A window moves a zone at a time, keeping its size, into free zones (Layout::move_dir); against a
+//! window that spans the same rows (or columns) it swaps places with it; anything else stops it, and
+//! nothing changes. Resizing (Layout::resize) right or down makes it a zone larger that way (into free
+//! zones, or taking the zone from the windows there when each keeps one), left or up a zone smaller. A
+//! window that closes leaves its zones to the windows on one side of it that line up with it exactly, and
+//! to paper when there are none.
+//!
+//! A parked window leaves a placeholder (Placeholder): its zones and the layout before and after, so it
+//! comes back to the same place, and the layout to what it was when nothing changed meanwhile.
 
 use smithay::{
     desktop::{Space, Window},
@@ -123,454 +125,440 @@ pub enum Direction {
     Down,
 }
 
-/// Where a new window goes once there are two (config.toml, `[layout] new_window`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum NewWindow {
-    #[default]
-    Column,
-    Row,
+impl Direction {
+    /// 0 across, 1 down
+    fn axis(self) -> usize {
+        match self {
+            Direction::Left | Direction::Right => 0,
+            Direction::Up | Direction::Down => 1,
+        }
+    }
+
+    /// right or down
+    fn forward(self) -> bool {
+        matches!(self, Direction::Right | Direction::Down)
+    }
+}
+
+/// A rectangle of zones: `[across, down]`, each `[from, to)` in zones from the frame's top left.
+pub type Zones = [[u32; 2]; 2];
+
+fn overlaps(a: &Zones, b: &Zones) -> bool {
+    (0..2).all(|k| a[k][0] < b[k][1] && b[k][0] < a[k][1])
+}
+
+/// Where a parked window was, to put it back there (Layout::park, Layout::unpark).
+#[derive(Debug, Clone)]
+pub struct Placeholder<W = Window> {
+    zones: Zones,
+    /// the sheet's zones then
+    sheet: (u32, u32),
+    /// the layout before it left, and right after; when the layout is still the second, it is the first again
+    before: Vec<(W, Zones)>,
+    after: Vec<(W, Zones)>,
 }
 
 #[derive(Debug)]
-struct Column {
-    windows: Vec<Window>,
-    /// width in zones across
-    width: u32,
-    /// height of each row in zones down (fractions only when rows outnumber the zones)
-    heights: Vec<f64>,
-    /// zones down left empty above and below a window alone in its column (resized or moved in zones)
-    gap: (u32, u32),
+pub struct Layout<W = Window> {
+    tiles: Vec<(W, Zones)>,
+    /// index into `tiles`
+    focus: Option<usize>,
+    /// the sheet's zones the tiles were placed on (a screen of another size rescales them: fit)
+    sheet: (u32, u32),
+    /// windows with no zone left after a rescale, for the caller to float (take_evicted)
+    evicted: Vec<W>,
 }
 
-impl Column {
-    fn new(window: Window) -> Column {
-        Column { windows: vec![window], width: 1, heights: vec![], gap: (0, 0) }
+impl<W> Default for Layout<W> {
+    fn default() -> Self {
+        Layout { tiles: Vec::new(), focus: None, sheet: (0, 0), evicted: Vec::new() }
     }
 }
 
-/// A column as Layout::snapshot keeps it: its windows, width, rows' heights and empty zones.
-type Snapshot = (Vec<Window>, u32, Vec<f64>, (u32, u32));
-
-/// Where a parked window was in the layout, to put it back there (Layout::park, Layout::unpark).
-#[derive(Debug, Clone)]
-pub struct Placeholder {
-    /// in a column with other windows: those windows, and its neighbours above and below
-    column: Vec<Window>,
-    above: Option<Window>,
-    below: Option<Window>,
-    /// the windows of the columns left and right of its column (for a column of its own)
-    left: Vec<Window>,
-    right: Vec<Window>,
-    /// its column and row then: the last resort
-    index: (usize, usize),
-    /// the layout before it left; when the layout is that again once it is back, its sizes are too
-    before: Vec<Snapshot>,
-    gap: (u32, u32),
-}
-
-#[derive(Debug, Default)]
-pub struct Layout {
-    columns: Vec<Column>,
-    /// focused (column, row)
-    focus: Option<(usize, usize)>,
-    /// zones across left empty left and right of a column alone on the sheet (resized or moved in zones)
-    gap: (u32, u32),
-}
-
-/// `total` zones shared among `n`: whole zones, the extra ones to the leftmost (or topmost).
-fn share(total: u32, n: usize) -> Vec<u32> {
-    let n = n.max(1) as u32;
-    (0..n).map(|i| total / n + u32::from(i < total % n)).collect()
-}
-
-/// A window alone along a side of `zones` zones, with `gap` empty zones before and after it, resized by
-/// a zone: shrinking moves its far edge in (it keeps a zone at least); growing takes the room after it
-/// back, then the room before.
-fn resize_gap(gap: &mut (u32, u32), zones: u32, grow: bool) {
-    if grow {
-        if gap.1 > 0 {
-            gap.1 -= 1;
-        } else if gap.0 > 0 {
-            gap.0 -= 1;
-        }
-    } else if zones.saturating_sub(gap.0 + gap.1) > 1 {
-        gap.1 += 1;
-    }
-}
-
-/// The same window moved a zone forward (right, down) or back, keeping its size; false at the frame.
-fn shift_gap(gap: &mut (u32, u32), forward: bool) -> bool {
-    match forward {
-        true if gap.1 > 0 => {
-            gap.1 -= 1;
-            gap.0 += 1;
-            true
-        }
-        false if gap.0 > 0 => {
-            gap.0 -= 1;
-            gap.1 += 1;
-            true
-        }
-        _ => false,
-    }
-}
-
-/// The zones a window alone spans along a side of `zones`, given its `gap`: kept inside the side, a zone
-/// at least, when the side has fewer zones than when the gap was made.
-fn span(zones: u32, gap: (u32, u32)) -> (u32, u32) {
-    let from = gap.0.min(zones.saturating_sub(1));
-    (from, zones.saturating_sub(gap.1).max(from + 1).min(zones.max(1)))
-}
-
-impl Layout {
-    pub fn windows(&self) -> impl Iterator<Item = &Window> {
-        self.columns.iter().flat_map(|c| c.windows.iter())
+impl<W: Clone + PartialEq> Layout<W> {
+    pub fn windows(&self) -> impl Iterator<Item = &W> {
+        self.tiles.iter().map(|(w, _)| w)
     }
 
-    pub fn contains(&self, window: &Window) -> bool {
+    pub fn contains(&self, window: &W) -> bool {
         self.find(window).is_some()
     }
 
-    /// Whether the focus is already as far as it goes towards `dir` (the next step leaves the screen).
-    pub fn at_edge(&self, dir: Direction) -> bool {
-        match (self.focus, dir) {
-            (None, _) => true,
-            (Some((c, _)), Direction::Left) => c == 0,
-            (Some((c, _)), Direction::Right) => c + 1 >= self.columns.len(),
-            _ => false,
+    fn find(&self, window: &W) -> Option<usize> {
+        self.tiles.iter().position(|(w, _)| w == window)
+    }
+
+    pub fn focused(&self) -> Option<W> {
+        self.focus.and_then(|i| self.tiles.get(i)).map(|(w, _)| w.clone())
+    }
+
+    pub fn focus_window(&mut self, window: &W) {
+        if let Some(i) = self.find(window) {
+            self.focus = Some(i);
         }
     }
 
-    /// Whether the focused window is alone that way (on the sheet across, in its column down) with empty
-    /// zones beside it to move into (move_dir).
-    pub fn can_shift(&self, dir: Direction) -> bool {
-        let Some((c, _)) = self.focus else { return false };
-        match dir {
-            Direction::Left | Direction::Right if self.columns.len() == 1 && self.columns[0].windows.len() == 1 => {
-                if dir == Direction::Left { self.gap.0 > 0 } else { self.gap.1 > 0 }
+    /// The zones `window` takes.
+    pub fn zones_of(&self, window: &W) -> Option<Zones> {
+        self.find(window).map(|i| self.tiles[i].1)
+    }
+
+    fn side(&self, axis: usize) -> u32 {
+        if axis == 0 { self.sheet.0 } else { self.sheet.1 }
+    }
+
+    /// Whether `z` is on the sheet and no window but those at `except` takes any of it.
+    fn free(&self, z: &Zones, except: &[usize]) -> bool {
+        (0..2).all(|k| z[k][0] < z[k][1] && z[k][1] <= self.side(k))
+            && self.tiles.iter().enumerate().all(|(i, (_, t))| except.contains(&i) || !overlaps(t, z))
+    }
+
+    /// The windows taking any of `z`, but those at `except`.
+    fn in_the_way(&self, z: &Zones, except: usize) -> Vec<usize> {
+        (0..self.tiles.len()).filter(|&i| i != except && overlaps(&self.tiles[i].1, z)).collect()
+    }
+
+    /// The zones a step beyond `a`'s side towards `dir`, as wide as `a` (None at the frame).
+    fn strip(&self, a: &Zones, dir: Direction) -> Option<Zones> {
+        let k = dir.axis();
+        let mut s = *a;
+        s[k] = if dir.forward() {
+            if a[k][1] >= self.side(k) {
+                return None;
             }
-            Direction::Up | Direction::Down if self.columns[c].windows.len() == 1 => {
-                let gap = self.columns[c].gap;
-                if dir == Direction::Up { gap.0 > 0 } else { gap.1 > 0 }
-            }
-            _ => false,
-        }
-    }
-
-    pub fn focused(&self) -> Option<Window> {
-        self.focus.and_then(|(c, r)| self.columns.get(c)?.windows.get(r).cloned())
-    }
-
-    fn find(&self, window: &Window) -> Option<(usize, usize)> {
-        self.columns.iter().enumerate().find_map(|(c, col)| col.windows.iter().position(|w| w == window).map(|r| (c, r)))
-    }
-
-    pub fn focus_window(&mut self, window: &Window) {
-        if let Some(at) = self.find(window) {
-            self.focus = Some(at);
-        }
-    }
-
-    fn reshare_columns(&mut self, grid: &Grid) {
-        self.gap = (0, 0);
-        let widths = share(grid.zones.0, self.columns.len());
-        for (col, w) in self.columns.iter_mut().zip(widths) {
-            col.width = w;
-        }
-    }
-
-    fn reshare_rows(col: &mut Column, grid: &Grid) {
-        let n = col.windows.len();
-        col.gap = (0, 0);
-        col.heights = if n as u32 <= grid.zones.1 {
-            share(grid.zones.1, n).into_iter().map(f64::from).collect()
+            [a[k][1], a[k][1] + 1]
         } else {
-            vec![grid.zones.1 as f64 / n as f64; n]
+            if a[k][0] == 0 {
+                return None;
+            }
+            [a[k][0] - 1, a[k][0]]
         };
+        Some(s)
     }
 
-    /// A new window: a new column to the right of the focused one, or a new row under the focused
-    /// window, as `mode` says (see the top of this file).
-    /// Every window keeps a zone at least: with every zone taken (as many columns as zones across, each
-    /// with as many rows as zones down) there is no room, and the window is not added (false; the caller
-    /// floats it).
+    /// The sheet as `grid` cuts it: after a change of the screen's zones (another screen, another scale)
+    /// every edge goes to the same place in proportion; a window left with no zone is placed again as a
+    /// new one, or floats (take_evicted).
+    pub fn fit(&mut self, grid: &Grid) {
+        let (old, new) = (self.sheet, grid.zones);
+        if old == new {
+            return;
+        }
+        self.sheet = new;
+        if old.0 == 0 || old.1 == 0 {
+            return;
+        }
+        let focused = self.focused();
+        let scale = |e: u32, o: u32, n: u32| ((e as u64 * n as u64 + o as u64 / 2) / o as u64) as u32;
+        for (_, z) in &mut self.tiles {
+            for k in 0..2 {
+                let (o, n) = if k == 0 { (old.0, new.0) } else { (old.1, new.1) };
+                z[k] = [scale(z[k][0], o, n), scale(z[k][1], o, n)];
+            }
+        }
+        let (kept, lost): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tiles).into_iter().partition(|(_, z)| z[0][0] < z[0][1] && z[1][0] < z[1][1]);
+        self.tiles = kept;
+        self.focus = focused.as_ref().and_then(|w| self.find(w)).or(if self.tiles.is_empty() { None } else { Some(0) });
+        for (w, _) in lost {
+            if !self.add(w.clone(), grid) {
+                self.evicted.push(w);
+            }
+        }
+        if let Some(w) = &focused {
+            self.focus_window(w);
+        }
+    }
+
+    /// The windows a rescale left without a zone (fit), for the caller to float.
+    pub fn take_evicted(&mut self) -> Vec<W> {
+        std::mem::take(&mut self.evicted)
+    }
+
+    /// The largest free rectangle of zones (the topmost, then leftmost, of equals).
+    fn largest_free(&self) -> Option<Zones> {
+        let (nx, ny) = self.sheet;
+        let mut best: Option<(u32, Zones)> = None;
+        for y0 in 0..ny {
+            for x0 in 0..nx {
+                for y1 in y0 + 1..=ny {
+                    for x1 in x0 + 1..=nx {
+                        let z = [[x0, x1], [y0, y1]];
+                        let area = (x1 - x0) * (y1 - y0);
+                        if best.is_none_or(|(b, _)| area > b) && self.free(&z, &[]) {
+                            best = Some((area, z));
+                        }
+                    }
+                }
+            }
+        }
+        best.map(|(_, z)| z)
+    }
+
+    /// A new window: the largest free rectangle, else the second half of the focused window (cut along
+    /// its longer side; when that is a single zone, the largest window that can be cut). False with every
+    /// window a single zone: the caller floats it.
     #[must_use]
-    pub fn add(&mut self, window: Window, grid: &Grid, mode: NewWindow) -> bool {
-        let (fc, fr) = self.focus.unwrap_or((self.columns.len().saturating_sub(1), 0));
-        let room_across = (self.columns.len() as u32) < grid.zones.0;
-        let room = |c: &Column| (c.windows.len() as u32) < grid.zones.1;
-        let room_down = self.columns.get(fc).is_some_and(room);
-        let as_column = self.columns.is_empty()
-            || match mode {
-                NewWindow::Column => room_across,
-                NewWindow::Row => room_across && (self.columns.len() < 2 || !room_down),
-            };
-        if as_column {
-            let at = if self.columns.is_empty() { 0 } else { fc + 1 };
-            self.columns.insert(at, Column::new(window));
-            Self::reshare_rows(&mut self.columns[at], grid);
-            self.reshare_columns(grid);
-            self.focus = Some((at, 0));
+    pub fn add(&mut self, window: W, grid: &Grid) -> bool {
+        self.fit(grid);
+        if self.find(&window).is_some() {
             return true;
         }
-        // a row: under the focused window, else at the foot of the nearest column with room
-        let near = (0..self.columns.len()).filter(|&c| room(&self.columns[c])).min_by_key(|&c| c.abs_diff(fc));
-        let Some(c) = (if room_down { Some(fc) } else { near }) else { return false };
-        let r = if c == fc { fr + 1 } else { self.columns[c].windows.len() };
-        let col = &mut self.columns[c];
-        col.windows.insert(r, window);
-        Self::reshare_rows(col, grid);
-        self.focus = Some((c, r));
+        if let Some(z) = self.largest_free() {
+            self.tiles.push((window, z));
+            self.focus = Some(self.tiles.len() - 1);
+            return true;
+        }
+        let len = |z: &Zones, k: usize| z[k][1] - z[k][0];
+        let mut order: Vec<usize> = (0..self.tiles.len()).collect();
+        order.sort_by_key(|&i| (Some(i) != self.focus, std::cmp::Reverse(len(&self.tiles[i].1, 0) * len(&self.tiles[i].1, 1))));
+        let Some(i) = order.into_iter().find(|&i| len(&self.tiles[i].1, 0) > 1 || len(&self.tiles[i].1, 1) > 1) else { return false };
+        let z = self.tiles[i].1;
+        // the longer side as it shows (zones need not be square), when it can be cut
+        let (w, h) = (len(&z, 0) as f64 * grid.zone.0, len(&z, 1) as f64 * grid.zone.1);
+        let k = if (w >= h && len(&z, 0) > 1) || len(&z, 1) == 1 { 0 } else { 1 };
+        let cut = z[k][0] + len(&z, k).div_ceil(2);
+        let (mut first, mut second) = (z, z);
+        first[k][1] = cut;
+        second[k][0] = cut;
+        self.tiles[i].1 = first;
+        self.tiles.push((window, second));
+        self.focus = Some(self.tiles.len() - 1);
         true
     }
 
-    pub fn remove(&mut self, window: &Window, grid: &Grid) {
-        let Some((c, r)) = self.find(window) else { return };
-        self.columns[c].windows.remove(r);
-        if self.columns[c].windows.is_empty() {
-            self.columns.remove(c);
-            self.reshare_columns(grid);
-            self.focus = if self.columns.is_empty() { None } else { Some((c.min(self.columns.len() - 1), 0)) };
-        } else {
-            Self::reshare_rows(&mut self.columns[c], grid);
-            self.focus = Some((c, r.min(self.columns[c].windows.len() - 1)));
-        }
-    }
-
-    /// The windows column by column, with the columns' widths and the rows' heights.
-    fn snapshot(&self) -> Vec<Snapshot> {
-        self.columns.iter().map(|c| (c.windows.clone(), c.width, c.heights.clone(), c.gap)).collect()
-    }
-
-    /// Take `window` out of the layout, remembering where it was.
-    pub fn park(&mut self, window: &Window, grid: &Grid) -> Option<Placeholder> {
-        let (c, r) = self.find(window)?;
-        let col = &self.columns[c].windows;
-        let others: Vec<Window> = col.iter().filter(|w| *w != window).cloned().collect();
-        let placeholder = Placeholder {
-            above: if others.is_empty() { None } else { r.checked_sub(1).map(|i| col[i].clone()) },
-            below: if others.is_empty() { None } else { col.get(r + 1).cloned() },
-            column: others,
-            left: c.checked_sub(1).map(|i| self.columns[i].windows.clone()).unwrap_or_default(),
-            right: self.columns.get(c + 1).map(|col| col.windows.clone()).unwrap_or_default(),
-            index: (c, r),
-            before: self.snapshot(),
-            gap: self.gap,
+    /// Take `window` out. Its zones go to the windows on one side of it that line up with it exactly
+    /// (left, then above, right, below): each grows across the gap. With none, they stay paper.
+    pub fn remove(&mut self, window: &W, grid: &Grid) {
+        self.fit(grid);
+        let Some(i) = self.find(window) else { return };
+        let was_focused = self.focus == Some(i);
+        let (_, z) = self.tiles.remove(i);
+        self.focus = match self.focus {
+            Some(f) if f > i => Some(f - 1),
+            Some(f) if f == i => None,
+            f => f,
         };
-        self.remove(window, grid);
-        Some(placeholder)
+        let mut grown = None;
+        for dir in [Direction::Left, Direction::Up, Direction::Right, Direction::Down] {
+            let (k, o) = (dir.axis(), 1 - dir.axis());
+            // the windows touching that side of the gap, all within its span and covering it together
+            let edge = if dir.forward() { z[k][1] } else { z[k][0] };
+            let side: Vec<usize> = (0..self.tiles.len())
+                .filter(|&j| {
+                    let t = &self.tiles[j].1;
+                    let touches = if dir.forward() { t[k][0] == edge } else { t[k][1] == edge };
+                    touches && t[o][0] < z[o][1] && z[o][0] < t[o][1]
+                })
+                .collect();
+            let within = side.iter().all(|&j| self.tiles[j].1[o][0] >= z[o][0] && self.tiles[j].1[o][1] <= z[o][1]);
+            let covered: u32 = side.iter().map(|&j| self.tiles[j].1[o][1] - self.tiles[j].1[o][0]).sum();
+            if side.is_empty() || !within || covered != z[o][1] - z[o][0] {
+                continue;
+            }
+            for &j in &side {
+                let t = &mut self.tiles[j].1;
+                if dir.forward() {
+                    t[k][0] = z[k][0];
+                } else {
+                    t[k][1] = z[k][1];
+                }
+            }
+            grown = side.first().copied();
+            break;
+        }
+        if was_focused || self.focus.is_none() {
+            self.focus = grown.or_else(|| self.nearest(&z)).or(if self.tiles.is_empty() { None } else { Some(0) });
+        }
     }
 
-    /// Put a parked window back where its placeholder says: into its column between the same
-    /// neighbours, or as its own column between the same columns (at the nearest place when those have
-    /// gone). With the layout as it was before, the sizes are as they were too. False when there is no
-    /// zone for it (Layout::add): the caller floats it.
+    /// The window nearest to `z` (centre to centre).
+    fn nearest(&self, z: &Zones) -> Option<usize> {
+        let centre = |z: &Zones| [z[0][0] + z[0][1], z[1][0] + z[1][1]];
+        let c = centre(z);
+        (0..self.tiles.len()).min_by_key(|&i| {
+            let t = centre(&self.tiles[i].1);
+            t[0].abs_diff(c[0]) + t[1].abs_diff(c[1])
+        })
+    }
+
+    /// Take `window` out (remove), remembering where it was.
+    pub fn park(&mut self, window: &W, grid: &Grid) -> Option<Placeholder<W>> {
+        self.fit(grid);
+        let zones = self.zones_of(window)?;
+        let before = self.tiles.clone();
+        self.remove(window, grid);
+        Some(Placeholder { zones, sheet: self.sheet, before, after: self.tiles.clone() })
+    }
+
+    /// Put a parked window back: with the layout as it was left, the layout as it was before; else into
+    /// its own zones when they are free, else as a new window (add; false: the caller floats it).
     #[must_use]
-    pub fn unpark(&mut self, window: Window, placeholder: &Placeholder, grid: &Grid, mode: NewWindow) -> bool {
-        let column_of = |ws: &[Window], cols: &[Column]| cols.iter().position(|c| c.windows.iter().any(|w| ws.contains(w)));
-        let column = (!placeholder.column.is_empty()).then(|| column_of(&placeholder.column, &self.columns)).flatten();
-        if let Some(c) = column.filter(|&c| (self.columns[c].windows.len() as u32) < grid.zones.1) {
-            let col = &self.columns[c].windows;
-            let r = placeholder
-                .above
-                .as_ref()
-                .and_then(|a| col.iter().position(|w| w == a))
-                .map(|i| i + 1)
-                .or_else(|| placeholder.below.as_ref().and_then(|b| col.iter().position(|w| w == b)))
-                .unwrap_or(placeholder.index.1.min(col.len()));
-            self.columns[c].windows.insert(r, window);
-            Self::reshare_rows(&mut self.columns[c], grid);
-            self.focus = Some((c, r));
-        } else if (self.columns.len() as u32) < grid.zones.0 {
-            let c = column_of(&placeholder.left, &self.columns)
-                .map(|i| i + 1)
-                .or_else(|| column_of(&placeholder.right, &self.columns))
-                .unwrap_or(placeholder.index.0.min(self.columns.len()));
-            self.columns.insert(c, Column::new(window));
-            Self::reshare_rows(&mut self.columns[c], grid);
-            self.reshare_columns(grid);
-            self.focus = Some((c, 0));
-        } else {
-            // no room for a column of its own: placed like a new window, or nowhere
-            if !self.add(window, grid, mode) {
-                return false;
+    pub fn unpark(&mut self, window: W, placeholder: &Placeholder<W>, grid: &Grid) -> bool {
+        self.fit(grid);
+        if placeholder.sheet == self.sheet {
+            if self.tiles == placeholder.after && placeholder.before.iter().any(|(w, _)| *w == window) {
+                self.tiles = placeholder.before.clone();
+                self.focus = self.find(&window);
+                return true;
+            }
+            if self.free(&placeholder.zones, &[]) {
+                self.tiles.push((window, placeholder.zones));
+                self.focus = Some(self.tiles.len() - 1);
+                return true;
             }
         }
-        let windows = |s: &[Snapshot]| s.iter().map(|c| c.0.clone()).collect::<Vec<_>>();
-        if windows(&self.snapshot()) == windows(&placeholder.before) {
-            for (col, (_, width, heights, gap)) in self.columns.iter_mut().zip(&placeholder.before) {
-                col.width = *width;
-                col.heights = heights.clone();
-                col.gap = *gap;
-            }
-            self.gap = placeholder.gap;
-        }
-        true
+        self.add(window, grid)
+    }
+
+    /// The window the focus goes to towards `dir`: of those wholly beyond the focused one's side, one
+    /// level with it first, then the nearest, then the most in line.
+    fn towards(&self, dir: Direction) -> Option<usize> {
+        let a = &self.tiles[self.focus?].1;
+        let (k, o) = (dir.axis(), 1 - dir.axis());
+        (0..self.tiles.len())
+            .filter(|&i| {
+                let b = &self.tiles[i].1;
+                if dir.forward() { b[k][0] >= a[k][1] } else { b[k][1] <= a[k][0] }
+            })
+            .min_by_key(|&i| {
+                let b = &self.tiles[i].1;
+                let level = b[o][0] < a[o][1] && a[o][0] < b[o][1];
+                let gap = if dir.forward() { b[k][0] - a[k][1] } else { a[k][0] - b[k][1] };
+                (!level, gap, (b[o][0] + b[o][1]).abs_diff(a[o][0] + a[o][1]))
+            })
+    }
+
+    /// Whether no window lies towards `dir` of the focused one (the focus goes on to the next screen).
+    pub fn at_edge(&self, dir: Direction) -> bool {
+        self.focus.is_none() || self.towards(dir).is_none()
+    }
+
+    /// Whether the focused window is against the frame towards `dir` (a move goes on to the next screen).
+    pub fn against_frame(&self, dir: Direction) -> bool {
+        self.focus.and_then(|i| self.tiles.get(i)).is_none_or(|(_, a)| self.strip(a, dir).is_none())
     }
 
     /// Move the focus; returns the newly focused window.
-    pub fn focus_dir(&mut self, dir: Direction) -> Option<Window> {
-        let (c, r) = self.focus?;
-        let (nc, nr) = match dir {
-            Direction::Left if c > 0 => (c - 1, r.min(self.columns[c - 1].windows.len() - 1)),
-            Direction::Right if c + 1 < self.columns.len() => (c + 1, r.min(self.columns[c + 1].windows.len() - 1)),
-            Direction::Up if r > 0 => (c, r - 1),
-            Direction::Down if r + 1 < self.columns[c].windows.len() => (c, r + 1),
-            _ => (c, r),
-        };
-        self.focus = Some((nc, nr));
+    pub fn focus_dir(&mut self, dir: Direction) -> Option<W> {
+        if let Some(i) = self.towards(dir) {
+            self.focus = Some(i);
+        }
         self.focused()
     }
 
-    /// Move the focused window: left/right into the neighbouring column as a row (or out to a new
-    /// column at the edge), up/down within its column; a window alone that way (on the sheet across, in its
-    /// column down) a zone into the empty zones beside it. Into a full column, or nowhere, it stays.
+    /// Move the focused window a zone towards `dir`, keeping its size: into free zones; past a window
+    /// spanning the same rows (or columns), swapping places with it; else nowhere, and nothing changes.
     pub fn move_dir(&mut self, dir: Direction, grid: &Grid) {
-        let Some((c, r)) = self.focus else { return };
-        // a window alone that way: a zone step into the empty zones beside it, keeping its size
-        if self.can_shift(dir) {
-            let forward = matches!(dir, Direction::Right | Direction::Down);
-            let gap = if matches!(dir, Direction::Left | Direction::Right) { &mut self.gap } else { &mut self.columns[c].gap };
-            shift_gap(gap, forward);
+        self.fit(grid);
+        let Some(i) = self.focus else { return };
+        let a = self.tiles[i].1;
+        let Some(strip) = self.strip(&a, dir) else { return };
+        let (k, o) = (dir.axis(), 1 - dir.axis());
+        if self.free(&strip, &[i]) {
+            let mut z = a;
+            z[k] = if dir.forward() { [a[k][0] + 1, a[k][1] + 1] } else { [a[k][0] - 1, a[k][1] - 1] };
+            self.tiles[i].1 = z;
             return;
         }
-        match dir {
-            Direction::Up | Direction::Down => {
-                let col = &mut self.columns[c];
-                let to = if dir == Direction::Up { r.checked_sub(1) } else { (r + 1 < col.windows.len()).then_some(r + 1) };
-                if let Some(to) = to {
-                    col.windows.swap(r, to);
-                    self.focus = Some((c, to));
-                }
-            }
-            Direction::Left | Direction::Right => {
-                let alone = self.columns[c].windows.len() == 1;
-                let target = if dir == Direction::Left { c.checked_sub(1) } else { (c + 1 < self.columns.len()).then_some(c + 1) };
-                // nowhere to go: a full column beside it (a row there would be less than a zone), or the
-                // frame with no room for a column of its own; then nothing changes, sizes included
-                let room = |col: &Column| (col.windows.len() as u32) < grid.zones.1;
-                let goes = match target {
-                    Some(t) => room(&self.columns[t]),
-                    None => !alone && (self.columns.len() as u32) < grid.zones.0,
-                };
-                if !goes {
-                    return;
-                }
-                let window = self.columns[c].windows.remove(r);
-                match target {
-                    Some(t) => {
-                        self.columns[t].windows.push(window);
-                        let at = (t, self.columns[t].windows.len() - 1);
-                        Self::reshare_rows(&mut self.columns[t], grid);
-                        if alone {
-                            self.columns.remove(c);
-                            self.focus = Some((if t > c { t - 1 } else { t }, at.1));
-                        } else {
-                            Self::reshare_rows(&mut self.columns[c], grid);
-                            self.focus = Some(at);
-                        }
-                    }
-                    None => {
-                        let at = if dir == Direction::Left { 0 } else { self.columns.len() };
-                        Self::reshare_rows(&mut self.columns[c], grid);
-                        self.columns.insert(at, Column::new(window));
-                        Self::reshare_rows(&mut self.columns[at], grid);
-                        self.focus = Some((at, 0));
-                    }
-                }
-                self.reshare_columns(grid);
-            }
+        let way = self.in_the_way(&strip, i);
+        let [j] = way[..] else { return };
+        let b = self.tiles[j].1;
+        if b[o] != a[o] {
+            return;
         }
+        let (la, lb) = (a[k][1] - a[k][0], b[k][1] - b[k][0]);
+        let (mut na, mut nb) = (a, b);
+        if dir.forward() {
+            nb[k] = [a[k][0], a[k][0] + lb];
+            na[k] = [a[k][0] + lb, b[k][1]];
+        } else {
+            na[k] = [b[k][0], b[k][0] + la];
+            nb[k] = [b[k][0] + la, a[k][1]];
+        }
+        self.tiles[i].1 = na;
+        self.tiles[j].1 = nb;
     }
 
-    /// Resize by one zone: left/right moves the boundary on the focused column's right (on its left for
-    /// the last column) one zone that way, up/down the boundary under the focused row (over it for the
-    /// last row); the window on the other side gives or takes the zone. A window alone across (or down)
-    /// moves its right (or bottom) edge instead, in from the frame (to a zone) and back out, then its
-    /// left (or top) edge out to the frame; the zones it leaves stay empty until a neighbour comes.
+    /// Resize the focused window by a zone. Right or down: a zone larger, on its right (bottom) side, or
+    /// on its left (top) when that cannot be: into free zones, or taking the zone from the windows there
+    /// when each of them keeps one. Left or up: a zone smaller, from its right (bottom) side, or its left
+    /// (top) when the other is on the frame; the windows beside that side and within its span take the
+    /// zone, else it stays paper.
     pub fn resize(&mut self, dir: Direction, grid: &Grid) {
-        let Some((c, r)) = self.focus else { return };
-        let grow = matches!(dir, Direction::Right | Direction::Down);
-        match dir {
-            Direction::Left | Direction::Right => {
-                let n = self.columns.len();
-                if n < 2 {
-                    resize_gap(&mut self.gap, grid.zones.0, grow);
-                    return;
+        self.fit(grid);
+        let Some(i) = self.focus else { return };
+        let a = self.tiles[i].1;
+        let (k, o) = (dir.axis(), 1 - dir.axis());
+        let len = |z: &Zones| z[k][1] - z[k][0];
+        if dir.forward() {
+            for side in [true, false] {
+                let towards = match (k, side) {
+                    (0, true) => Direction::Right,
+                    (0, false) => Direction::Left,
+                    (_, true) => Direction::Down,
+                    (_, false) => Direction::Up,
+                };
+                let Some(strip) = self.strip(&a, towards) else { continue };
+                let way = self.in_the_way(&strip, i);
+                if !way.iter().all(|&j| len(&self.tiles[j].1) > 1) {
+                    continue;
                 }
-                let (a, b) = if c + 1 < n { (c, c + 1) } else { (c - 1, c) };
-                let (from, to) = if grow { (b, a) } else { (a, b) };   // the boundary moves right: the left side grows
-                if self.columns[from].width > 1 {
-                    self.columns[from].width -= 1;
-                    self.columns[to].width += 1;
+                for &j in &way {
+                    let t = &mut self.tiles[j].1;
+                    if side { t[k][0] += 1 } else { t[k][1] -= 1 }
+                }
+                let t = &mut self.tiles[i].1;
+                if side { t[k][1] += 1 } else { t[k][0] -= 1 }
+                return;
+            }
+        } else {
+            if len(&a) < 2 {
+                return;
+            }
+            // the far side, unless it is on the frame and the near one is not
+            let far = !(a[k][1] == self.side(k) && a[k][0] > 0);
+            let edge = if far { a[k][1] } else { a[k][0] };
+            for j in 0..self.tiles.len() {
+                let t = &mut self.tiles[j].1;
+                let beside = if far { t[k][0] == edge } else { t[k][1] == edge };
+                if j != i && beside && t[o][0] >= a[o][0] && t[o][1] <= a[o][1] {
+                    if far { t[k][0] -= 1 } else { t[k][1] += 1 }
                 }
             }
-            Direction::Up | Direction::Down => {
-                let col = &mut self.columns[c];
-                let n = col.windows.len();
-                if n < 2 {
-                    resize_gap(&mut col.gap, grid.zones.1, grow);
-                    return;
-                }
-                let (a, b) = if r + 1 < n { (r, r + 1) } else { (r - 1, r) };
-                let (from, to) = if grow { (b, a) } else { (a, b) };   // the boundary moves down: the upper side grows
-                if col.heights[from] >= 2.0 {
-                    col.heights[from] -= 1.0;
-                    col.heights[to] += 1.0;
-                }
-            }
+            let t = &mut self.tiles[i].1;
+            if far { t[k][1] -= 1 } else { t[k][0] += 1 }
         }
     }
+}
 
+impl Layout<Window> {
     /// Place every window on the grid and tell it its size. Each keeps its tile (tile_of), for the renderer.
     /// `skip` is a fullscreen window, placed by the caller.
     pub fn arrange(&self, space: &mut Space<Window>, grid: &Grid, skip: Option<&Window>) {
-        // a column alone on the sheet spans what its gap leaves, and a window alone in its column likewise
-        let lone = self.columns.len() == 1;
-        let mut x0 = if lone { span(grid.zones.0, self.gap).0 } else { 0 };
-        let last_c = self.columns.len().saturating_sub(1);
-        for (ci, col) in self.columns.iter().enumerate() {
-            let x1 = match (lone, ci == last_c) {
-                (true, _) => span(grid.zones.0, self.gap).1,
-                (false, true) => grid.zones.0.max(x0 + 1),
-                (false, false) => x0 + col.width,
-            };
-            let single = col.windows.len() == 1;
-            let mut y0 = if single { span(grid.zones.1, col.gap).0 as f64 } else { 0.0 };
-            let last_r = col.windows.len().saturating_sub(1);
-            for (ri, window) in col.windows.iter().enumerate() {
-                let y1 = match (single, ri == last_r) {
-                    (true, _) => span(grid.zones.1, col.gap).1 as f64,
-                    (false, true) => (grid.zones.1 as f64).max(y0 + 1.0),
-                    (false, false) => y0 + col.heights[ri],
-                };
-                let tile = grid.tile(x0, x1, y0, y1);
-                let rect = tile.logical;
-                set_tile(window, Some(tile));
-                if Some(window) == skip {
-                    y0 = y1;
-                    continue;
-                }
-                if let Some(toplevel) = window.toplevel() {
-                    toplevel.with_pending_state(|state| {
-                        state.size = Some(rect.size);
-                        state.states.set(xdg_toplevel::State::TiledLeft);
-                        state.states.set(xdg_toplevel::State::TiledRight);
-                        state.states.set(xdg_toplevel::State::TiledTop);
-                        state.states.set(xdg_toplevel::State::TiledBottom);
-                        state.states.unset(xdg_toplevel::State::Fullscreen);
-                    });
-                    if toplevel.is_initial_configure_sent() {
-                        toplevel.send_pending_configure();
-                    }
-                } else if let Some(x11) = window.x11_surface() {
-                    // an X11 window is told its place and size directly (in the space's coordinates)
-                    let _ = x11.configure(rect);
-                }
-                space.map_element(window.clone(), rect.loc, false);
-                y0 = y1;
+        for (window, z) in &self.tiles {
+            let tile = grid.tile(z[0][0], z[0][1], z[1][0] as f64, z[1][1] as f64);
+            let rect = tile.logical;
+            set_tile(window, Some(tile));
+            if Some(window) == skip {
+                continue;
             }
-            x0 = x1;
+            if let Some(toplevel) = window.toplevel() {
+                toplevel.with_pending_state(|state| {
+                    state.size = Some(rect.size);
+                    state.states.set(xdg_toplevel::State::TiledLeft);
+                    state.states.set(xdg_toplevel::State::TiledRight);
+                    state.states.set(xdg_toplevel::State::TiledTop);
+                    state.states.set(xdg_toplevel::State::TiledBottom);
+                    state.states.unset(xdg_toplevel::State::Fullscreen);
+                });
+                if toplevel.is_initial_configure_sent() {
+                    toplevel.send_pending_configure();
+                }
+            } else if let Some(x11) = window.x11_surface() {
+                // an X11 window is told its place and size directly (in the space's coordinates)
+                let _ = x11.configure(rect);
+            }
+            space.map_element(window.clone(), rect.loc, false);
         }
     }
 }
@@ -592,30 +580,181 @@ pub fn tile_of(window: &Window, at: Rectangle<i32, Logical>) -> Option<Tile> {
 mod tests {
     use super::*;
     use crate::title::{margin, tick, LINE};
+    use Direction::*;
 
-    /// A window alone, resized and moved in zones along a side of 6: a zone at least, never past the frame,
-    /// its size kept as it moves; and its span inside a side that has fewer zones since.
+    /// A sheet of `nx` by `ny` square zones.
+    fn sheet(nx: u32, ny: u32) -> Grid {
+        Grid {
+            area: Rectangle::default(),
+            origin: (0.0, 0.0).into(),
+            zone: (50.0, 50.0),
+            zones: (nx, ny),
+            at: (0, 0).into(),
+            scale: 1.0,
+            mode: (nx as i32 * 50, ny as i32 * 50),
+            margin: 0,
+        }
+    }
+
+    fn z(x0: u32, x1: u32, y0: u32, y1: u32) -> Zones {
+        [[x0, x1], [y0, y1]]
+    }
+
+    fn at(l: &Layout<u32>, w: u32) -> Zones {
+        l.zones_of(&w).unwrap()
+    }
+
+    /// Two windows, then halves of halves; with every window a zone, the next is refused (it floats).
     #[test]
-    fn a_window_alone_steps_in_zones() {
-        let mut gap = (0, 0);
-        for _ in 0..10 {
-            resize_gap(&mut gap, 6, false);
+    fn new_windows_take_free_zones_then_halves() {
+        let g = sheet(6, 4);
+        let mut l = Layout::default();
+        assert!(l.add(1, &g));
+        assert_eq!(at(&l, 1), z(0, 6, 0, 4), "the first takes the frame");
+        assert!(l.add(2, &g));
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 3, 0, 4), z(3, 6, 0, 4)), "the second the right half");
+        assert!(l.add(3, &g));
+        assert_eq!((at(&l, 2), at(&l, 3)), (z(3, 6, 0, 2), z(3, 6, 2, 4)), "the third the focused one's lower half");
+        let mut l = Layout::default();
+        for w in 0..24 {
+            assert!(l.add(w, &g), "window {w}");
         }
-        assert_eq!(gap, (0, 5), "shrinks to one zone, no further");
-        assert!(!shift_gap(&mut gap, false), "at the frame, no step back");
+        assert!(!l.add(24, &g), "every zone taken");
+        // a closed window's zone goes to a neighbour, which the next one halves again
+        l.remove(&5, &g);
+        let area = |t: &Zones| (t[0][1] - t[0][0]) * (t[1][1] - t[1][0]);
+        assert_eq!(l.tiles.iter().filter(|(_, t)| area(t) == 2).count(), 1);
+        assert!(l.add(24, &g));
+    }
+
+    /// The case that started this: a window moves left past rows that are not its own, into free zones,
+    /// and nothing else changes size; against a window of the same rows it swaps; else it stops.
+    #[test]
+    fn moves_keep_sizes() {
+        let g = sheet(12, 7);
+        let mut l = Layout::default();
+        l.tiles = vec![(1, z(0, 4, 0, 3)), (2, z(6, 10, 4, 7))];
+        l.sheet = g.zones;
+        l.focus = Some(1);
+        for _ in 0..6 {
+            l.move_dir(Left, &g);
+        }
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 4, 0, 3), z(0, 4, 4, 7)), "under the other, sizes kept");
+        l.move_dir(Up, &g);
+        assert_eq!(at(&l, 2), z(0, 4, 3, 6), "up into the free row");
+        l.move_dir(Up, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 4, 3, 6), z(0, 4, 0, 3)), "then swaps with the one above");
+        // different spans: it stops
+        l.tiles = vec![(1, z(0, 4, 0, 3)), (2, z(4, 8, 1, 4))];
+        l.focus = Some(1);
+        let before = l.tiles.clone();
+        l.move_dir(Left, &g);
+        assert_eq!(l.tiles, before, "half in the way: nothing changes");
+        // side by side, different widths: they swap, each its own width
+        l.tiles = vec![(1, z(0, 8, 0, 7)), (2, z(8, 12, 0, 7))];
+        l.focus = Some(1);
+        l.move_dir(Left, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(4, 12, 0, 7), z(0, 4, 0, 7)));
+        assert!(l.against_frame(Left));
+        l.move_dir(Left, &g);
+        assert_eq!(at(&l, 2), z(0, 4, 0, 7), "at the frame, no further");
+    }
+
+    /// Right and down grow, left and up shrink, a zone at least; a neighbour gives or takes the zone.
+    #[test]
+    fn resizing() {
+        let g = sheet(6, 4);
+        let mut l = Layout::default();
+        assert!(l.add(1, &g));
+        for _ in 0..8 {
+            l.resize(Left, &g);
+        }
+        assert_eq!(at(&l, 1), z(0, 1, 0, 4), "shrinks from the right, to a zone");
         for _ in 0..3 {
-            assert!(shift_gap(&mut gap, true));
+            l.move_dir(Right, &g);
         }
-        assert_eq!((gap, span(6, gap)), ((3, 2), (3, 4)), "three zones on, still one zone wide");
-        resize_gap(&mut gap, 6, true);
-        resize_gap(&mut gap, 6, true);
-        assert_eq!(gap, (3, 0), "grows to the frame on its far side first");
-        resize_gap(&mut gap, 6, true);
-        assert_eq!(gap, (2, 0), "then back towards the near side");
-        assert!(!shift_gap(&mut gap, true), "at the frame, no step on");
-        // a side with fewer zones (another screen): still inside it, a zone at least
-        assert_eq!(span(2, (3, 0)), (1, 2));
-        assert_eq!(span(4, (0, 5)), (0, 1));
+        for _ in 0..8 {
+            l.resize(Right, &g);
+        }
+        assert_eq!(at(&l, 1), z(0, 6, 0, 4), "grows right to the frame, then left");
+        assert!(l.add(2, &g));
+        l.focus_window(&1);
+        l.resize(Right, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 4, 0, 4), z(4, 6, 0, 4)), "takes a zone from its neighbour");
+        l.resize(Right, &g);
+        l.resize(Right, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 5, 0, 4), z(5, 6, 0, 4)), "which keeps one");
+        l.focus_window(&2);
+        l.resize(Left, &g);
+        assert_eq!(at(&l, 2), z(5, 6, 0, 4), "a zone at least");
+        l.resize(Right, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 4, 0, 4), z(4, 6, 0, 4)), "on the frame, it grows on its left");
+        l.resize(Left, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 5, 0, 4), z(5, 6, 0, 4)), "and gives it back");
+        l.resize(Up, &g);
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 5, 0, 4), z(5, 6, 0, 3)), "a zone shorter: paper under it");
+    }
+
+    /// A closed window's zones go to the windows that line up with it; parked and back, all as before.
+    #[test]
+    fn closing_and_parking() {
+        let g = sheet(6, 4);
+        let mut l = Layout::default();
+        for w in 1..=3 {
+            assert!(l.add(w, &g));
+        }
+        let three = l.tiles.clone();
+        l.remove(&1, &g);
+        assert_eq!((at(&l, 2), at(&l, 3)), (z(0, 6, 0, 2), z(0, 6, 2, 4)), "both on the right grow left");
+        assert!(l.add(1, &g));
+        l.tiles = three.clone();
+        l.remove(&2, &g);
+        assert_eq!(at(&l, 3), z(3, 6, 0, 4), "the one below grows up");
+        // two that do not line up: paper
+        l.tiles = vec![(1, z(0, 3, 0, 3)), (2, z(3, 6, 0, 4)), (3, z(0, 2, 3, 4))];
+        l.remove(&2, &g);
+        assert_eq!(l.tiles, vec![(1, z(0, 3, 0, 3)), (3, z(0, 2, 3, 4))]);
+        // parked, then back: the layout as before
+        l.tiles = three.clone();
+        l.focus = Some(1);
+        let p = l.park(&2, &g).unwrap();
+        assert!(!l.contains(&2));
+        assert!(l.unpark(2, &p, &g));
+        assert_eq!(l.tiles, three);
+        // the others changed meanwhile: back into its zones when they are free
+        let p = l.park(&2, &g).unwrap();
+        l.tiles = vec![(1, z(0, 3, 0, 4)), (3, z(3, 6, 2, 4))];
+        assert!(l.unpark(2, &p, &g));
+        assert_eq!(at(&l, 2), z(3, 6, 0, 2));
+    }
+
+    /// Focus goes to the window beyond the side, level with the focused one first.
+    #[test]
+    fn focus_moves_by_place() {
+        let g = sheet(6, 4);
+        let mut l = Layout::default();
+        l.sheet = g.zones;
+        l.tiles = vec![(1, z(0, 3, 0, 4)), (2, z(3, 6, 0, 2)), (3, z(3, 6, 2, 4))];
+        l.focus = Some(2);
+        assert_eq!(l.focus_dir(Left), Some(1));
+        assert_eq!(l.focus_dir(Right), Some(2), "level, then the upper one");
+        assert_eq!(l.focus_dir(Down), Some(3));
+        assert!(l.at_edge(Right) && l.at_edge(Down) && !l.at_edge(Up));
+    }
+
+    /// A smaller sheet (another screen): every edge in proportion; a window left with nothing is placed again.
+    #[test]
+    fn fits_another_sheet() {
+        let mut l = Layout::default();
+        l.sheet = (12, 7);
+        l.tiles = vec![(1, z(0, 6, 0, 7)), (2, z(6, 12, 0, 4)), (3, z(6, 12, 4, 5))];
+        l.focus = Some(0);
+        l.fit(&sheet(6, 4));
+        assert_eq!((at(&l, 1), at(&l, 2)), (z(0, 3, 0, 4), z(3, 6, 0, 2)));
+        // 3 was one row of seven: rows 4..5 become 2..3 (rounded), still a zone
+        assert_eq!(at(&l, 3), z(3, 6, 2, 3));
+        assert!(l.take_evicted().is_empty());
+        assert_eq!(l.focused(), Some(1));
     }
 
     /// At every scale, tiles land on whole physical pixels symmetric about the frame: each border abuts

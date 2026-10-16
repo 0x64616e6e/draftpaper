@@ -1,5 +1,13 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * Free-form tiling: every window takes a rectangle of zones of its own.
+    It moves a zone at a time keeping its size, into free zones, or past a
+    window of the same rows (or columns), swapping places; anything else
+    stops it. Mod+Ctrl+Right/Down make it a zone larger (into free zones,
+    or from the windows there), Left/Up a zone smaller. A new window takes
+    the largest free rectangle, else the second half of the focused one;
+    a closed one leaves its zones to the windows that line up with it.
+    `[layout] new_window` is gone.
   * The top and bottom margins number their zones (1 from the left), as the
     side margins letter theirs, in every zone nothing else takes.
   * Every window is a zone at least. A window alone on the sheet (or alone

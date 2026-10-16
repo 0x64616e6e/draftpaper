@@ -167,7 +167,7 @@ impl Draftpaper {
         let g = self.screens[j].grid;
         let ws = &mut self.screens[j].workspaces[k];
         // with no zone left for it there (Layout::add), it floats
-        if !ws.layout.add(window.clone(), &g, self.config.new_window) {
+        if !ws.layout.add(window.clone(), &g) {
             ws.floating.push(window);
         }
         self.relayout();

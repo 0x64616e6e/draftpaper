@@ -10,8 +10,8 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+Return | Terminal (alacritty) |
 | Mod+d | Launcher (fuzzel) |
 | Mod+h j k l · Mod+Up/Down | Move the focus |
-| Mod+Shift+h j k l · Mod+Shift+arrows | Move the window; a window alone smaller than the frame moves a zone at a time |
-| Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going); a window alone moves its right or bottom edge in from the frame |
+| Mod+Shift+h j k l · Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap; else it stays |
+| Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going): right and down larger, left and up smaller |
 | Mod+f | Fullscreen |
 | Mod+Shift+q | Close the window |
 | Mod+1 … Mod+9, Mod+0 | Workspace 1 … 9, 10 |
@@ -19,11 +19,12 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+Shift+e | Leave the session |
 | Ctrl+Alt+F1 … F12 | Virtual terminal |
 
-The first two windows sit side by side; a third opens a new column, or a row under the focused one
-(`[layout] new_window`). Dialogs, and windows that cannot fill a tile (one fixed size, or a maximum
-below the tile), float centred. A browser's picture-in-picture (Meet, videos) floats in the bottom-right
-corner, follows you from workspace to workspace and leaves the focus where it was. `[[rule]]` in
-config.toml floats, pins or places other windows.
+Every window takes a rectangle of zones. A new window takes the largest free one, else the second half of
+the focused window; a closed window's zones go to the windows that line up with it, else stay paper.
+Dialogs, and windows that cannot fill a tile (one fixed size, or a maximum below the tile), float centred.
+A browser's picture-in-picture (Meet, videos) floats in the bottom-right corner, follows you from
+workspace to workspace and leaves the focus where it was. `[[rule]]` in config.toml floats, pins or
+places other windows.
 
 ## Parking (the side margins)
 
@@ -121,7 +122,7 @@ between them, ← → along, each change shown at once.
 Top level: `theme`, `margin`, `glyphs`, `wallpaper`, `margins`, `title_tint`. Tables: `[title]`
 (project, drawn), `[[cell]]` (cells of your own), `[alerts]`, `[idle]`, `[apps]` (theme, skip,
 firefox_text, firefox_ui_pt), `[hooks]` (theme), `[commands]` (screenshot), `[input]` (keyboard layout,
-variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[layout]` (new_window), `[[rule]]` (window rules:
+variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[[rule]]` (window rules:
 app_id, title, pip; float, sticky, place, focus),
 `[animations]`, `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
 `wallpaper_position`, `wallpaper_brightness`, `wallpaper_wash`, `wallpaper_blur`, `wallpaper_dirs`, `[bindings]`. Displays are matched by connector

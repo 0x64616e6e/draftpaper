@@ -350,6 +350,15 @@ impl Draftpaper {
             s.workspaces.retain(|w| w.number == current || !w.is_empty());
             s.current = s.workspaces.iter().position(|w| w.number == current).unwrap_or(0);
         }
+        // every layout on its screen's zones (another screen or scale since); a window with no zone left floats
+        for s in &mut self.screens {
+            let grid = s.grid;
+            for w in &mut s.workspaces {
+                w.layout.fit(&grid);
+                let evicted = w.layout.take_evicted();
+                w.floating.extend(evicted);
+            }
+        }
         for s in &self.screens {
             // windows of workspaces not shown leave the space
             for (k, w) in s.workspaces.iter().enumerate() {
@@ -589,7 +598,6 @@ impl Draftpaper {
     /// Place a new window, floating (`dialog`) or in the layout of the active screen, as the window
     /// rules decided (`d`: sticky, the corner, the keyboard or not).
     pub fn place_as(&mut self, window: Window, dialog: bool, d: crate::rules::Decision) {
-        let mode = self.config.new_window;
         if dialog && d.sticky {
             window.user_data().insert_if_missing(|| crate::rules::Sticky);
         }
@@ -600,7 +608,7 @@ impl Draftpaper {
             let grid = screen.grid;
             if dialog {
                 screen.workspace_mut().floating.push(window.clone());
-            } else if !screen.layout_mut().add(window.clone(), &grid, mode) {
+            } else if !screen.layout_mut().add(window.clone(), &grid) {
                 // every zone taken (Layout::add): it floats
                 screen.workspace_mut().floating.push(window.clone());
             }

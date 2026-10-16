@@ -14,9 +14,6 @@
 //!     enabled = true                   # false: reduced motion, every change at once
 //!     duration_ms = 220
 //!
-//!     [layout]
-//!     new_window = "column"            # a third window: a new column, or "row" (under the focused one)
-//!
 //!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,
 //!     title = "^Picture"               # sticky, place = "centre"|"corner", focus
 //!     float = true
@@ -104,8 +101,6 @@ pub struct Config {
     pub bindings: Vec<Binding>,
     /// how long parking, unparking and switching workspaces take; None: no animations
     pub animations: Option<std::time::Duration>,
-    /// where a third window goes: a new column, or a row in the focused column (layout.rs)
-    pub new_window: crate::layout::NewWindow,
     /// window rules: the built-in ones, then config.toml's [[rule]]s (rules.rs)
     pub rules: Vec<crate::rules::Rule>,
 }
@@ -279,14 +274,9 @@ impl Config {
         let enabled = anim.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true);
         let ms = anim.get("duration_ms").and_then(|v| v.as_integer()).unwrap_or(220).clamp(0, 2000) as u64;
         let animations = (enabled && ms > 0).then(|| std::time::Duration::from_millis(ms));
-        let new_window = match table.get("layout").and_then(|l| l.get("new_window")).and_then(|v| v.as_str()) {
-            None | Some("column") => crate::layout::NewWindow::Column,
-            Some("row") => crate::layout::NewWindow::Row,
-            Some(other) => return Err(format!("[layout] new_window = \"{other}\": \"column\" or \"row\"")),
-        };
         let mut rules = crate::rules::defaults();
         rules.extend(crate::rules::parse(table)?);
-        Ok(Config { input, bindings, animations, new_window, rules })
+        Ok(Config { input, bindings, animations, rules })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

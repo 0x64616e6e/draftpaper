@@ -1,7 +1,8 @@
 #!/bin/sh
 # make pixels (and alone): windows in zones, headless (nothing on any display). On a sheet of 4 by 2
 # zones: a window alone resized to a zone and moved about in zone steps, its size kept, never past the
-# frame; a move with nowhere to go changes nothing; with every zone taken, a ninth window floats.
+# frame; a move with nowhere to go changes nothing; two windows on different rows, one moved under the
+# other keeping both sizes, then swapped; with every zone taken, a ninth window floats.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -53,7 +54,25 @@ ok "down a zone, then no further" "$(geo | awk '{print $2}')" "$yd"
 for i in 1 2 3 4 5 6 7 8; do msg resize right; msg resize down; done
 ok "grown back to the whole frame" "$(geo)" "$whole"
 
-for i in 2 3 4 5 6 7 8; do term; done
+# two windows on different rows: the lower one moves left under the upper one, both keeping their sizes;
+# then up, against a window of the same columns: they swap
+term
+line() { geo | sed -n "$1p"; }
+ok "the second takes the right half" "$(line 1 | awk '{print $1 + $3 < 640}')" "1"
+msg resize up; msg move down
+msg focus left; msg resize up; msg focus right
+a=$(line 1); b=$(line 2)
+msg move left; msg move left
+set -- $a; ax=$1 ay=$2; set -- $b; bw=$3 bh=$4 by=$2
+ok "the upper one unchanged" "$(line 1)" "$a"
+# its width up to 3 pixels off, as above: by the frame the zone's own rounding differs
+ok "the lower one under it, its size kept" "$(line 2 | awk -v w="$bw" '{d = $3 - w; print $1, $2, (d < 0 ? -d : d) <= 3, $4}')" "$ax $by 1 $bh"
+msg move left
+ok "at the frame, a move left changes nothing" "$(line 2 | awk '{print $1}')" "$ax"
+msg move up
+ok "up against the same columns: they swap" "$(line 1 | awk '{print $2}') $(line 2 | awk '{print $2}')" "$by $ay"
+
+for i in 3 4 5 6 7 8; do term; done
 ok "eight windows tiled, none floating" "$(geo | awk '$5=="false"' | wc -l)" "8"
 term
 ok "a ninth floats" "$(geo | awk '$5=="true"' | wc -l)" "1"
