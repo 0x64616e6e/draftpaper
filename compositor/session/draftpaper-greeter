@@ -23,11 +23,14 @@ if [ -z "$look" ]; then
     look=$run/default
     mkdir -p "$look"
 fi
-# the compositor reads the sheet from HOME; caches of the greeter's own go to its runtime directory
+# the compositor reads the sheet from HOME (the copy, not writable here); what the greeter writes itself
+# (caches, Quickshell's state) goes to its runtime directory
 export HOME="$look"
 export XDG_CONFIG_HOME="$look/.config"
 export DRAFTPAPER_CACHE="$look/.cache/draftpaper"
 export XDG_CACHE_HOME="$run/cache"
+export XDG_DATA_HOME="$run/data"
+export XDG_STATE_HOME="$run/state"
 export DRAFTPAPER_GREETER_USER="$user"
 export DRAFTPAPER_GREETER_SESSION="${DRAFTPAPER_GREETER_SESSION:-draftpaper-session}"
 exec draftpaper-compositor --tty --greeter

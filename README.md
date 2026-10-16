@@ -235,8 +235,18 @@ command = "draftpaper-greeter"
 user = "_greetd"
 ```
 
+greetd's package runs it on VT7, where a getty gives way to it; on VT1 the getty there has to as well
+(`/etc/systemd/system/greetd.service.d/draftpaper.conf`):
+
+```ini
+[Unit]
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+```
+
 Keep the text console off that VT, or it can flash up between the two: add `fbcon=vc:2-63` to the
-kernel command line. Then switch the display manager (`sudo systemctl disable gdm; sudo systemctl enable
+kernel command line (VT1 is the only one a single range can leave out; the others keep theirs, and
+Ctrl+Alt+F2 still gives a text login). Then switch the display manager (`sudo systemctl disable gdm; sudo systemctl enable
 greetd`); `systemctl enable gdm` goes back.
 
 ## Another account
