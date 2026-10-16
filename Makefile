@@ -28,6 +28,7 @@ install: $(COMPOSITOR) $(CLI) $(SHADERS)
 	install -Dm755 $(COMPOSITOR) $(DESTDIR)$(PREFIX)/bin/draftpaper-compositor
 	install -Dm755 compositor/session/draftpaper-session $(DESTDIR)$(PREFIX)/bin/draftpaper-session
 	install -Dm755 compositor/session/draftpaper-as $(DESTDIR)$(PREFIX)/bin/draftpaper-as
+	install -Dm755 compositor/session/draftpaper-greeter $(DESTDIR)$(PREFIX)/bin/draftpaper-greeter
 	install -d $(SHARE)/qml $(SHARE)/themes $(SHARE)/apps
 	# the shell, the themes and the applications' templates
 	install -m644 qml/*.qml $(SHADERS) $(SHARE)/qml/
@@ -49,12 +50,14 @@ check: $(CLI)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
 # the sheet at every scale, pixel by pixel, and windows in zones, headless: nothing is shown on any
-# display, and the launcher (compositor/tests/pixels.sh, zones.sh, launcher.sh)
+# display, the launcher, and the login screen against a stand-in for greetd (compositor/tests/pixels.sh,
+# zones.sh, launcher.sh, greeter.sh)
 pixels: $(COMPOSITOR) $(CLI)
-	cd compositor && $(CARGO) build --release --locked --example sheetcheck
+	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd
 	compositor/tests/pixels.sh
 	compositor/tests/zones.sh
 	compositor/tests/launcher.sh
+	compositor/tests/greeter.sh
 
 clean:
 	cd compositor && $(CARGO) clean

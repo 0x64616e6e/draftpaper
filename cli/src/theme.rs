@@ -257,6 +257,8 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
     util::write(&p.cache.join("fuzzel.ini"), &fuzzel_ini(&t, font));
     if apps_too {
         crate::apps::apply(p, &t, &cfg);
+        // and the login screen's copy of the sheet (greeter.rs)
+        crate::greeter::sync(p);
     }
     util::write(&p.cache.join("swaylock.conf"), &swaylock_conf(&t, font));
     let idle = p.cache.join("swayidle.conf");

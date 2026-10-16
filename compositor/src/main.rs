@@ -3,6 +3,7 @@
 
 mod handlers;
 
+mod handoff;
 mod config;
 mod cursor;
 mod focus;
@@ -35,8 +36,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.first().map(String::as_str) == Some("msg") {
         std::process::exit(ipc::msg(&args[1..]));
     }
+    // draftpaper-compositor hold CRTC=FB...: keeps the device (stdin) open for the next compositor (handoff.rs)
+    if args.first().map(String::as_str) == Some("hold") {
+        std::process::exit(handoff::holder(&args[1..]));
+    }
 
-    // draftpaper-compositor [--tty | --headless WxH [--scale S]] [--session] [--command PROGRAM] | msg REQUEST...
+    // draftpaper-compositor [--tty | --headless WxH [--scale S]] [--session | --greeter] [--command PROGRAM] | msg REQUEST...
     // the TTY backend (the displays and input devices themselves) only when asked for: a compositor
     // started without it from inside a session, with no display to nest in, must not take the hardware
     let tty = args.iter().any(|a| a == "--tty");
@@ -69,6 +74,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // and D-Bus and start draftpaper-session.target, stopped again on exit
     let session = args.iter().any(|a| a == "--session");
     let command = args.iter().position(|a| a == "-c" || a == "--command").and_then(|i| args.get(i + 1)).cloned();
+    // --greeter: the login screen under greetd (draftpaper-greeter): the login card (qml/greeter.qml) on
+    // the sheet, no bindings, no X11; when the card has started the session and quit, the compositor
+    // leaves the bare sheet on screen for it (handoff.rs)
+    data.greeter = args.iter().any(|a| a == "--greeter");
 
     if tty {
         if let Err(e) = crate::tty::init_tty(&mut event_loop, &mut data) {
@@ -99,8 +108,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .status();
     }
 
-    // X11 applications (not for tests)
-    if headless.is_none() {
+    // X11 applications (not for tests, not on the login screen)
+    if headless.is_none() && !data.greeter {
         data.start_xwayland();
     }
 
@@ -114,8 +123,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
-    std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
-
     // SIGTERM, SIGINT, SIGHUP: leave the loop, so Xwayland's lock and sockets and the session target are
     // cleaned up; SIGUSR1: a screenshot (as the Print key). Children get a clean signal mask (std's Command).
     use smithay::reexports::calloop::signals::{Signal, Signals};
@@ -127,7 +134,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
     )?;
 
+    if data.greeter {
+        // the card; when it quits (the session started, or it failed), so does the compositor. After the
+        // signals: they are blocked only in threads started after that (any other would die of them)
+        let root = std::env::var_os("DRAFTPAPER_ROOT").map(std::path::PathBuf::from).unwrap_or_else(|| "/usr/share/draftpaper".into());
+        let mut card = std::process::Command::new("qs").arg("-p").arg(root.join("qml/greeter.qml")).arg("-n").spawn()?;
+        let (done, gone) = smithay::reexports::calloop::channel::channel::<()>();
+        std::thread::spawn(move || {
+            let _ = card.wait();
+            let _ = done.send(());
+        });
+        event_loop.handle().insert_source(gone, |_, _, data| data.loop_signal.stop())?;
+    } else {
+        std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
+    }
+
     event_loop.run(None, &mut data, move |data| data.ipc_refresh())?;
+    // the bare sheet stays on screen for the next compositor
+    handoff::leave(&mut event_loop, &mut data);
     data.stop_ipc();
 
     if session {

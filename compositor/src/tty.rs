@@ -76,6 +76,8 @@ pub struct TtyData {
     devices: Vec<smithay::reexports::input::Device>,
     /// displays connected but turned off through output management (by name); the scan leaves them be
     disabled: std::collections::HashSet<String>,
+    /// taking the displays over as they were failed, and they were reset (reset_once)
+    reset: bool,
 }
 
 impl TtyData {
@@ -128,7 +130,9 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
         .open(&path, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK)
         .map_err(err("open gpu"))?;
     let fd = DrmDeviceFd::new(DeviceFd::from(fd));
-    let (drm, drm_notifier) = DrmDevice::new(fd.clone(), true).map_err(err("drm device"))?;
+    // the displays as they are, not reset: a display showing the greeter's last frame (or the firmware's
+    // picture) in the mode Draftpaper wants is taken over without going dark (adopt)
+    let (drm, drm_notifier) = DrmDevice::new(fd.clone(), false).map_err(err("drm device"))?;
     let gbm = GbmDevice::new(fd).map_err(err("gbm device"))?;
     let egl = unsafe { EGLDisplay::new(gbm.clone()) }.map_err(err("egl display"))?;
     let context = EGLContext::new(&egl).map_err(err("egl context"))?;
@@ -158,7 +162,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default() });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false });
 
     let handle = event_loop.handle();
     handle
@@ -216,11 +220,82 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
         })
         .map_err(|e| TtyError::Device(e.to_string()))?;
 
-    scan_outputs(data);
+    // the outputs, set up but not drawn yet: what the previous owner left beside them goes first
+    let Some(mut tty_data) = data.tty_data.take() else { return Ok(()) };
+    let started = scan_with(data, &mut tty_data);
+    adopt(&tty_data);
+    data.tty_data = Some(tty_data);
+    data.relayout();
+    for crtc in started {
+        render(data, crtc);
+    }
+    data.refresh_output_management();
     if data.tty_data.as_ref().unwrap().outputs.is_empty() {
         return Err(TtyError::Device("no connected display".into()));
     }
     Ok(())
+}
+
+/// The device was not reset (DrmDevice::new above): switch off what the previous owner (the greeter,
+/// another compositor, the console) left on that Draftpaper does not draw: displays it does not drive,
+/// and on its own CRTCs every plane but the primary (a pointer, an overlay), which its first frames would
+/// not touch. The primary planes stay: their pictures stay up until the first frame replaces them.
+fn adopt(tty: &TtyData) {
+    use smithay::reexports::drm::control::{atomic::AtomicModeReq, property, AtomicCommitFlags};
+    let device = tty.manager.device();
+    if !device.is_atomic() {
+        return;
+    }
+    let (Ok(resources), Ok(planes)) = (device.resource_handles(), device.plane_handles()) else { return };
+    let ours: HashMap<crtc::Handle, smithay::reexports::drm::control::plane::Handle> =
+        tty.outputs.iter().map(|(c, (_, s, _))| (*c, s.with_compositor(|c| c.surface().plane()))).collect();
+    // a property of a DRM object, by name
+    fn prop<T: smithay::reexports::drm::control::ResourceHandle>(device: &DrmDevice, handle: T, name: &str) -> Option<property::Handle> {
+        let props = device.get_properties(handle).ok()?;
+        let (ids, _) = props.as_props_and_values();
+        ids.iter().copied().find(|&id| device.get_property(id).is_ok_and(|p| p.name().to_str() == Ok(name)))
+    }
+    let mut req = AtomicModeReq::new();
+    let mut what = Vec::new();
+    for plane in planes {
+        let Ok(info) = device.get_plane(plane) else { continue };
+        let Some(crtc) = info.crtc() else { continue };
+        if ours.get(&crtc) == Some(&plane) {
+            continue;
+        }
+        if let (Some(c), Some(f)) = (prop(device, plane, "CRTC_ID"), prop(device, plane, "FB_ID")) {
+            req.add_property(plane, c, property::Value::CRTC(None));
+            req.add_property(plane, f, property::Value::Framebuffer(None));
+            what.push(format!("plane {}", u32::from(plane)));
+        }
+    }
+    for &conn in resources.connectors() {
+        let Ok(info) = device.get_connector(conn, false) else { continue };
+        let crtc = info.current_encoder().and_then(|e| device.get_encoder(e).ok()).and_then(|e| e.crtc());
+        if crtc.is_some_and(|c| !ours.contains_key(&c)) {
+            if let Some(p) = prop(device, conn, "CRTC_ID") {
+                req.add_property(conn, p, property::Value::CRTC(None));
+                what.push(connector_name(&info));
+            }
+        }
+    }
+    for &crtc in resources.crtcs() {
+        if ours.contains_key(&crtc) || device.get_crtc(crtc).ok().and_then(|c| c.mode()).is_none() {
+            continue;
+        }
+        if let (Some(a), Some(m)) = (prop(device, crtc, "ACTIVE"), prop(device, crtc, "MODE_ID")) {
+            req.add_property(crtc, a, property::Value::Boolean(false));
+            req.add_property(crtc, m, property::Value::Unknown(0));
+            what.push(format!("crtc {}", u32::from(crtc)));
+        }
+    }
+    if what.is_empty() {
+        return;
+    }
+    match device.atomic_commit(AtomicCommitFlags::ALLOW_MODESET, req) {
+        Ok(()) => eprintln!("draftpaper: switched off what was left on: {}", what.join(", ")),
+        Err(e) => eprintln!("draftpaper: switching off {}: {e}", what.join(", ")),
+    }
 }
 
 /// Bring the outputs in line with the connected displays: new ones get an output (at its preferred mode,
@@ -308,15 +383,21 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         }
         let device = tty.manager.device();
         let used: Vec<crtc::Handle> = tty.outputs.keys().copied().collect();
-        let crtc = info
-            .encoders()
-            .iter()
-            .filter_map(|e| device.get_encoder(*e).ok())
-            .flat_map(|e| resources.filter_crtcs(e.possible_crtcs()))
-            .find(|c| !used.contains(c));
+        // the CRTC the display is on already (the greeter's, the firmware's), so it is taken over as it
+        // is; else the first free one
+        let current = info.current_encoder().and_then(|e| device.get_encoder(e).ok()).and_then(|e| e.crtc()).filter(|c| !used.contains(c));
+        let crtc = current.or_else(|| {
+            info.encoders()
+                .iter()
+                .filter_map(|e| device.get_encoder(*e).ok())
+                .flat_map(|e| resources.filter_crtcs(e.possible_crtcs()))
+                .find(|c| !used.contains(c))
+        });
         let Some(crtc) = crtc else { continue };
 
         let mode = *info.modes().iter().find(|m| m.mode_type().contains(ModeTypeFlags::PREFERRED)).unwrap_or(&info.modes()[0]);
+        // the mode it shows already: then the first frame goes out without a modeset (no flash)
+        let adopted = current == Some(crtc) && device.get_crtc(crtc).ok().and_then(|c| c.mode()) == Some(mode);
         let (w, h) = (mode.size().0 as i32, mode.size().1 as i32);
         let (phys_w, phys_h) = info.size().unwrap_or((0, 0));
         let name = connector_name(&info);
@@ -328,7 +409,10 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
             let right = data.space.outputs().filter_map(|o| data.space.output_geometry(o)).map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
             (right, 0)
         });
-        eprintln!("draftpaper: output {name} {w}x{h} ({phys_w}x{phys_h} mm, {mm:.2} px/mm), scale {scale}, at {position:?}");
+        eprintln!(
+            "draftpaper: output {name} {w}x{h} ({phys_w}x{phys_h} mm, {mm:.2} px/mm), scale {scale}, at {position:?}, {}",
+            if adopted { "taken over as it is" } else { "mode set" }
+        );
 
         let output = Output::new(
             name,
@@ -398,15 +482,30 @@ fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> 
     }
     let (output, surface, _) = tty.outputs.get_mut(&crtc)?;
     let output = output.clone();
-    let elements = output_elements(data, &mut tty.renderer, &output, Some((&tty.cursor.buffer, tty.cursor.hotspot)));
+    // leaving (handoff.rs): no pointer
+    let pointer = data.leaving.is_none().then_some((&tty.cursor.buffer, tty.cursor.hotspot));
+    let elements = output_elements(data, &mut tty.renderer, &output, pointer);
     let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], FrameFlags::DEFAULT) {
-        Ok(result) if !result.is_empty => surface.queue_frame(()).is_ok(),
+        Ok(result) if !result.is_empty => match surface.queue_frame(()) {
+            Ok(()) => true,
+            Err(e) => {
+                eprintln!("draftpaper: frame {e:?}");
+                reset_once(tty);
+                false
+            }
+        },
         Ok(_) => false,
         Err(e) => {
             eprintln!("draftpaper: render {e:?}");
+            reset_once(tty);
             false
         }
     };
+    // leaving: nothing new to draw, so the bare sheet is what the display shows
+    if let (Some(leaving), false) = (data.leaving.as_mut(), queued) {
+        leaving.remove(&crtc);
+        return None;
+    }
     Some(queued)
 }
 
@@ -735,4 +834,60 @@ fn configure_with(
         }
     }
     Ok((started, changed))
+}
+
+/// Render one output now (handoff.rs).
+pub fn render_crtc(data: &mut Draftpaper, crtc: crtc::Handle) {
+    render(data, crtc);
+}
+
+/// The framebuffer each output's primary plane shows (handoff.rs).
+pub fn shown(tty: &TtyData) -> Vec<(crtc::Handle, smithay::reexports::drm::control::framebuffer::Handle)> {
+    let device = tty.manager.device();
+    tty.outputs
+        .iter()
+        .filter_map(|(crtc, (_, surface, _))| {
+            let plane = surface.with_compositor(|c| c.surface().plane());
+            Some((*crtc, device.get_plane(plane).ok()?.framebuffer()?))
+        })
+        .collect()
+}
+
+pub fn device(tty: &TtyData) -> &DrmDevice {
+    tty.manager.device()
+}
+
+/// The GPU's device file (/dev/dri/card1).
+pub fn device_path(tty: &TtyData) -> PathBuf {
+    tty.node.dev_path().unwrap_or_default()
+}
+
+/// Every output as drawn now, to DIR/last-<output>.png (DRAFTPAPER_LAST_FRAME, handoff.rs).
+pub fn capture_into(data: &mut Draftpaper, dir: &std::path::Path) {
+    let Some(mut tty) = data.tty_data.take() else { return };
+    let outputs: Vec<Output> = tty.outputs.values().map(|(o, _, _)| o.clone()).collect();
+    for output in outputs {
+        let path = dir.join(format!("last-{}.png", output.name()));
+        if let Err(e) = capture(data, &mut tty.renderer, &output, &path) {
+            eprintln!("draftpaper: last frame of {}: {e}", output.name());
+        }
+    }
+    data.tty_data = Some(tty);
+}
+
+/// A frame the driver refused, likely on the state the previous owner left (adopt): reset every display,
+/// as Draftpaper did before it took them over as they were, once; the next frames set their modes anew.
+fn reset_once(tty: &mut TtyData) {
+    if std::mem::replace(&mut tty.reset, true) {
+        return;
+    }
+    eprintln!("draftpaper: resetting the displays");
+    if let Err(e) = tty.manager.device_mut().reset_state() {
+        eprintln!("draftpaper: reset: {e}");
+    }
+    for (_, surface, _) in tty.outputs.values_mut() {
+        if let Err(e) = surface.with_compositor(|c| c.reset_state()) {
+            eprintln!("draftpaper: reset: {e:?}");
+        }
+    }
 }

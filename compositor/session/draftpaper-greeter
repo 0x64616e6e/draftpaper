@@ -1,0 +1,33 @@
+#!/bin/sh
+# draftpaper-greeter: Draftpaper's login screen, for greetd (/etc/greetd/config.toml:
+#   [terminal] vt = 1
+#   [default_session] command = "draftpaper-greeter", user = "_greetd").
+# Runs the compositor as the login screen (--greeter) on the sheet of the user whose copy of it
+# (`draftpaper apply`: /var/lib/draftpaper/greeter/<user>/) was written last, or of USER given as the
+# argument, with their name filled in; without a copy, the default sheet. The session it starts is
+# draftpaper-session, on the same VT, and the sheet stays on screen between the two.
+dir=/var/lib/draftpaper/greeter
+user=${1:-}
+if [ -z "$user" ]; then
+    last=$(ls -t "$dir"/*/.synced 2>/dev/null | head -n 1)
+    [ -n "$last" ] && user=$(basename "$(dirname "$last")")
+fi
+look=
+# only a copy its user owns (the directory is shared: anyone could make one under another's name)
+if [ -n "$user" ] && [ -d "$dir/$user" ] && [ ! -L "$dir/$user" ] && [ "$(stat -c %U "$dir/$user")" = "$user" ]; then
+    look=$dir/$user
+fi
+run=${XDG_RUNTIME_DIR:-/tmp}/draftpaper-greeter
+mkdir -p "$run"
+if [ -z "$look" ]; then
+    look=$run/default
+    mkdir -p "$look"
+fi
+# the compositor reads the sheet from HOME; caches of the greeter's own go to its runtime directory
+export HOME="$look"
+export XDG_CONFIG_HOME="$look/.config"
+export DRAFTPAPER_CACHE="$look/.cache/draftpaper"
+export XDG_CACHE_HOME="$run/cache"
+export DRAFTPAPER_GREETER_USER="$user"
+export DRAFTPAPER_GREETER_SESSION="${DRAFTPAPER_GREETER_SESSION:-draftpaper-session}"
+exec draftpaper-compositor --tty --greeter

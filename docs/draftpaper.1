@@ -1,18 +1,21 @@
 .TH DRAFTPAPER 1 "2026-10-15" "draftpaper 0.3.0" "User Commands"
 .SH NAME
-draftpaper, draftpaper-compositor, draftpaper-session, draftpaper-as \- the Wayland desktop drawn as a drafting sheet
+draftpaper, draftpaper-compositor, draftpaper-session, draftpaper-greeter, draftpaper-as \- the Wayland desktop drawn as a drafting sheet
 .SH SYNOPSIS
 .B draftpaper
 .I COMMAND
 .br
 .B draftpaper-session
 .br
+.B draftpaper-greeter
+.RI [ USER ]
+.br
 .B draftpaper-compositor
 .RB [ --tty \fR|\fB --headless
 .IR WIDTH x HEIGHT
 .RB [ --scale
 .IR S ]]
-.RB [ --session ]
+.RB [ --session \fR|\fB --greeter ]
 .RB [ --command
 .IR PROGRAM ]
 .br
@@ -43,6 +46,16 @@ for tests, it draws one output of that size offscreen on the GPU's render node, 
 .RB ( "make pixels" );
 .B DRAFTPAPER_MM
 sets its pixels per millimetre.
+.PP
+.B draftpaper-greeter
+is the login screen, for greetd: it runs
+.B draftpaper-compositor --tty --greeter
+on the copy of the sheet of USER (or of whoever ran
+.B draftpaper apply
+last) in /var/lib/draftpaper/greeter, with a sign-in card on it, and starts
+.B draftpaper-session
+once greetd accepts the password. Leaving, the compositor keeps the bare sheet on screen, and the next
+one takes the displays over as they are, so the screen does not go dark in between (see README.md).
 .PP
 .B draftpaper
 is the rest: themes, the generated files for the shell, the launcher, the lock screen and the

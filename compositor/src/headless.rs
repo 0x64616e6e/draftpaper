@@ -121,3 +121,14 @@ fn frame(data: &mut Draftpaper) {
     let _ = data.display_handle.flush_clients();
     data.headless = Some(h);
 }
+
+/// The output as drawn now, to DIR/last-<output>.png (DRAFTPAPER_LAST_FRAME, handoff.rs).
+pub fn capture_into(data: &mut Draftpaper, dir: &std::path::Path) {
+    let Some(mut h) = data.headless.take() else { return };
+    let output = h.output.clone();
+    let path = dir.join(format!("last-{}.png", output.name()));
+    if let Err(e) = crate::tty::capture(data, &mut h.renderer, &output, &path) {
+        eprintln!("draftpaper: last frame: {e}");
+    }
+    data.headless = Some(h);
+}

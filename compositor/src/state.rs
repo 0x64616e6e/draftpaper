@@ -76,6 +76,10 @@ pub struct Draftpaper {
     /// on the TTY: the session (for VT switches), and the bindings move from Alt to Super
     pub session: Option<smithay::backend::session::libseat::LibSeatSession>,
     pub tty: bool,
+    /// the login screen (--greeter): no bindings but the VT switches, no IPC, no Xwayland
+    pub greeter: bool,
+    /// on the way out (tty::leave): the outputs whose last frame, the bare sheet, is not on screen yet
+    pub leaving: Option<std::collections::HashSet<smithay::reexports::drm::control::crtc::Handle>>,
     /// the X11 window manager, once Xwayland is up (handlers/xwayland.rs)
     pub xwm: Option<smithay::xwayland::X11Wm>,
     pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
@@ -196,6 +200,8 @@ impl Draftpaper {
             active: 0,
             session: None,
             tty: false,
+            greeter: false,
+            leaving: None,
             xwm: None,
             xwayland_shell_state,
             config: crate::config::Config::default_config(),

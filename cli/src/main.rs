@@ -4,6 +4,7 @@
 
 mod apps;
 mod config;
+mod greeter;
 mod readings;
 mod scheme;
 mod theme;
@@ -82,16 +83,26 @@ fn main() {
         ["scheme", rest @ ..] => schemes(&p, rest),
         ["wallpaper"] => println!("{}", config::load(&p).get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("none")),
         ["wallpaper", "json"] => wallpaper_json(&p),
-        ["wallpaper", "set", pairs @ ..] => wallpaper_set(&p, pairs),
-        ["wallpaper", "none", ..] => config::set_value(&p, "wallpaper", None),
+        ["wallpaper", "set", pairs @ ..] => {
+            wallpaper_set(&p, pairs);
+            greeter::sync(&p);
+        }
+        ["wallpaper", "none", ..] => {
+            config::set_value(&p, "wallpaper", None);
+            greeter::sync(&p);
+        }
         ["wallpaper", file, ..] => {
             let path = expand(file, &p);
             if !path.is_file() {
                 util::die(format!("draftpaper: no such file {}", path.display()));
             }
             config::set_value(&p, "wallpaper", Some(&path.display().to_string()));
+            greeter::sync(&p);
         }
-        ["margins", m @ ("paper" | "ambient"), ..] => config::set_value(&p, "margins", Some(m)),
+        ["margins", m @ ("paper" | "ambient"), ..] => {
+            config::set_value(&p, "margins", Some(m));
+            greeter::sync(&p);
+        }
         ["margins", ..] => util::die("draftpaper margins paper|ambient"),
         ["audio", how, ..] => audio(&p, how),
         ["audio"] => util::die("draftpaper audio save|restore"),

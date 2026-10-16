@@ -313,6 +313,11 @@ fn scene_elements(
 
     elements.extend(layer_elements(renderer, &[Layer::Bottom, Layer::Background]));
 
+    // leaving (tty::leave): the bare sheet, as the next compositor's first frame draws it
+    if state.leaving.is_some() {
+        elements.clear();
+    }
+
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
         let size: Size<i32, Logical> = geometry.size;
         let scale = output.current_scale().fractional_scale();

@@ -164,6 +164,8 @@ impl Draftpaper {
             "outputs" => Ok(self.ipc_outputs()),
             "workspaces" => Ok(self.ipc_workspaces()),
             "windows" => Ok(self.ipc_windows()),
+            // the login screen runs nothing and keeps its sheet as the session will first draw it
+            "action" | "sheet" if self.greeter => Err("not on the login screen".into()),
             "action" => {
                 let text = request.get("action").and_then(Value::as_str).ok_or("no \"action\"")?;
                 match crate::config::parse_action(text)? {

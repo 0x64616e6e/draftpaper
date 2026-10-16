@@ -30,7 +30,8 @@ impl Draftpaper {
                 let time = Event::time_msec(&event);
                 let pressed = event.state() == KeyState::Pressed;
                 let tty = self.tty;
-                let locked = self.locked;
+                // the login screen takes no bindings either: nothing is started before someone logs in
+                let locked = self.locked || self.greeter;
                 // a held binding repeats until a key goes up or down
                 if let Some(token) = self.key_repeat.take() {
                     self.loop_handle.remove(token);

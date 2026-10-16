@@ -1,5 +1,19 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * A login screen of Draftpaper's own, for greetd (#37, experimental):
+    draftpaper-greeter draws the user's sheet with a sign-in card on whole
+    zones; once greetd accepts the password the card fades and
+    draftpaper-session starts on the same VT. `draftpaper apply` copies the
+    sheet's look to /var/lib/draftpaper/greeter/<user>/ when that exists.
+  * The compositor takes the displays over as they are instead of resetting
+    them (the CRTC each display is on, its mode kept when it is the one
+    wanted), and switches off only what it does not drive: no blank flash
+    at the start of a session. If the driver refuses a frame on that
+    state, the displays are reset once, as before.
+  * Leaving, the compositor draws the bare sheet and keeps it on screen
+    (CLOSEFB, Linux 6.8), a child holding the device until the next
+    compositor shows a frame of its own, so the screen does not go dark
+    between the login screen and the session.
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through

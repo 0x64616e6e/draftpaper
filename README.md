@@ -201,6 +201,40 @@ Actions: `focus|move|resize left|right|up|down`, `workspace N`, `send N`, `fulls
 `park_next`, `park_prev`, `screenshot`, `zoom` (the magnifier), `pointer X Y` (the pointer there, for
 scripts), `power off|on`, `reload`, `quit`, `spawn COMMAND`.
 
+## Login screen (experimental)
+
+Draftpaper can be its own login screen under [greetd](https://sr.ht/~kennylevinsen/greetd/):
+`draftpaper-greeter` draws your sheet with a sign-in card on whole zones in the middle of it, and once
+the password is accepted the card fades and the session starts on the same VT without a flicker. The
+compositor leaves the bare sheet on screen when it exits, and the session takes the displays over as
+they are, in the same mode, so they never go dark in between (Linux 6.8 or later).
+
+The login screen runs as greetd's own user and cannot read your home, so `draftpaper apply` (every
+login, every theme change) copies what your sheet looks like (theme, margin, wallpaper, the outputs'
+scales) to `/var/lib/draftpaper/greeter/<you>/` when that directory exists. The copy is readable by
+every local user, the wallpaper too. To set it up:
+
+```sh
+sudo apt install greetd
+sudo install -d -m 1777 /var/lib/draftpaper/greeter
+draftpaper apply
+```
+
+and in `/etc/greetd/config.toml`:
+
+```toml
+[terminal]
+vt = 1
+
+[default_session]
+command = "draftpaper-greeter"
+user = "_greetd"
+```
+
+Keep the text console off that VT, or it can flash up between the two: add `fbcon=vc:2-63` to the
+kernel command line. Then switch the display manager (`sudo systemctl disable gdm; sudo systemctl enable
+greetd`); `systemctl enable gdm` goes back.
+
 ## Another account
 
 For work kept under a separate unix account, `draftpaper-as USER [COMMAND...]` runs a program as that
