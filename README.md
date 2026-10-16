@@ -246,8 +246,15 @@ After=getty@tty1.service
 
 Keep the text console off that VT, or it can flash up between the two: add `fbcon=vc:2-63` to the
 kernel command line (VT1 is the only one a single range can leave out; the others keep theirs, and
-Ctrl+Alt+F2 still gives a text login). Then switch the display manager (`sudo systemctl disable gdm; sudo systemctl enable
-greetd`); `systemctl enable gdm` goes back.
+Ctrl+Alt+F2 still gives a text login). Then make greetd the display manager, from the next boot (it
+takes over the `display-manager.service` link):
+
+```sh
+echo /usr/sbin/greetd | sudo tee /etc/X11/default-display-manager
+sudo systemctl enable --force greetd
+```
+
+Back to GDM: the same with `/usr/sbin/gdm3` and `gdm3`.
 
 ## Another account
 
