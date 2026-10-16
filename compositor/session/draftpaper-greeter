@@ -33,4 +33,6 @@ export XDG_DATA_HOME="$run/data"
 export XDG_STATE_HOME="$run/state"
 export DRAFTPAPER_GREETER_USER="$user"
 export DRAFTPAPER_GREETER_SESSION="${DRAFTPAPER_GREETER_SESSION:-draftpaper-session}"
-exec draftpaper-compositor --tty --greeter
+# its log (and the card's, and the holder's) to the journal: greetd keeps none (journalctl -t draftpaper-greeter)
+export RUST_LOG="${RUST_LOG:-warn}"
+exec systemd-cat --identifier=draftpaper-greeter draftpaper-compositor --tty --greeter

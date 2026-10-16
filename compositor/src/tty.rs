@@ -78,6 +78,8 @@ pub struct TtyData {
     disabled: std::collections::HashSet<String>,
     /// taking the displays over as they were failed, and they were reset (reset_once)
     reset: bool,
+    /// the outputs that have had a frame queued (logged once, with the time since the start: handoff.rs)
+    drawn: std::collections::HashSet<crtc::Handle>,
 }
 
 impl TtyData {
@@ -162,7 +164,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false, drawn: Default::default() });
 
     let handle = event_loop.handle();
     handle
@@ -193,10 +195,12 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
             let Some(tty) = data.tty_data.as_mut() else { return };
             match event {
                 SessionEvent::PauseSession => {
+                    eprintln!("draftpaper: session paused after {} ms", data.start_time.elapsed().as_millis());
                     tty.libinput.suspend();
                     tty.manager.pause();
                 }
                 SessionEvent::ActivateSession => {
+                    eprintln!("draftpaper: session active after {} ms", data.start_time.elapsed().as_millis());
                     let _ = tty.libinput.resume();
                     let _ = tty.manager.activate(false);
                     let crtcs: Vec<_> = tty.outputs.keys().copied().collect();
@@ -488,17 +492,22 @@ fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> 
     let elements = output_elements(data, &mut tty.renderer, &output, pointer);
     let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], FrameFlags::DEFAULT) {
         Ok(result) if !result.is_empty => match surface.queue_frame(()) {
-            Ok(()) => true,
+            Ok(()) => {
+                if tty.drawn.insert(crtc) {
+                    eprintln!("draftpaper: {}: first frame after {} ms", output.name(), data.start_time.elapsed().as_millis());
+                }
+                true
+            }
             Err(e) => {
                 eprintln!("draftpaper: frame {e:?}");
-                reset_once(tty);
+                reset_once(tty, &format!("{e:?}"));
                 false
             }
         },
         Ok(_) => false,
         Err(e) => {
             eprintln!("draftpaper: render {e:?}");
-            reset_once(tty);
+            reset_once(tty, &format!("{e:?}"));
             false
         }
     };
@@ -878,7 +887,13 @@ pub fn capture_into(data: &mut Draftpaper, dir: &std::path::Path) {
 
 /// A frame the driver refused, likely on the state the previous owner left (adopt): reset every display,
 /// as Draftpaper did before it took them over as they were, once; the next frames set their modes anew.
-fn reset_once(tty: &mut TtyData) {
+/// Not when the frame was refused for want of the device (not its master yet: the previous owner's
+/// session still ending, or another VT): that passes, and a reset then would darken the displays.
+fn reset_once(tty: &mut TtyData, why: &str) {
+    let master = why.contains("PermissionDenied") || why.contains("DeviceInactive") || why.contains("os error 13") || why.contains("os error 1)");
+    if master || !tty.session.is_active() {
+        return;
+    }
     if std::mem::replace(&mut tty.reset, true) {
         return;
     }
@@ -900,6 +915,7 @@ fn take_pictures(tty: &mut TtyData) {
     for (crtc, (output, _, _)) in &tty.outputs {
         let Some(fb) = device.get_crtc(*crtc).ok().and_then(|c| c.framebuffer()) else { continue };
         if let Some((texture, size)) = crate::opening::from_framebuffer(device, &mut tty.renderer, fb) {
+            eprintln!("draftpaper: {}: opening on the picture it showed ({}x{})", output.name(), size.0, size.1);
             crate::opening::start(output, texture, size);
         }
     }

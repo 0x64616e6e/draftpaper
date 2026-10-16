@@ -86,9 +86,11 @@ fn copy(p: &Paths, dir: &Path) -> std::io::Result<()> {
             _ => false,
         };
         if !same(&src, &dst) {
-            fs::copy(&src, &dst)?;
+            let tmp = dir.join(format!(".{name}.{}", std::process::id()));
+            fs::copy(&src, &tmp)?;
+            fs::set_permissions(&tmp, fs::Permissions::from_mode(0o644))?;
+            fs::rename(&tmp, &dst)?;
         }
-        fs::set_permissions(&dst, fs::Permissions::from_mode(0o644))?;
         look.insert("wallpaper".into(), toml::Value::String(format!("~/{name}")));
         kept = Some(name);
     }
@@ -101,19 +103,23 @@ fn copy(p: &Paths, dir: &Path) -> std::io::Result<()> {
     }
     write(&conf.join("config.toml"), &toml::to_string(&look).unwrap_or_default())?;
 
-    // the user's own themes (a scheme writes one), as they are
+    // the user's own themes (a scheme writes one), as they are: gathered in a directory of this
+    // process's own, then put in place whole (two applies at once, as at login, each write their own)
     let themes = conf.join("themes");
-    let _ = fs::remove_dir_all(&themes);
-    let own = p.themes()[0].clone();
-    if let Ok(entries) = fs::read_dir(&own) {
-        fs::create_dir_all(&themes)?;
-        fs::set_permissions(&themes, fs::Permissions::from_mode(0o755))?;
-        for e in entries.flatten() {
-            if e.path().extension().is_some_and(|x| x == "toml") {
-                fs::copy(e.path(), themes.join(e.file_name()))?;
-                fs::set_permissions(themes.join(e.file_name()), fs::Permissions::from_mode(0o644))?;
-            }
+    let fresh = conf.join(format!(".themes.{}", std::process::id()));
+    let _ = fs::remove_dir_all(&fresh);
+    fs::create_dir_all(&fresh)?;
+    fs::set_permissions(&fresh, fs::Permissions::from_mode(0o755))?;
+    for e in fs::read_dir(&p.themes()[0]).into_iter().flatten().flatten() {
+        if e.path().extension().is_some_and(|x| x == "toml") {
+            fs::copy(e.path(), fresh.join(e.file_name()))?;
+            fs::set_permissions(fresh.join(e.file_name()), fs::Permissions::from_mode(0o644))?;
         }
+    }
+    let _ = fs::remove_dir_all(&themes);
+    if fs::rename(&fresh, &themes).is_err() {
+        // the other apply put its own there in the meantime: the same files
+        let _ = fs::remove_dir_all(&fresh);
     }
 
     // the card's colours: theme.json's, without what only the session uses (commands, cells...)
@@ -136,7 +142,8 @@ fn copy(p: &Paths, dir: &Path) -> std::io::Result<()> {
 }
 
 fn write(path: &Path, text: &str) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
+    // a name of this process's own: two applies at once (at login) each rename their own into place
+    let tmp = path.with_file_name(format!(".{}.{}", path.file_name().and_then(|n| n.to_str()).unwrap_or("file"), std::process::id()));
     fs::write(&tmp, text)?;
     fs::set_permissions(&tmp, fs::Permissions::from_mode(0o644))?;
     fs::rename(&tmp, path)

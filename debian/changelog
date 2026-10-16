@@ -23,6 +23,11 @@ draftpaper (0.3.0) unstable; urgency=medium
     framebuffer on screen and imported, GETFB2): that very frame until the
     shell is up, then fading into the desktop drawn blurred, the blur
     going to nothing.
+  * A session no longer opens a terminal at the start (that default is for
+    the compositor nested, without --command). The compositors log to the
+    journal (journalctl -t draftpaper, -t draftpaper-greeter), the handoff
+    with its timings; a frame refused before the session has the device
+    no longer resets the displays.
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through

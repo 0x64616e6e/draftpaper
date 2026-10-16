@@ -148,7 +148,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
         event_loop.handle().insert_source(gone, |_, _, data| data.loop_signal.stop())?;
     } else {
-        std::process::Command::new(command.as_deref().unwrap_or("alacritty")).spawn().ok();
+        // --command PROGRAM: started once up; nested without one, a terminal to try it in. A session starts
+        // nothing itself: the shell and the rest come with draftpaper-session.target
+        match command.as_deref() {
+            Some(program) => drop(std::process::Command::new(program).spawn()),
+            None if !session && !tty => drop(std::process::Command::new("alacritty").spawn()),
+            None => {}
+        }
     }
 
     event_loop.run(None, &mut data, move |data| data.ipc_refresh())?;

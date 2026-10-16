@@ -43,8 +43,10 @@ pub fn leave(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpa
     let Some(tty) = data.tty_data.as_ref() else { return };
     // on another VT, or the displays off: nothing to keep
     if !smithay::backend::session::Session::is_active(&tty.session) || data.screens_off {
+        eprintln!("draftpaper: leaving, nothing to keep (another VT, or the displays off)");
         return;
     }
+    let began = Instant::now();
     let crtcs: Vec<crtc::Handle> = crate::tty::shown(tty).into_iter().map(|(c, _)| c).collect();
     data.leaving = Some(crtcs.iter().copied().collect());
     for &crtc in &crtcs {
@@ -55,6 +57,10 @@ pub fn leave(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpa
     let deadline = Instant::now() + Duration::from_secs(1);
     while data.leaving.as_ref().is_some_and(|l| !l.is_empty()) && Instant::now() < deadline {
         let _ = event_loop.dispatch(Some(Duration::from_millis(16)), data);
+    }
+    match data.leaving.as_ref().filter(|l| !l.is_empty()) {
+        Some(l) => eprintln!("draftpaper: leaving: {} output(s) not settled after {} ms", l.len(), began.elapsed().as_millis()),
+        None => eprintln!("draftpaper: leaving: last frames on screen after {} ms", began.elapsed().as_millis()),
     }
     let settle = Instant::now() + Duration::from_millis(50);
     while Instant::now() < settle {
@@ -75,7 +81,10 @@ fn keep(data: &mut Draftpaper) {
     let mut kept = Vec::new();
     for (crtc, fb) in shown {
         match closefb(device.as_fd(), fb) {
-            Ok(()) => kept.push((crtc, fb)),
+            Ok(()) => {
+                eprintln!("draftpaper: crtc {}: framebuffer {} kept on screen", u32::from(crtc), u32::from(fb));
+                kept.push((crtc, fb))
+            }
             Err(e) => eprintln!("draftpaper: keeping the last frame: {e} (Linux 6.8 or later keeps it)"),
         }
     }
@@ -121,8 +130,9 @@ fn hold(path: &std::path::Path, kept: &[(crtc::Handle, framebuffer::Handle)]) {
     use std::os::unix::process::CommandExt;
     // its own process group: not taken along by a signal to this one's
     command.process_group(0).stdin(file).stdout(std::process::Stdio::null());
-    if let Err(e) = command.spawn() {
-        eprintln!("draftpaper: holder: {e}");
+    match command.spawn() {
+        Ok(child) => eprintln!("draftpaper: holder {} keeps {} open", child.id(), path.display()),
+        Err(e) => eprintln!("draftpaper: holder: {e}"),
     }
 }
 
@@ -150,13 +160,27 @@ pub fn holder(args: &[String]) -> i32 {
             Some((c, f.parse().ok()?))
         })
         .collect();
-    let deadline = Instant::now() + HOLD;
+    // what each CRTC shows instead, and when (0: nothing, the display dark), for the log
+    let began = Instant::now();
+    let deadline = began + HOLD;
+    let mut seen: Vec<Option<u32>> = vec![None; pairs.len()];
     while Instant::now() < deadline {
-        let shown = pairs.iter().any(|(c, f)| card.get_crtc(*c).ok().and_then(|i| i.framebuffer()).map(u32::from) == Some(*f));
+        let mut shown = false;
+        for (i, (c, f)) in pairs.iter().enumerate() {
+            let now = card.get_crtc(*c).ok().map(|info| info.framebuffer().map(u32::from).unwrap_or(0));
+            if now == Some(*f) {
+                shown = true;
+            } else if seen[i] != now {
+                seen[i] = now;
+                eprintln!("draftpaper-hold: crtc {} shows framebuffer {} after {} ms", u32::from(*c), now.unwrap_or(0), began.elapsed().as_millis());
+            }
+        }
         if !shown {
+            eprintln!("draftpaper-hold: taken over after {} ms", began.elapsed().as_millis());
             return 0;
         }
-        std::thread::sleep(Duration::from_millis(100));
+        std::thread::sleep(Duration::from_millis(20));
     }
+    eprintln!("draftpaper-hold: nobody took over in {} s", HOLD.as_secs());
     0
 }
