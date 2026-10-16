@@ -22,6 +22,8 @@ mod screencopy;
 mod output_management;
 mod wallpaper;
 mod lens;
+mod blur;
+mod opening;
 mod rules;
 mod title;
 mod tty;
@@ -75,8 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let session = args.iter().any(|a| a == "--session");
     let command = args.iter().position(|a| a == "-c" || a == "--command").and_then(|i| args.get(i + 1)).cloned();
     // --greeter: the login screen under greetd (draftpaper-greeter): the login card (qml/greeter.qml) on
-    // the sheet, no bindings, no X11; when the card has started the session and quit, the compositor
-    // leaves the bare sheet on screen for it (handoff.rs)
+    // the sheet, no bindings, no X11; when the card has started the session (IPC "leave"), the compositor
+    // leaves its last frame on screen for it (handoff.rs)
     data.greeter = args.iter().any(|a| a == "--greeter");
 
     if tty {
@@ -150,7 +152,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     event_loop.run(None, &mut data, move |data| data.ipc_refresh())?;
-    // the bare sheet stays on screen for the next compositor
+    // the last frame stays on screen for the next compositor
     handoff::leave(&mut event_loop, &mut data);
     data.stop_ipc();
 

@@ -38,6 +38,8 @@ render_elements! {
     Sheet=PixelShaderElement,
     /// the magnifier (lens.rs)
     Lens=crate::lens::LensElement,
+    /// the blurred scene (blur.rs), the opening picture (opening.rs)
+    Texture=crate::blur::TextureElement,
     /// the wallpaper's textures, cut to their pixels
     Picture=CropRenderElement<MemoryRenderBufferRenderElement<GlesRenderer>>,
 }
@@ -76,14 +78,56 @@ pub fn output_elements(
     output: &Output,
     pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
 ) -> Vec<OutputElements> {
+    // the opening (opening.rs): the picture the displays showed, alone until the desktop is up, then
+    // fading over the desktop while its blur goes
+    let up = layer_map_for_output(output).layers().next().is_some();
+    let opening = crate::opening::frame(output, up);
+    let mut blur_mm = state.blur_mm();
+    let picture = match opening {
+        Some((picture, _, true)) => return vec![OutputElements::Texture(picture)],
+        Some((picture, mm, false)) => {
+            blur_mm = blur_mm.max(mm);
+            Some(picture)
+        }
+        None => None,
+    };
+    // blurred (blur.rs): what is behind the pointer and the overlay and top layers
+    if blur_mm > 0.05 && !state.locked {
+        let (mut elements, front) = scene_elements(state, renderer, output, pointer);
+        let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
+        let back = elements.split_off(front.min(elements.len()));
+        if let Some(blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm) {
+            elements.push(OutputElements::Texture(blurred));
+        } else {
+            elements.extend(back);
+        }
+        if let Some(p) = picture {
+            elements.insert(0, OutputElements::Texture(p));
+        }
+        return elements;
+    }
+    let mut elements = output_scene(state, renderer, output, pointer);
+    if let Some(p) = picture {
+        elements.insert(0, OutputElements::Texture(p));
+    }
+    elements
+}
+
+/// What `output` shows, with the magnifier but without the opening and the blur.
+fn output_scene(
+    state: &Draftpaper,
+    renderer: &mut GlesRenderer,
+    output: &Output,
+    pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
+) -> Vec<OutputElements> {
     // the magnifier (lens.rs), on the output under the pointer: the scene without the pointer, the lens
     // and its frame in front
     let at = state.seat.get_pointer().unwrap().current_location();
     let here = state.space.output_geometry(output).filter(|g| g.to_f64().contains(at));
     let (Some(lens), Some(geometry), false) = (&state.lens, here, state.locked) else {
-        return scene_elements(state, renderer, output, pointer);
+        return scene_elements(state, renderer, output, pointer).0;
     };
-    let scene = scene_elements(state, renderer, output, None);
+    let scene = scene_elements(state, renderer, output, None).0;
     let scale = output.current_scale().fractional_scale();
     let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
     let hotspot = (at - geometry.loc.to_f64()).to_physical(scale);
@@ -110,9 +154,9 @@ fn scene_elements(
     renderer: &mut GlesRenderer,
     output: &Output,
     pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
-) -> Vec<OutputElements> {
+) -> (Vec<OutputElements>, usize) {
     // an output not in the space (gone, or not placed yet) has nothing to show
-    let Some(geometry) = state.space.output_geometry(output) else { return Vec::new() };
+    let Some(geometry) = state.space.output_geometry(output) else { return (Vec::new(), 0) };
     let mut elements = Vec::new();
 
     // locked: the lock surface (if the locker has made one yet) on black, nothing else
@@ -132,7 +176,8 @@ fn scene_elements(
             [0.0, 0.0, 0.0, 1.0],
             Kind::Unspecified,
         )));
-        return elements;
+        let n = elements.len();
+        return (elements, n);
     }
 
     if let Some((buffer, hotspot)) = pointer {
@@ -181,6 +226,9 @@ fn scene_elements(
         out
     };
     elements.extend(layer_elements(renderer, &[Layer::Overlay, Layer::Top]));
+    // what is in front of the windows (the pointer, menus, the overlay and top layers: the login card)
+    // stays sharp when the rest is blurred
+    let mut front = elements.len();
 
     // the windows: each drawn at `at` (its geometry, global logical), then mapped onto `to`, faded by
     // `alpha`. A window's own surfaces are clipped to its rectangle (a client that draws more than its
@@ -313,9 +361,11 @@ fn scene_elements(
 
     elements.extend(layer_elements(renderer, &[Layer::Bottom, Layer::Background]));
 
-    // leaving (tty::leave): the bare sheet, as the next compositor's first frame draws it
-    if state.leaving.is_some() {
+    // leaving (handoff.rs): the bare sheet, as the next compositor will first draw it; the login screen
+    // leaves what it shows (the sheet blurred, the name in the title block), taken over as a picture
+    if state.leaving.is_some() && !state.greeter {
         elements.clear();
+        front = 0;
     }
 
     if let Some(sheet) = output.user_data().get::<OutputSheet>() {
@@ -393,5 +443,5 @@ fn scene_elements(
             }
         }
     }
-    elements
+    (elements, front)
 }

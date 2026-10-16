@@ -76,6 +76,13 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
     let margin_mm = theme.margin_mm as f64;
     attach_sheet(&output, theme, mm);
     data.add_screen(output.clone(), mm as f64, margin_mm);
+    // DRAFTPAPER_OPENING=FILE.png: the picture a display would have shown before (opening.rs), for tests
+    let mut renderer = renderer;
+    if let Some(path) = std::env::var_os("DRAFTPAPER_OPENING") {
+        if let Some((texture, size)) = crate::opening::from_png(&mut renderer, std::path::Path::new(&path)) {
+            crate::opening::start(&output, texture, size);
+        }
+    }
     data.headless = Some(Headless { renderer, output, target: None });
     std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
 

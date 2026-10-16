@@ -124,6 +124,12 @@ fn copy(p: &Paths, dir: &Path) -> std::io::Result<()> {
             card.insert(k.into(), v.clone());
         }
     }
+    // the name the title block letters (the DRAWN cell), and whether that cell is there (no cell of the
+    // user's own in its place): the card slides the name into it
+    if let Some(drawn) = shell.get("title").and_then(|t| t.get("drawn")) {
+        card.insert("drawn".into(), drawn.clone());
+    }
+    card.insert("drawnCell".into(), json!(shell.get("cells").and_then(Value::as_array).is_none_or(|c| c.is_empty())));
     write(&cache.join("theme.json"), &Value::Object(card).to_string())?;
     // when it was written: draftpaper-greeter shows the copy written last
     write(&dir.join(".synced"), "")

@@ -166,6 +166,17 @@ impl Draftpaper {
             "windows" => Ok(self.ipc_windows()),
             // the login screen runs nothing and keeps its sheet as the session will first draw it
             "action" | "sheet" if self.greeter => Err("not on the login screen".into()),
+            // {"request": "blur", "mm": 6}: the sheet behind the overlay and top layers blurred (the login card)
+            "blur" => {
+                let mm = request.get("mm").and_then(Value::as_f64).ok_or("no \"mm\"")?;
+                self.set_blur(mm);
+                Ok(Value::Null)
+            }
+            // the login screen, its session started: leave what it shows on screen and exit (handoff.rs)
+            "leave" if self.greeter => {
+                self.loop_signal.stop();
+                Ok(Value::Null)
+            }
             "action" => {
                 let text = request.get("action").and_then(Value::as_str).ok_or("no \"action\"")?;
                 match crate::config::parse_action(text)? {

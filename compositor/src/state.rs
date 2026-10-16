@@ -80,6 +80,8 @@ pub struct Draftpaper {
     pub greeter: bool,
     /// on the way out (tty::leave): the outputs whose last frame, the bare sheet, is not on screen yet
     pub leaving: Option<std::collections::HashSet<smithay::reexports::drm::control::crtc::Handle>>,
+    /// the sheet blurred behind the login card (blur.rs), in millimetres: from, to, since (IPC "blur")
+    pub blur: (f64, f64, std::time::Instant),
     /// the X11 window manager, once Xwayland is up (handlers/xwayland.rs)
     pub xwm: Option<smithay::xwayland::X11Wm>,
     pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
@@ -202,6 +204,7 @@ impl Draftpaper {
             tty: false,
             greeter: false,
             leaving: None,
+            blur: (0.0, 0.0, std::time::Instant::now()),
             xwm: None,
             xwayland_shell_state,
             config: crate::config::Config::default_config(),
@@ -625,5 +628,22 @@ impl Draftpaper {
         } else {
             self.space.map_element(window, (0, 0), false);
         }
+    }
+}
+
+/// How long the blur takes to change (IPC "blur").
+const BLUR_CHANGE: std::time::Duration = std::time::Duration::from_millis(400);
+
+impl Draftpaper {
+    /// The blur now, in millimetres (its change eased in and out).
+    pub fn blur_mm(&self) -> f64 {
+        let (from, to, since) = self.blur;
+        let e = (since.elapsed().as_secs_f64() / BLUR_CHANGE.as_secs_f64()).min(1.0);
+        from + (to - from) * e * e * (3.0 - 2.0 * e)
+    }
+
+    /// Blur the sheet to `mm`, from where it is now.
+    pub fn set_blur(&mut self, mm: f64) {
+        self.blur = (self.blur_mm(), mm.clamp(0.0, 20.0), std::time::Instant::now());
     }
 }

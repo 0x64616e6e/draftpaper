@@ -5,10 +5,12 @@
 # A user's home with a theme of their own, a margin, ambient margins and (when the system has a PNG in
 # /usr/share/pixmaps) a wallpaper; `draftpaper apply` copies its look for the login screen (cli's
 # greeter.rs). The greeter runs on that copy as draftpaper-greeter runs it, the name filled in, and is
-# driven over its test IPC as the keys drive it: a wrong password (refused), the right one; then greetd
-# is asked to start draftpaper-session, the card goes, the compositor exits, and its last frame must be
-# the first frame of a compositor on the user's own home, pixel for pixel. SHOT=FILE keeps a
-# screenshot of the card.
+# driven over its test IPC as the keys drive it, the stand-in's fingerprint reader listening first (as
+# pam_fprintd): a password typed meanwhile is held, given when PAM asks and refused; then the finger
+# signs in, greetd is asked to start draftpaper-session, and the compositor leaves its last frame (the
+# sheet blurred, the name in the title block). A compositor on the user's own home opens on that very
+# picture and reveals the desktop as it is without one, pixel for pixel. SHOT=FILE keeps a screenshot
+# of the card.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -19,7 +21,8 @@ t=$(mktemp -d -p "${XDG_CACHE_HOME:-$HOME/.cache}" draftpaper-greeter.XXXXXX)
 home=$t/home
 mkdir -p "$home/.config/draftpaper/themes" "$home/Pictures" "$t/greeter" "$t/gcache"
 sed 's/^name *=.*/name = "drafttest"/' "$repo/themes/blueprint.toml" > "$home/.config/draftpaper/themes/drafttest.toml"
-wp=$(ls /usr/share/pixmaps/debian-logo.png /usr/share/pixmaps/*.png 2>/dev/null | head -n 1)
+wp=
+for f in /usr/share/pixmaps/debian-logo.png /usr/share/pixmaps/*.png; do [ -f "$f" ] && { wp=$f; break; }; done
 {
     printf 'theme = "drafttest"\nmargin = 7\nmargins = "ambient"\n'
     [ -n "$wp" ] && printf 'wallpaper = "%s"\n' "$wp"
@@ -45,9 +48,16 @@ else
     echo "  (no PNG in /usr/share/pixmaps: no wallpaper)"
 fi
 
-# the login screen, as draftpaper-greeter starts it
+# a state of the card, waited for (up to N tenths of a second): what it was last
+until_state() {
+    i=0
+    while s=$(ipc state 2>/dev/null); ! printf '%s' "$s" | grep -q "$1" && [ $i -lt "$2" ]; do sleep 0.1; i=$((i + 1)); done
+    printf '%s' "$s"
+}
+
+# the login screen, as draftpaper-greeter starts it; the reader takes a finger for 3 s
 greeter_env="HOME=$look XDG_CONFIG_HOME=$look/.config DRAFTPAPER_CACHE=$look/.cache/draftpaper XDG_CACHE_HOME=$t/gcache DRAFTPAPER_GREETER_USER=drafttest"
-"$fake" "$t/greetd.sock" "$t/started" &
+"$fake" "$t/greetd.sock" "$t/started" "$t/finger" 3 &
 pids=$!
 # started with env itself, so $! is the process
 env $clean $common $greeter_env GREETD_SOCK="$t/greetd.sock" DRAFTPAPER_GREETER_TEST=1 DRAFTPAPER_LAST_FRAME="$t" \
@@ -61,42 +71,65 @@ wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 ipc() { env $clean $common $greeter_env WAYLAND_DISPLAY="$wl" qs ipc -p "$repo/qml/greeter.qml" call greeter "$@"; }
 i=0
 until ipc state > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-ok "the name filled in, the card asks for the password" "$(ipc state)" "password"
+ok "the name filled in, the reader listening at once" "$(until_state "^password finger$" 20)" "password finger"
 ipc type wrong
 ipc enter
-sleep 0.5
-ok "a wrong password refused" "$(ipc state)" "password: Authentication failure"
+ok "a password typed meanwhile, held" "$(ipc state)" "password busy finger"
+# the reader gives up (3 s), PAM asks for the password, the held one goes and is refused
+ok "then given when PAM asks, and refused" "$(until_state "Authentication failure" 60)" "password: Authentication failure"
+ok "the reader listening again" "$(until_state "finger" 20)" "password finger: Authentication failure"
 if [ -n "${SHOT:-}" ]; then
     mkdir -p "$look/Pictures"
     kill -USR1 "$greeter"
     sleep 1
     mv "$look"/Pictures/*.png "$SHOT"
 fi
-ipc type pencil
-ipc enter
-# the card fades (a quarter second), the session is asked for, Quickshell and the compositor quit
+touch "$t/finger"
+# the finger taken: the name slides into the title block (under half a second), the session is asked
+# for, and the compositor leaves
 i=0
-while kill -0 "$greeter" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
-ok "the compositor gone with the card" "$(kill -0 "$greeter" 2>/dev/null && echo running || echo gone)" "gone"
+while kill -0 "$greeter" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.1; i=$((i + 1)); done
+ok "signed in by the finger, the compositor gone" "$(kill -0 "$greeter" 2>/dev/null && echo running || echo gone)" "gone"
 ok "greetd asked for the session" "$(tr -d ' \n' < "$t/started" 2>/dev/null)" '{"cmd":["draftpaper-session"],"env":[],"user":"drafttest"}'
 last=$(ls "$t"/last-*.png 2>/dev/null | head -n 1)
 ok "its last frame written" "$([ -n "$last" ] && echo yes)" "yes"
 
-# the session's first frame: a compositor on the user's own home, nothing started yet
-env $clean $common $user_env "$comp" --headless 3840x2160 --scale 1.5 --command true > "$t/log2" 2>&1 &
-session=$!
-pids="$pids $session"
-i=0
-until grep -aq "Created new socket" "$t/log2" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-wl2=$(grep -a "Created new socket" "$t/log2" | grep -o "wayland-[0-9]*" | head -1)
-# up (its IPC answers), and its signals with it
-i=0
-until DRAFTPAPER_SOCKET="${XDG_RUNTIME_DIR:?}/draftpaper-$wl2.sock" "$comp" msg version > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-sleep 0.5
-kill -USR1 "$session"
-i=0
-until ls "$home"/Pictures/*.png > /dev/null 2>&1 || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
+# a compositor on the user's own home, nothing started; $1: more of its environment. Waits until it is
+# up (its IPC answers, its signals with it); its pid in $session
+start_session() {
+    env $clean $common $user_env "$@" "$comp" --headless 3840x2160 --scale 1.5 --command true > "$t/log2" 2>&1 &
+    session=$!
+    pids="$pids $session"
+    i=0
+    until grep -aq "Created new socket" "$t/log2" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+    wl2=$(grep -a "Created new socket" "$t/log2" | grep -o "wayland-[0-9]*" | head -1)
+    i=0
+    until DRAFTPAPER_SOCKET="${XDG_RUNTIME_DIR:?}/draftpaper-$wl2.sock" "$comp" msg version > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+}
+# a screenshot of $session to the file $1
+shot() {
+    rm -f "$home"/Pictures/*.png
+    kill -USR1 "$session"
+    i=0
+    until ls "$home"/Pictures/*.png > /dev/null 2>&1 || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    sleep 0.3
+    mv "$(ls "$home"/Pictures/*.png | head -n 1)" "$1" 2>/dev/null
+}
+same() { [ -s "$1" ] && [ -s "$2" ] && cmp -s "$1" "$2" && echo same || echo different; }
+
+# the desktop as it is, without an opening
+start_session
 sleep 0.3
-first=$(ls "$home"/Pictures/*.png 2>/dev/null | head -n 1)
-ok "the greeter's last frame is the session's first" "$([ -n "$last" ] && [ -n "$first" ] && cmp -s "$last" "$first" && echo same || echo different)" "same"
+shot "$t/plain.png"
+kill "$session"
+ok "the login screen's last frame blurred, with the name: not the plain sheet" "$(same "$last" "$t/plain.png")" "different"
+
+# the session, taking over that frame: the very picture first, the desktop once revealed (after 4 s,
+# no shell coming here, then 0.7 s)
+start_session DRAFTPAPER_OPENING="$last" DRAFTPAPER_OPENING_WAIT=4
+shot "$t/opening.png"
+ok "the session opens on the login screen's last frame" "$(same "$last" "$t/opening.png")" "same"
+sleep 5
+shot "$t/revealed.png"
+ok "and reveals the desktop" "$(same "$t/plain.png" "$t/revealed.png")" "same"
 exit $fail

@@ -1,6 +1,7 @@
 //! Leaving the displays to the next compositor without a flicker (the login screen to the session, the
-//! session back to the login screen). On the way out every output draws the bare sheet, exactly the
-//! next compositor's first frame, and that frame stays on screen:
+//! session back to the login screen). On the way out every output draws its last frame (the session:
+//! the bare sheet; the login screen: the sheet blurred, the name in the title block) without the
+//! pointer, and that frame stays on screen, for the next compositor to open on (opening.rs):
 //!
 //! - its framebuffer is let go of with CLOSEFB (Linux 6.8) instead of being removed (RMFB, which takes
 //!   the plane down: black), and the device state is left as it is (Smithay's surfaces would clear it);
@@ -29,7 +30,7 @@ use crate::Draftpaper;
 /// How long the holder waits for the next compositor at most.
 const HOLD: Duration = Duration::from_secs(30);
 
-/// Draw the bare sheet on every output and keep it there (see above). After the event loop has ended.
+/// Draw the last frame on every output and keep it there (see above). After the event loop has ended.
 pub fn leave(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpaper) {
     let last = std::env::var_os("DRAFTPAPER_LAST_FRAME").map(std::path::PathBuf::from);
     if data.headless.is_some() {
@@ -49,7 +50,7 @@ pub fn leave(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpa
     for &crtc in &crtcs {
         crate::tty::render_crtc(data, crtc);
     }
-    // until every output has the bare sheet on screen (tty.rs takes them off `leaving`), then a few
+    // until every output has its last frame on screen (tty.rs takes them off `leaving`), then a few
     // frames more for a flip still on its way
     let deadline = Instant::now() + Duration::from_secs(1);
     while data.leaving.as_ref().is_some_and(|l| !l.is_empty()) && Instant::now() < deadline {

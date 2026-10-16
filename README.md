@@ -204,10 +204,14 @@ scripts), `power off|on`, `reload`, `quit`, `spawn COMMAND`.
 ## Login screen (experimental)
 
 Draftpaper can be its own login screen under [greetd](https://sr.ht/~kennylevinsen/greetd/):
-`draftpaper-greeter` draws your sheet with a sign-in card on whole zones in the middle of it, and once
-the password is accepted the card fades and the session starts on the same VT without a flicker. The
-compositor leaves the bare sheet on screen when it exits, and the session takes the displays over as
-they are, in the same mode, so they never go dark in between (Linux 6.8 or later).
+`draftpaper-greeter` draws your sheet, blurred, with a sign-in card on whole zones in the middle of it.
+With your name known the session is asked for at once, so a fingerprint reader (pam_fprintd) listens
+from the start, its glyph lit on the card; a password typed meanwhile is given when PAM asks for it.
+Once you are in, your name slides from the card into the title block's DRAWN cell, and the session
+starts on the same VT without a flicker: the login screen leaves that frame on screen when it exits,
+the session takes the displays over as they are, in the same mode, shows that very frame until its
+shell is up, then fades it into the desktop as the blur goes (Linux 6.8 or later). After any display
+manager the session opens the same way, from whatever was on screen.
 
 The login screen runs as greetd's own user and cannot read your home, so `draftpaper apply` (every
 login, every theme change) copies what your sheet looks like (theme, margin, wallpaper, the outputs'

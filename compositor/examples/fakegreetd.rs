@@ -1,8 +1,10 @@
 //! A stand-in for greetd, for the login screen's headless test (compositor/tests/greeter.sh): greetd's
 //! IPC (a native-endian u32 length, then JSON) on the socket given, one account, `drafttest` with the
 //! password `pencil`, and the session the greeter starts written to the file given as one JSON line.
+//! As PAM with pam_fprintd does, a session asks for a finger first: it waits up to WAIT seconds for the
+//! file FINGER to appear (the finger on the reader: in), then asks for the password.
 //!
-//!   fakegreetd SOCKET STARTED-FILE
+//!   fakegreetd SOCKET STARTED-FILE [FINGER [WAIT]]
 
 use std::{
     io::{Read, Write},
@@ -31,18 +33,42 @@ fn main() {
         eprintln!("fakegreetd SOCKET STARTED-FILE");
         std::process::exit(2);
     };
+    let finger = args.get(2).map(std::path::PathBuf::from);
+    let wait: f64 = args.get(3).and_then(|w| w.parse().ok()).unwrap_or(3.0);
     let _ = std::fs::remove_file(socket);
     let listener = UnixListener::bind(socket).expect("bind");
     for stream in listener.incoming() {
         let Ok(mut s) = stream else { continue };
         let mut user = String::new();
         let mut authed = false;
+        // the reader is listening (an info message sent, its empty answer not yet in)
+        let mut reading = false;
         while let Some(req) = read(&mut s) {
             let reply = match req["type"].as_str().unwrap_or("") {
                 "create_session" => {
                     user = req["username"].as_str().unwrap_or("").to_string();
                     authed = false;
-                    json!({ "type": "auth_message", "auth_message_type": "secret", "auth_message": "Password: " })
+                    reading = finger.is_some();
+                    if reading {
+                        json!({ "type": "auth_message", "auth_message_type": "info", "auth_message": "Place your finger on the fingerprint reader" })
+                    } else {
+                        json!({ "type": "auth_message", "auth_message_type": "secret", "auth_message": "Password: " })
+                    }
+                }
+                // the info answered: the reader waits for the finger, then gives up
+                "post_auth_message_response" if reading => {
+                    reading = false;
+                    let f = finger.as_ref().unwrap();
+                    let until = std::time::Instant::now() + std::time::Duration::from_secs_f64(wait);
+                    while !f.exists() && std::time::Instant::now() < until {
+                        std::thread::sleep(std::time::Duration::from_millis(50));
+                    }
+                    if f.exists() && user == "drafttest" {
+                        authed = true;
+                        json!({ "type": "success" })
+                    } else {
+                        json!({ "type": "auth_message", "auth_message_type": "secret", "auth_message": "Password: " })
+                    }
                 }
                 "post_auth_message_response" if user == "drafttest" && req["response"] == "pencil" => {
                     authed = true;
@@ -60,6 +86,7 @@ fn main() {
                 "cancel_session" => {
                     user.clear();
                     authed = false;
+                    reading = false;
                     json!({ "type": "success" })
                 }
                 other => json!({ "type": "error", "error_type": "error", "description": format!("not now: {other}") }),

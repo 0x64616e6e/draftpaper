@@ -223,6 +223,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     // the outputs, set up but not drawn yet: what the previous owner left beside them goes first
     let Some(mut tty_data) = data.tty_data.take() else { return Ok(()) };
     let started = scan_with(data, &mut tty_data);
+    take_pictures(&mut tty_data);
     adopt(&tty_data);
     data.tty_data = Some(tty_data);
     data.relayout();
@@ -888,6 +889,18 @@ fn reset_once(tty: &mut TtyData) {
     for (_, surface, _) in tty.outputs.values_mut() {
         if let Err(e) = surface.with_compositor(|c| c.reset_state()) {
             eprintln!("draftpaper: reset: {e:?}");
+        }
+    }
+}
+
+/// What each display shows before Draftpaper draws over it (the login screen's last frame), for the
+/// opening (opening.rs).
+fn take_pictures(tty: &mut TtyData) {
+    let device = tty.manager.device();
+    for (crtc, (output, _, _)) in &tty.outputs {
+        let Some(fb) = device.get_crtc(*crtc).ok().and_then(|c| c.framebuffer()) else { continue };
+        if let Some((texture, size)) = crate::opening::from_framebuffer(device, &mut tty.renderer, fb) {
+            crate::opening::start(output, texture, size);
         }
     }
 }

@@ -14,6 +14,15 @@ draftpaper (0.3.0) unstable; urgency=medium
     (CLOSEFB, Linux 6.8), a child holding the device until the next
     compositor shows a frame of its own, so the screen does not go dark
     between the login screen and the session.
+  * The login screen blurs the sheet behind its card once the name is
+    known, and asks greetd for the session at once, so a fingerprint reader
+    listens from the start (a drawn glyph on the card, lit while it does);
+    a password typed meanwhile is given when PAM asks. Signed in, the name
+    slides into the title block's DRAWN cell before the session starts.
+  * The session opens on what the displays showed (read back from the
+    framebuffer on screen and imported, GETFB2): that very frame until the
+    shell is up, then fading into the desktop drawn blurred, the blur
+    going to nothing.
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through
