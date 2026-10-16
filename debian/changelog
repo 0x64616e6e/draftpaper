@@ -1,5 +1,8 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * The title block takes whole zones (the nearest to 130 by 36 mm: 3 by 1
+    on the 4K and the laptop), its outer rule starting on the margins'
+    ticks; its cells in proportion.
   * Free-form tiling: every window takes a rectangle of zones of its own.
     It moves a zone at a time keeping its size, into free zones, or past a
     window of the same rows (or columns), swapping places; anything else

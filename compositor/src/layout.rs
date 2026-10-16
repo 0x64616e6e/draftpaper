@@ -55,8 +55,8 @@ impl Grid {
         let mode = if mode.0 > 0 && mode.1 > 0 { mode } else { ((size.w as f64 * scale).round() as i32, (size.h as f64 * scale).round() as i32) };
         let mg = crate::title::margin(margin_mm, mm, scale);
         let (iw, ih) = ((mode.0 - 2 * mg) as f64, (mode.1 - 2 * mg) as f64);
-        let nx = (iw / (50.0 * mm * scale)).round().max(2.0);
-        let ny = (ih / (50.0 * mm * scale)).round().max(2.0);
+        let (nx, ny) = crate::title::zones(mode, mg, mm * scale);
+        let (nx, ny) = (nx as f64, ny as f64);
         let mut grid = Grid {
             area: Rectangle::default(),
             origin: (at.x as f64 + mg as f64 / scale, at.y as f64 + mg as f64 / scale).into(),

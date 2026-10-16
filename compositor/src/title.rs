@@ -12,7 +12,7 @@ use smithay::utils::{Physical, Rectangle};
 /// The frame's line, in pixels.
 pub const LINE: i32 = 2;
 
-/// The title block, in millimetres.
+/// The title block, in millimetres: it takes the whole zones nearest this (title_block).
 pub const SIZE_MM: (f32, f32) = (130.0, 36.0);
 
 /// The title block's cells, [x, y, width, height] in millimetres from its top-left corner; they tile it.
@@ -56,15 +56,27 @@ pub struct TitleBlock {
     pub rules: Vec<Rule>,
 }
 
+/// The zones across and down of an output of `size` physical pixels, `margin` from margin(), `mm`
+/// physical pixels per millimetre: about 50 mm each, two at least (the layout's Grid cuts the same).
+pub fn zones(size: (i32, i32), margin: i32, mm: f64) -> (u32, u32) {
+    let n = |len: i32| ((len - 2 * margin) as f64 / (50.0 * mm)).round().max(2.0) as u32;
+    (n(size.0), n(size.1))
+}
+
 /// The title block of an output of `size` physical pixels, `margin` from margin(), `mm` physical pixels
-/// per millimetre.
-pub fn title_block(size: (i32, i32), margin: i32, mm: f32) -> TitleBlock {
+/// per millimetre, cut into `zones`: the whole zones nearest SIZE_MM in the frame's bottom-right corner,
+/// its outer rule starting on the ticks, and its cells in proportion.
+pub fn title_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) -> TitleBlock {
     let (right, bottom) = (size.0 - margin, size.1 - margin);
-    let bw = ((SIZE_MM.0 * mm).round() as i32).max(2 * LINE + 1);
-    let bh = ((SIZE_MM.1 * mm).round() as i32).max(2 * LINE + 1);
-    let (left, top) = (right - bw, bottom - bh);
-    let x = |v: f32| if v >= SIZE_MM.0 { right } else { left + (v * mm).round() as i32 };
-    let y = |v: f32| if v >= SIZE_MM.1 { bottom } else { top + (v * mm).round() as i32 };
+    let whole = |len: i32, n: u32, want: f32| {
+        let zone = (len - 2 * margin) as f32 / n.max(1) as f32;
+        let k = ((want * mm / zone).round() as u32).clamp(1, n.saturating_sub(1).max(1));
+        tick(len, margin, n, n - k).0
+    };
+    let (left, top) = (whole(size.0, zones.0, SIZE_MM.0).min(right - 2 * LINE - 1), whole(size.1, zones.1, SIZE_MM.1).min(bottom - 2 * LINE - 1));
+    let (mx, my) = ((right - left) as f32 / SIZE_MM.0, (bottom - top) as f32 / SIZE_MM.1);
+    let x = |v: f32| if v >= SIZE_MM.0 { right } else { left + (v * mx).round() as i32 };
+    let y = |v: f32| if v >= SIZE_MM.1 { bottom } else { top + (v * my).round() as i32 };
     // what is not the frame's line nor the outer rule
     let (ix0, iy0, ix1, iy1) = (left + LINE, top + LINE, right - LINE, bottom - LINE);
     let rect = |x0: i32, y0: i32, x1: i32, y1: i32| Rectangle::<i32, Physical>::new((x0, y0).into(), ((x1 - x0).max(0), (y1 - y0).max(0)).into());
@@ -117,8 +129,8 @@ pub fn title_block(size: (i32, i32), margin: i32, mm: f32) -> TitleBlock {
     TitleBlock { rect: rect(left, top, right, bottom), inner: rect(ix0, iy0, ix1, iy1), cells, rules }
 }
 
-// the twin of the sheet shader's ticked(), which cannot be called from here: its tests are the shader's
-#[allow(dead_code)]
+// the twin of the sheet shader's ticked(), which cannot be called from here: its tests are the shader's; the
+// title block starts on its ticks
 /// The physical pixel of the tick at zone boundary `k` (of `zones`) along a side `len` pixels long: for
 /// the frame's corners (k = 0, zones) the first pixel of the frame's line there, which the tick covers
 /// whole (LINE pixels); otherwise one pixel.
@@ -158,12 +170,16 @@ mod tests {
     fn the_title_block_is_exact() {
         for ((w, h), phys_mm, scale, margin_mm) in cases() {
             let mg = margin(margin_mm, phys_mm / scale, scale);
-            let t = title_block((w, h), mg, phys_mm as f32);
+            let zones = zones((w, h), mg, phys_mm);
+            let t = title_block((w, h), mg, phys_mm as f32, zones);
             let case = format!("{w}x{h} {phys_mm} px/mm, scale {scale}, margin {margin_mm} mm");
             // on the frame's outer edges, inside the frame
             assert_eq!(t.rect.loc.x + t.rect.size.w, w - mg, "{case}");
             assert_eq!(t.rect.loc.y + t.rect.size.h, h - mg, "{case}");
             assert!(t.rect.loc.x > mg && t.rect.loc.y > mg, "{case}");
+            // its outer rule starts on a tick: whole zones
+            assert!((1..zones.0).any(|k| tick(w, mg, zones.0, k).0 == t.rect.loc.x), "{case}: left off the ticks");
+            assert!((1..zones.1).any(|k| tick(h, mg, zones.1, k).0 == t.rect.loc.y), "{case}: top off the ticks");
             // rules: no pixel twice, none on the frame's line, all in the block
             let mut seen = std::collections::HashSet::new();
             for r in &t.rules {

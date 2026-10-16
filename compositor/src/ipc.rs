@@ -396,7 +396,7 @@ fn request_kinds(line: &str) -> Option<Vec<&'static str>> {
 /// The margins' ink when the output's wallpaper has ambient margins, as "#rrggbb".
 /// The title block of screen `s` (title.rs), in logical pixels from the output's top-left corner.
 fn title_block(s: &crate::screens::Screen, scale: f64) -> Value {
-    let t = crate::title::title_block(crate::render::mode_size(&s.output), crate::title::margin(s.margin_mm, s.mm, scale), s.phys_mm as f32);
+    let t = crate::title::title_block(crate::render::mode_size(&s.output), crate::title::margin(s.margin_mm, s.mm, scale), s.phys_mm as f32, s.grid.zones);
     let r = |r: smithay::utils::Rectangle<i32, smithay::utils::Physical>| {
         json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
     };

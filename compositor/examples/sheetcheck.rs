@@ -48,7 +48,7 @@ fn main() {
     }
     let (w, h) = (img.width() as i32, img.height() as i32);
     let mg = title::margin(margin_mm, phys_mm / scale, scale);
-    let block = title::title_block((w, h), mg, phys_mm as f32);
+    let block = title::title_block((w, h), mg, phys_mm as f32, title::zones((w, h), mg, phys_mm));
     let (left, top, right, bottom) = (block.rect.loc.x, block.rect.loc.y, w - mg, h - mg);
     let px = |x: i32, y: i32| *img.get_pixel(x as u32, y as u32);
     // a dot of the 5 mm pattern, or a letter: unlike both neighbours across the line being checked

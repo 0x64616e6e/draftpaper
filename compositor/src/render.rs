@@ -346,7 +346,7 @@ fn scene_elements(
         // whole pixels, none over another or over the frame's line
         let lettered = layer_map_for_output(output).layers().any(|l| l.namespace() == "draftpaper-title-block");
         if lettered {
-            let block = crate::title::title_block(physical, margin, mm);
+            let block = crate::title::title_block(physical, margin, mm, zones);
             let t = &sheet.theme;
             let colour = |alpha: f32| {
                 let a = alpha.min(1.0);

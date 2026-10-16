@@ -284,7 +284,7 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
 
     // the title block's place (title.rs: bottom right of the interior, up to the frame's line, which is drawn
     // over the picture as along the rest of the frame) and the picture there, blurred and tinted
-    let block = crate::title::title_block(size, margin, mm).rect;
+    let block = crate::title::title_block(size, margin, mm, zones).rect;
     let title = Rectangle::<i32, Physical>::new(block.loc, (block.size.w - crate::title::LINE, block.size.h - crate::title::LINE).into());
     let (bw, bh) = (title.size.w, title.size.h);
     let (tx, ty) = ((title.loc.x - interior.loc.x).max(0) as u32, (title.loc.y - interior.loc.y).max(0) as u32);
