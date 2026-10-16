@@ -49,11 +49,12 @@ check: $(CLI)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
 # the sheet at every scale, pixel by pixel, and windows in zones, headless: nothing is shown on any
-# display (compositor/tests/pixels.sh, zones.sh)
+# display, and the launcher (compositor/tests/pixels.sh, zones.sh, launcher.sh)
 pixels: $(COMPOSITOR) $(CLI)
 	cd compositor && $(CARGO) build --release --locked --example sheetcheck
 	compositor/tests/pixels.sh
 	compositor/tests/zones.sh
+	compositor/tests/launcher.sh
 
 clean:
 	cd compositor && $(CARGO) clean

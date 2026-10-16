@@ -1,5 +1,10 @@
 draftpaper (0.3.0) unstable; urgency=medium
 
+  * A launcher of its own on Mod+d (#34): the applications as a register in
+    the frame's top-left corner, whole zones, what you type lettered in the
+    margin above; fuzzy, the most used and recent first, launched through
+    the compositor. `draftpaper menu` shows any list of lines in it for
+    scripts. fuzzel moves to Suggests and stays an alternative.
   * The title block takes whole zones (the nearest to 130 by 36 mm: 3 by 1
     on the 4K and the laptop), its outer rule starting on the margins'
     ticks; its cells in proportion.

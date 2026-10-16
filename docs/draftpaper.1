@@ -88,6 +88,14 @@ writes the choices to [scheme] in config.toml and the theme
 .BR "theme revert" " \fINAME\fR"
 A shipped theme as shipped again: your copy of it removed.
 .TP
+.B launcher
+Open or close the launcher (Super+D): the applications as a register on the sheet, found as you type
+and launched through the compositor.
+.TP
+.BR menu " [" "\-\-prompt \fITEXT\fR" ]
+A menu of the lines on standard input in the launcher's register; the line chosen on standard output.
+Exits 1 when the menu was closed without a choice, 2 when the shell could not show it.
+.TP
 .B settings
 Open or close the settings (Super+T): the colour scheme, from the themes or built from choices, and
 the wallpaper, the margin cells and the title block's tint.
@@ -140,7 +148,8 @@ Themes of your own, beside those in
 .IR /usr/share/draftpaper/themes/ .
 .TP
 .I ~/.cache/draftpaper/
-Generated files: the shell's theme, the launcher's, the lock screen's and swayidle's configuration.
+Generated files: the shell's theme, fuzzel's, the lock screen's and swayidle's configuration, and the
+launcher's count of launches (launcher.json).
 .TP
 .I /usr/share/doc/draftpaper/README.md
 The keys and every setting.

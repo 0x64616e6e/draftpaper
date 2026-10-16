@@ -6,7 +6,7 @@
 //!
 //!   ~/.cache/draftpaper/theme.json    the ink, alert and accent colours and the shell's settings (title
 //!                                     block, cells, alerts, commands); shell.qml reads it live
-//!   ~/.cache/draftpaper/fuzzel.ini    the launcher (Mod+d) drawn like the sheet: paper, ink, a square
+//!   ~/.cache/draftpaper/fuzzel.ini    fuzzel (the launcher's alternative) drawn like the sheet: paper, ink, a square
 //!                                     frame, matches in the alert colour, the selection inverted
 //!   ~/.cache/draftpaper/swaylock.conf the lock screen (Mod+Shift+x): the paper, an ink ring, the accent
 //!                                     while typing, the alert colour for a wrong password

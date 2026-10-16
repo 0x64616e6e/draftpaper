@@ -8,7 +8,7 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Keys | |
 |---|---|
 | Mod+Return | Terminal (alacritty) |
-| Mod+d | Launcher (fuzzel) |
+| Mod+d | Launcher: the applications as a register on the sheet (fuzzel stays an alternative) |
 | Mod+h j k l · Mod+Up/Down | Move the focus |
 | Mod+Shift+h j k l · Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap; else it stays |
 | Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going): right and down larger, left and up smaller |
@@ -49,6 +49,21 @@ places other windows.
 
 The displays turn off after 15 minutes idle (`[idle] screens_off`); any input, a key, the touchpad,
 the touchscreen, wakes them.
+
+## Launcher
+
+| Keys | |
+|---|---|
+| Mod+d | Open the register of applications in the frame's top-left corner; what you type, in the margin above |
+| Type · Backspace · Ctrl+u | Find (fuzzy: the name, then what it is, the keywords); the most used and recent first |
+| ↑ ↓ · Tab · Ctrl+k j · Ctrl+p n · wheel | Along the register; Page up and down a page |
+| Enter · click a row | Launch it, on the active workspace |
+| Esc · click elsewhere | Close |
+
+`draftpaper menu [--prompt TEXT] < lines` shows any list in the same register and prints the line
+chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d instead, bind
+`"Mod+d" = "spawn fuzzel --config \"${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/fuzzel.ini\""` in
+`[bindings]`; `draftpaper apply` keeps its config in the theme's colours.
 
 ## Settings (colour scheme, wallpaper)
 

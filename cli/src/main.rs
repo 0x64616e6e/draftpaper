@@ -41,18 +41,20 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               windows, shade, terminal, text, contrast; keep writes [scheme] and the
                               \"custom\" theme
   draftpaper settings         open or close the settings (Mod+t, the theme cell): the colour scheme
+  draftpaper launcher         open or close the launcher (Mod+d): the applications, as a register
+  draftpaper menu [--prompt TEXT]
+                              a menu of stdin's lines in the launcher's register; the choice on stdout
+                              (exit 1: closed without one)
   draftpaper audio save|restore
                               the default output's volume and mute, kept from one session to the next
                               (draftpaper-audio.service: the switch to the login screen mutes it)
-  draftpaper wallpaper [FILE   draftpaper wallpaper json   the wallpaper, margins and tint as set, and the pictures to choose from
+  draftpaper wallpaper [FILE | none]
+                              a picture in the frame, or none (the compositor picks it up at once)
+  draftpaper wallpaper json   the wallpaper's settings as set, and the pictures to choose from
   draftpaper wallpaper set NAME=VALUE ...
                               picture=FILE|none, margins=paper|ambient, tint, fit=fill|fit|centre,
                               position=centre|top|bottom|left|right, brightness, wash, blur (mm):
                               any of them in one write (the settings' wallpaper page)
-|none paper|ambient TINT
-                              the three at once (the settings' wallpaper page)
-| none]
-                              a picture in the frame, or none (the compositor picks it up at once)
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
   draftpaper readings         the readings the shell polls, as JSON
@@ -98,6 +100,12 @@ fn main() {
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "settings", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
+        ["launcher", ..] => {
+            // the shell's IpcHandler "launcher" (qml/shell.qml)
+            let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "launcher", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
+            std::process::exit(code);
+        }
+        ["menu", rest @ ..] => menu(&p, rest),
         ["lock-on-sleep", how, ..] => lock_on_sleep(&p, how),
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
@@ -271,6 +279,59 @@ fn audio(p: &Paths, how: &str) {
         }
         _ => util::die("draftpaper audio save|restore"),
     }
+}
+
+/// A menu of stdin's lines in the launcher's register (the shell's IpcHandler "launcher"): the choice
+/// comes back through a FIFO in the runtime directory and goes to stdout. Exit 1 when the menu was
+/// closed without a choice, 2 when the shell could not show it.
+fn menu(p: &Paths, rest: &[&str]) {
+    let fail = |msg: String| -> ! {
+        eprintln!("draftpaper menu: {msg}");
+        std::process::exit(2)
+    };
+    let prompt = match rest {
+        [] => "",
+        ["--prompt" | "-p", text, ..] => text,
+        _ => fail("draftpaper menu [--prompt TEXT] < lines".into()),
+    };
+    let mut input = String::new();
+    if std::io::stdin().read_to_string(&mut input).is_err() {
+        fail("stdin is not text".into());
+    }
+    let _ = std::fs::create_dir_all(&p.runtime);
+    let base = p.runtime.join(format!("menu-{}", std::process::id()));
+    let (list, fifo) = (base.with_extension("lines"), base.with_extension("fifo"));
+    let clean = || {
+        let _ = std::fs::remove_file(&list);
+        let _ = std::fs::remove_file(&fifo);
+    };
+    clean();
+    if std::fs::write(&list, &input).is_err() || !Command::new("mkfifo").arg("-m").arg("600").arg(&fifo).status().is_ok_and(|s| s.success()) {
+        clean();
+        fail(format!("cannot write {}", base.display()));
+    }
+    // `qs ipc call` exits 0 even when the call fails, and says why on its output: a call that returns
+    // nothing and says nothing went through
+    let said = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "launcher", "menu", prompt]).arg(&list).arg(&fifo).output();
+    match said {
+        Ok(o) if o.status.success() && o.stdout.is_empty() && o.stderr.is_empty() => {}
+        Ok(o) => {
+            clean();
+            fail(format!("the shell did not show it: {}{}", String::from_utf8_lossy(&o.stdout).trim(), String::from_utf8_lossy(&o.stderr).trim()));
+        }
+        Err(e) => {
+            clean();
+            fail(format!("qs: {e}"));
+        }
+    }
+    // blocks until the shell writes the choice: a line, or an empty one when the menu closed
+    let choice = std::fs::read_to_string(&fifo).unwrap_or_default();
+    clean();
+    let choice = choice.trim_end_matches('\n');
+    if choice.is_empty() {
+        std::process::exit(1);
+    }
+    println!("{choice}");
 }
 
 /// A flag in the runtime directory that the idle service's before-sleep hook looks for.

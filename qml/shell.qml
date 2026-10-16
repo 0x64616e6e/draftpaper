@@ -222,6 +222,21 @@ ShellRoot {
         function keep(): void { if (settings.visible) settings.keep() }
         function cancel(): void { if (settings.visible) settings.cancel() }
     }
+    // the launcher (Mod+d: `draftpaper launcher`) and the menu (`draftpaper menu`), Launcher.qml
+    Launcher { id: launcher; shell: root }
+    IpcHandler {
+        target: "launcher"
+        function toggle(): void { launcher.visible ? launcher.close() : launcher.open() }
+        // a menu over the lines of the file `lines` (`qs ipc` splits a JSON list given as an argument);
+        // the choice goes to the FIFO `fifo`
+        function menu(prompt: string, lines: string, fifo: string): void { launcher.openMenu(prompt, lines, fifo) }
+        // what the keys do, for scripts and tests: type, move, launch (or choose), close
+        function type(text: string): void { if (launcher.visible) launcher.query = text }
+        function move(n: int): void { if (launcher.visible) launcher.move(n) }
+        function launch(): void { if (launcher.visible) launcher.launch() }
+        function close(): void { if (launcher.visible) launcher.close() }
+        function picked(): string { return launcher.visible && launcher.matches[launcher.sel] ? launcher.matches[launcher.sel].name : "" }
+    }
     IpcHandler {        // the name the theme picker had (`draftpaper picker`, an installed 0.3.0 binding)
         target: "themes"
         function toggle(): void { settings.visible ? settings.cancel() : settings.open() }

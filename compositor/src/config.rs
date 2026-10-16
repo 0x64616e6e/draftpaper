@@ -131,7 +131,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+t", "spawn draftpaper settings"),
     ("Mod+Return", "spawn alacritty"),
     // the launcher, themed like the sheet by `draftpaper apply`
-    ("Mod+d", r#"spawn fuzzel --config "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/fuzzel.ini""#),
+    ("Mod+d", "spawn draftpaper launcher"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
     // screenshots through screencopy: a region picked with slurp into swappy (annotate, save, copy), the

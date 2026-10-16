@@ -42,7 +42,7 @@ recommended wireplumber has to come from the same place.
 Log out and pick **Draftpaper** from the display manager's session menu (in GDM, the gear under the
 password field). From a text console, run `draftpaper-session`.
 
-The recommended packages are the defaults the keys run: alacritty (or foot), fuzzel, swaylock, swayidle,
+The recommended packages are the defaults the keys run: alacritty (or foot), swaylock, swayidle,
 grim, slurp and swappy, wireplumber and brightnessctl. Screen sharing in browsers and calls goes through
 xdg-desktop-portal-wlr. The sheet is lettered in IBM Plex Mono when it is installed, DejaVu Sans Mono
 otherwise; Plex is in Debian's `contrib` section.
@@ -57,7 +57,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Key | |
 |---|---|
 | Mod+Return | Terminal (alacritty) |
-| Mod+d | Launcher (fuzzel) |
+| Mod+d | Launcher: the applications as a register on the sheet (fuzzel stays an alternative) |
 | Mod+h/j/k/l, Mod+Up/Down | Move the focus |
 | Mod+Shift+h/j/k/l, Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap |
 | Mod+Ctrl+h/j/k/l, Mod+Ctrl+arrows | Resize by a zone (hold to repeat): right and down larger, left and up smaller |
