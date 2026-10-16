@@ -135,6 +135,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     // the displays as they are, not reset: a display showing the greeter's last frame (or the firmware's
     // picture) in the mode Draftpaper wants is taken over without going dark (adopt)
     let (drm, drm_notifier) = DrmDevice::new(fd.clone(), false).map_err(err("drm device"))?;
+    log_screens(&drm, "device opened");
     let gbm = GbmDevice::new(fd).map_err(err("gbm device"))?;
     let egl = unsafe { EGLDisplay::new(gbm.clone()) }.map_err(err("egl display"))?;
     let context = EGLContext::new(&egl).map_err(err("egl context"))?;
@@ -227,8 +228,10 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     // the outputs, set up but not drawn yet: what the previous owner left beside them goes first
     let Some(mut tty_data) = data.tty_data.take() else { return Ok(()) };
     let started = scan_with(data, &mut tty_data);
+    log_screens(tty_data.manager.device(), "outputs set up");
     take_pictures(&mut tty_data);
     adopt(&tty_data);
+    log_screens(tty_data.manager.device(), "the rest switched off");
     data.tty_data = Some(tty_data);
     data.relayout();
     for crtc in started {
@@ -447,6 +450,7 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
             &DrmOutputRenderElements::default(),
         ) {
             Ok(surface) => {
+                log_screens(tty.manager.device(), &format!("{} set up", output.name()));
                 data.add_screen(output.clone(), mm as f64, theme.margin_mm as f64);
                 tty.outputs.insert(crtc, (output, surface, info.handle()));
                 started.push(crtc);
@@ -915,8 +919,26 @@ fn take_pictures(tty: &mut TtyData) {
     for (crtc, (output, _, _)) in &tty.outputs {
         let Some(fb) = device.get_crtc(*crtc).ok().and_then(|c| c.framebuffer()) else { continue };
         if let Some((texture, size)) = crate::opening::from_framebuffer(device, &mut tty.renderer, fb) {
+            if crate::opening::is_black(&mut tty.renderer, &texture, size) {
+                eprintln!("draftpaper: {}: the picture on it is black: no opening", output.name());
+                continue;
+            }
             eprintln!("draftpaper: {}: opening on the picture it showed ({}x{})", output.name(), size.0, size.1);
             crate::opening::start(output, texture, size);
         }
     }
+}
+
+/// What each CRTC shows (its primary plane's framebuffer, 0: nothing), with when: following the
+/// handoff in the log.
+fn log_screens(device: &DrmDevice, when: &str) {
+    let Ok(resources) = device.resource_handles() else { return };
+    let shown: Vec<String> = resources
+        .crtcs()
+        .iter()
+        .filter_map(|c| device.get_crtc(*c).ok())
+        .filter(|i| i.mode().is_some())
+        .map(|i| format!("crtc {} framebuffer {}", u32::from(i.handle()), i.framebuffer().map(u32::from).unwrap_or(0)))
+        .collect();
+    eprintln!("draftpaper: {when}: {}", if shown.is_empty() { "no CRTC on".into() } else { shown.join(", ") });
 }

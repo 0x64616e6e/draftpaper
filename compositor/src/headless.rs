@@ -80,7 +80,11 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
     let mut renderer = renderer;
     if let Some(path) = std::env::var_os("DRAFTPAPER_OPENING") {
         if let Some((texture, size)) = crate::opening::from_png(&mut renderer, std::path::Path::new(&path)) {
-            crate::opening::start(&output, texture, size);
+            if crate::opening::is_black(&mut renderer, &texture, size) {
+                eprintln!("draftpaper: headless: the picture is black: no opening");
+            } else {
+                crate::opening::start(&output, texture, size);
+            }
         }
     }
     data.headless = Some(Headless { renderer, output, target: None });

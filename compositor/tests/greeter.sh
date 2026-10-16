@@ -132,4 +132,12 @@ ok "the session opens on the login screen's last frame" "$(same "$last" "$t/open
 sleep 5
 shot "$t/revealed.png"
 ok "and reveals the desktop" "$(same "$t/plain.png" "$t/revealed.png")" "same"
+kill "$session"
+
+# a black picture (the screen dark, or the picture not come through: on Intel the previous frame read
+# back can be) is no opening
+printf '%s' iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkkAAAACklEQVQI12NgAAAAAgAB4iG8MwAAAABJRU5ErkJggg== | base64 -d > "$t/black.png"
+: > "$t/log2"
+start_session DRAFTPAPER_OPENING="$t/black.png"
+ok "a black picture is no opening" "$(grep -ac "the picture is black: no opening" "$t/log2")" "1"
 exit $fail

@@ -36,6 +36,11 @@ pub fn sync(p: &Paths) {
         return;
     }
     let Some(user) = std::env::var("USER").ok().or_else(|| std::env::var("LOGNAME").ok()).filter(|u| !u.is_empty() && !u.contains('/')) else { return };
+    // only for the user's own home: a program run with a home of its own (the tests) does not overwrite
+    // the login screen's copy, unless it names a directory for it itself (DRAFTPAPER_GREETER_DIR)
+    if std::env::var_os("DRAFTPAPER_GREETER_DIR").is_none() && passwd_home(&user).as_deref() != Some(p.home.as_path()) {
+        return;
+    }
     // this user's uid: the owner of their own cache directory
     p.ensure();
     let Ok(uid) = fs::metadata(&p.cache).map(|m| m.uid()) else { return };
@@ -147,4 +152,10 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
     fs::write(&tmp, text)?;
     fs::set_permissions(&tmp, fs::Permissions::from_mode(0o644))?;
     fs::rename(&tmp, path)
+}
+
+/// `user`'s home directory, from /etc/passwd.
+fn passwd_home(user: &str) -> Option<PathBuf> {
+    let passwd = fs::read_to_string("/etc/passwd").ok()?;
+    passwd.lines().map(|l| l.split(':').collect::<Vec<_>>()).find(|f| f.len() >= 6 && f[0] == user).map(|f| PathBuf::from(f[5]))
 }

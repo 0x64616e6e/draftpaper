@@ -39,6 +39,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(ipc::msg(&args[1..]));
     }
     // draftpaper-compositor hold CRTC=FB...: keeps the device (stdin) open for the next compositor (handoff.rs)
+    // draftpaper-compositor grab DEVICE DIR: what each display shows, as the opening reads it (opening.rs)
+    if args.first().map(String::as_str) == Some("grab") {
+        std::process::exit(opening::grab(&args[1..]));
+    }
     if args.first().map(String::as_str) == Some("hold") {
         std::process::exit(handoff::holder(&args[1..]));
     }

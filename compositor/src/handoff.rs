@@ -5,8 +5,9 @@
 //!
 //! - its framebuffer is let go of with CLOSEFB (Linux 6.8) instead of being removed (RMFB, which takes
 //!   the plane down: black), and the device state is left as it is (Smithay's surfaces would clear it);
-//! - a child, `draftpaper-compositor hold`, keeps the device open until another compositor shows a
-//!   frame of its own (at most 30 s): were it closed by everyone, the kernel's console emulation would
+//! - a child, `draftpaper-compositor hold` (in a scope of the user's systemd, outside the login session,
+//!   which would otherwise not end, and logind hand the device to no one else), keeps the device open
+//!   until another compositor shows a frame of its own (at most 30 s): were it closed by everyone, the kernel's console emulation would
 //!   put its own picture up (drm_lastclose). The child opens the device while this compositor is still
 //!   its master, so it never becomes master itself.
 //!
@@ -112,7 +113,8 @@ fn closefb(fd: BorrowedFd<'_>, fb: framebuffer::Handle) -> std::io::Result<()> {
 }
 
 /// Start the holder with a descriptor of the device of its own, opened now (this compositor is master,
-/// so the new one is not).
+/// so the new one is not). Started through systemd-run, which runs it in a scope of the user's systemd
+/// with that descriptor.
 fn hold(path: &std::path::Path, kept: &[(crtc::Handle, framebuffer::Handle)]) {
     let file = match std::fs::OpenOptions::new().read(true).write(true).open(path) {
         Ok(f) => f,
@@ -122,8 +124,10 @@ fn hold(path: &std::path::Path, kept: &[(crtc::Handle, framebuffer::Handle)]) {
         }
     };
     let Ok(exe) = std::env::current_exe() else { return };
-    let mut command = std::process::Command::new(exe);
-    command.arg("hold");
+    // outside the login session (a scope of the user's own systemd): a process left in the session keeps
+    // it from ending, and logind gives the next session the device only once it has
+    let mut command = std::process::Command::new("systemd-run");
+    command.args(["--user", "--scope", "--quiet", "--collect"]).arg(exe).arg("hold");
     for (crtc, fb) in kept {
         command.arg(format!("{}={}", u32::from(*crtc), u32::from(*fb)));
     }

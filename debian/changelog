@@ -28,6 +28,15 @@ draftpaper (0.3.0) unstable; urgency=medium
     journal (journalctl -t draftpaper, -t draftpaper-greeter), the handoff
     with its timings; a frame refused before the session has the device
     no longer resets the displays.
+  * The holder runs outside the login session (a scope of the user's own
+    systemd): left in it, it kept the session from ending, and logind
+    would not give the device to the next one; a login could fail outright.
+  * A picture on screen that reads back black is no opening (on Intel the
+    previous frame read back can be); the startup logs what each CRTC
+    shows at each step. `draftpaper-compositor grab DEVICE DIR [WIDTH]`
+    (as root) reads back what each display shows, as the opening does.
+  * The login screen's copy of the sheet is written only from the user's
+    own home (not by programs run with a home of their own, as the tests).
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through
