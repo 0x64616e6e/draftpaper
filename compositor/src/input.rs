@@ -362,7 +362,12 @@ impl Draftpaper {
             Action::Spawn(command) => {
                 let _ = std::process::Command::new("sh").arg("-c").arg(command).spawn();
             }
-            Action::Quit => self.loop_signal.stop(),
+            // the session as it is, for the next login (session.rs)
+            Action::Quit => {
+                self.session_save(false);
+                self.loop_signal.stop();
+            }
+            Action::SessionSave => self.session_save(true),
             Action::Screenshot => crate::tty::screenshot(self),
             Action::Pointer(x, y) => {
                 let pos = smithay::utils::Point::<f64, smithay::utils::Logical>::from((x, y));

@@ -26,6 +26,13 @@ A browser's picture-in-picture (Meet, videos) floats in the bottom-right corner,
 workspace to workspace and leaves the focus where it was. `[[rule]]` in config.toml floats, pins or
 places other windows.
 
+The session comes back at the next login: every application open when you logged out (or the machine
+went down) starts again, by its desktop entry or else its command line, and each window takes its old
+place: its workspace, its zones, floating or parked in its cell. Terminals start in the directory their
+shell was in. What the applications keep is theirs to restore: a browser its tabs, an editor its files,
+tmux-resurrect a terminal's sessions. `[session] restore = false` turns it off; `skip` leaves applications
+out. The session is in `~/.local/state/draftpaper/session.json`.
+
 ## Parking (the side margins)
 
 | Keys | |
@@ -156,6 +163,6 @@ Top level: `theme`, `margin`, `glyphs`, `wallpaper`, `margins`, `title_tint`. Ta
 firefox_text, firefox_ui_pt), `[hooks]` (theme), `[commands]` (screenshot), `[input]` (keyboard layout,
 variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[[rule]]` (window rules:
 app_id, title, pip; float, sticky, place, focus),
-`[animations]`, `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
+`[animations]`, `[session]` (restore, skip), `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
 `wallpaper_position`, `wallpaper_brightness`, `wallpaper_wash`, `wallpaper_blur`, `wallpaper_dirs`, `[bindings]`. Displays are matched by connector
 name (`eDP-1`, `DP-3`); one without settings gets its preferred mode at scale 1, right of the others.

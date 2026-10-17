@@ -98,7 +98,8 @@ pub fn output_elements(
     }
     // the opening (opening.rs): the picture the displays showed, alone until the desktop is up, then
     // fading over the desktop while its blur goes
-    let up = state.shell_ready;
+    // and, with a session being restored, its windows back (session.rs, for a while)
+    let up = state.shell_ready && state.session_settled();
     let opening = crate::opening::frame(output, up);
     let mut blur_mm = state.blur_mm();
     let picture = match opening {

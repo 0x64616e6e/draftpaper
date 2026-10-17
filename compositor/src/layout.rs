@@ -143,6 +143,21 @@ impl Direction {
 /// A rectangle of zones: `[across, down]`, each `[from, to)` in zones from the frame's top left.
 pub type Zones = [[u32; 2]; 2];
 
+/// Zones of a sheet of `old` zones on one of `new`: every edge to the same place in proportion (a
+/// rectangle may come out empty).
+fn rescale(z: Zones, old: (u32, u32), new: (u32, u32)) -> Zones {
+    if old == new || old.0 == 0 || old.1 == 0 {
+        return z;
+    }
+    let scale = |e: u32, o: u32, n: u32| ((e as u64 * n as u64 + o as u64 / 2) / o as u64) as u32;
+    let mut out = z;
+    for k in 0..2 {
+        let (o, n) = if k == 0 { (old.0, new.0) } else { (old.1, new.1) };
+        out[k] = [scale(z[k][0], o, n), scale(z[k][1], o, n)];
+    }
+    out
+}
+
 fn overlaps(a: &Zones, b: &Zones) -> bool {
     (0..2).all(|k| a[k][0] < b[k][1] && b[k][0] < a[k][1])
 }
@@ -156,6 +171,19 @@ pub struct Placeholder<W = Window> {
     /// the layout before it left, and right after; when the layout is still the second, it is the first again
     before: Vec<(W, Zones)>,
     after: Vec<(W, Zones)>,
+}
+
+impl<W> Placeholder<W> {
+    /// A restored session's parked window: its zones on a sheet of `sheet` zones, nothing else known
+    /// (it comes back into them when they are free: Layout::unpark).
+    pub fn restored(zones: Zones, sheet: (u32, u32)) -> Placeholder<W> {
+        Placeholder { zones, sheet, before: Vec::new(), after: Vec::new() }
+    }
+
+    /// Its zones and the sheet's then.
+    pub fn zones(&self) -> (Zones, (u32, u32)) {
+        (self.zones, self.sheet)
+    }
 }
 
 #[derive(Debug)]
@@ -196,6 +224,33 @@ impl<W: Clone + PartialEq> Layout<W> {
         if let Some(i) = self.find(window) {
             self.focus = Some(i);
         }
+    }
+
+    /// Every window with its zones.
+    pub fn tiles(&self) -> impl Iterator<Item = (&W, Zones)> {
+        self.tiles.iter().map(|(w, z)| (w, *z))
+    }
+
+    /// The sheet's zones the tiles are placed on.
+    pub fn sheet(&self) -> (u32, u32) {
+        self.sheet
+    }
+
+    /// Put `window` on `zones` of a sheet of `sheet` zones (a restored session's), rescaled to this one's:
+    /// false when they are not free, for the caller to place it as a new window.
+    #[must_use]
+    pub fn insert_at(&mut self, window: W, zones: Zones, sheet: (u32, u32), grid: &Grid) -> bool {
+        self.fit(grid);
+        if self.find(&window).is_some() {
+            return true;
+        }
+        let z = rescale(zones, sheet, self.sheet);
+        if !self.free(&z, &[]) {
+            return false;
+        }
+        self.tiles.push((window, z));
+        self.focus = Some(self.tiles.len() - 1);
+        true
     }
 
     /// The zones `window` takes.
@@ -249,12 +304,8 @@ impl<W: Clone + PartialEq> Layout<W> {
             return;
         }
         let focused = self.focused();
-        let scale = |e: u32, o: u32, n: u32| ((e as u64 * n as u64 + o as u64 / 2) / o as u64) as u32;
         for (_, z) in &mut self.tiles {
-            for k in 0..2 {
-                let (o, n) = if k == 0 { (old.0, new.0) } else { (old.1, new.1) };
-                z[k] = [scale(z[k][0], o, n), scale(z[k][1], o, n)];
-            }
+            *z = rescale(*z, old, new);
         }
         let (kept, lost): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tiles).into_iter().partition(|(_, z)| z[0][0] < z[0][1] && z[1][0] < z[1][1]);
         self.tiles = kept;

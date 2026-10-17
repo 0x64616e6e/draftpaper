@@ -53,7 +53,8 @@ check: $(CLI)
 
 # the sheet at every scale, pixel by pixel, and windows in zones, headless: nothing is shown on any
 # display, the launcher, the login screen against a stand-in for greetd, and the lock screen against
-# a PAM service of the test's own (compositor/tests/pixels.sh, zones.sh, launcher.sh, greeter.sh, lock.sh)
+# a PAM service of the test's own, and a session saved and restored (compositor/tests/pixels.sh,
+# zones.sh, launcher.sh, greeter.sh, lock.sh, session.sh)
 pixels: $(COMPOSITOR) $(CLI)
 	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd
 	compositor/tests/pixels.sh
@@ -61,6 +62,7 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/launcher.sh
 	compositor/tests/greeter.sh
 	compositor/tests/lock.sh
+	compositor/tests/session.sh
 
 # the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
 screenshots: $(COMPOSITOR) $(CLI)

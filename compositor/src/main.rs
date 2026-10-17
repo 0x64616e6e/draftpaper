@@ -25,6 +25,7 @@ mod lens;
 mod blur;
 mod opening;
 mod rules;
+mod session;
 mod title;
 mod tty;
 mod winit;
@@ -88,6 +89,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // the sheet, no bindings, no X11; when the card has started the session (IPC "leave"), the compositor
     // leaves its last frame on screen for it (handoff.rs)
     data.greeter = args.iter().any(|a| a == "--greeter");
+    // the session saved and restored (session.rs): a login session's, or a test's
+    data.saved.on = !data.greeter && (session || std::env::var("DRAFTPAPER_SESSION").is_ok_and(|v| v == "1"));
 
     if tty {
         if let Err(e) = crate::tty::init_tty(&mut event_loop, &mut data) {
@@ -143,6 +146,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => data.loop_signal.stop(),
         },
     )?;
+
+    // the last session's applications started again (after the signals: the threads that reap them
+    // must have them blocked), and the session read every so often to be saved
+    data.session_restore();
+    event_loop.handle().insert_source(smithay::reexports::calloop::timer::Timer::from_duration(crate::session::PERIOD), |_, _, data| {
+        data.session_tick();
+        smithay::reexports::calloop::timer::TimeoutAction::ToDuration(crate::session::PERIOD)
+    })?;
 
     if data.greeter {
         // the card; when it quits (the session started, or it failed), so does the compositor. After the

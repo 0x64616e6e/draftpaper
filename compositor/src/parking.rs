@@ -30,6 +30,26 @@ pub struct Parked {
     spot: Spot,
 }
 
+impl Parked {
+    /// A restored session's parked window (session.rs): back into `zones` (of a sheet of `sheet`
+    /// zones), or floating with none.
+    pub fn restored(window: Window, cell: usize, zones: Option<(crate::layout::Zones, (u32, u32))>) -> Parked {
+        let spot = match zones {
+            Some((z, sheet)) => Spot::Tiled(Placeholder::restored(z, sheet)),
+            None => Spot::Floating,
+        };
+        Parked { window, cell, spot }
+    }
+
+    /// Where it goes back to: its zones and the sheet's then, None floating.
+    pub fn zones(&self) -> Option<(crate::layout::Zones, (u32, u32))> {
+        match &self.spot {
+            Spot::Tiled(p) => Some(p.zones()),
+            Spot::Floating => None,
+        }
+    }
+}
+
 /// The first free cell after `after` going `step`, round the margin; past the end when all are taken.
 fn free(taken: &[usize], total: usize, after: isize, step: isize) -> usize {
     let n = total as isize;

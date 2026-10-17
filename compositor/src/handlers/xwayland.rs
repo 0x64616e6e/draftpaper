@@ -74,6 +74,8 @@ impl Draftpaper {
                     data.xwm = Some(wm);
                     std::env::set_var("DISPLAY", format!(":{display_number}"));
                     eprintln!("draftpaper: Xwayland on :{display_number}");
+                    // a session being restored: its X11 applications (session.rs)
+                    data.session_xwayland_ready();
                     // the session's services see it (the theme's X resources, X11 applications started by
                     // them), and X11 applications get the theme's colours (draftpaper apply writes them)
                     let _ = std::process::Command::new("sh")

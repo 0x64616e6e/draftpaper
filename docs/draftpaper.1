@@ -161,11 +161,15 @@ or
 .TP
 .I ~/.config/draftpaper/config.toml
 Settings: theme, margin, wallpaper, title block, custom cells, alerts, idle, applications, input,
-animations, outputs, key bindings. Read again when it changes.
+animations, session, outputs, key bindings. Read again when it changes.
 .TP
 .I ~/.config/draftpaper/themes/
 Themes of your own, beside those in
 .IR /usr/share/draftpaper/themes/ .
+.TP
+.I ~/.local/state/draftpaper/session.json
+The session as it was last: each window's application, place and directory, put back at the next
+login ([session] in config.toml).
 .TP
 .I ~/.cache/draftpaper/
 Generated files: the shell's theme, fuzzel's, the lock screen's and swayidle's configuration, and the

@@ -14,6 +14,10 @@
 //!     enabled = true                   # false: reduced motion, every change at once
 //!     duration_ms = 220
 //!
+//!     [session]                        # at login, the applications open at the last logout, their
+//!     restore = true                   # windows back in their places (session.rs)
+//!     skip = ["org.gnome.Calculator"]  # app ids left out
+//!
 //!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,
 //!     title = "^Picture"               # sticky, place = "centre"|"corner", focus
 //!     float = true
@@ -42,6 +46,8 @@ pub enum Action {
     Fullscreen,
     Close,
     Quit,
+    /// write the session (session.rs) now, as it is
+    SessionSave,
     Spawn(String),
     /// every output to ~/Pictures (TTY only)
     Screenshot,
@@ -103,6 +109,14 @@ pub struct Config {
     pub animations: Option<std::time::Duration>,
     /// window rules: the built-in ones, then config.toml's [[rule]]s (rules.rs)
     pub rules: Vec<crate::rules::Rule>,
+    pub session: Session,
+}
+
+/// [session] (session.rs): the windows put back at login, but those of the applications in `skip`.
+#[derive(Debug, Clone)]
+pub struct Session {
+    pub restore: bool,
+    pub skip: Vec<String>,
 }
 
 pub fn path() -> PathBuf {
@@ -174,6 +188,7 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
         "fullscreen" => Action::Fullscreen,
         "close" => Action::Close,
         "quit" => Action::Quit,
+        "session_save" => Action::SessionSave,
         "screenshot" => Action::Screenshot,
         "zoom" => Action::Zoom,
         "pointer" => {
@@ -276,7 +291,13 @@ impl Config {
         let animations = (enabled && ms > 0).then(|| std::time::Duration::from_millis(ms));
         let mut rules = crate::rules::defaults();
         rules.extend(crate::rules::parse(table)?);
-        Ok(Config { input, bindings, animations, rules })
+        // [session]: restore = true|false, skip = ["app id", ...]
+        let session = table.get("session").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let session = Session {
+            restore: session.get("restore").and_then(|v| v.as_bool()).unwrap_or(true),
+            skip: session.get("skip").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        };
+        Ok(Config { input, bindings, animations, rules, session })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

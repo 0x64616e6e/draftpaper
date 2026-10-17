@@ -109,6 +109,8 @@ pub struct Draftpaper {
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
     /// the output-management clients and what they were last told (output_management.rs)
     pub output_management: crate::output_management::OutputManagement,
+    /// the session saved and restored (session.rs)
+    pub saved: crate::session::Session,
 }
 
 impl Draftpaper {
@@ -222,6 +224,7 @@ impl Draftpaper {
             pointer_over: (None, None),
             screencopies: Vec::new(),
             output_management: Default::default(),
+            saved: Default::default(),
         }
     }
 
@@ -610,6 +613,10 @@ impl Draftpaper {
     /// Place a new window, floating (`dialog`) or in the layout of the active screen, as the window
     /// rules decided (`d`: sticky, the corner, the keyboard or not).
     pub fn place_as(&mut self, window: Window, dialog: bool, d: crate::rules::Decision) {
+        // a window of a session being restored: where it was (session.rs)
+        if self.session_place(&window, dialog, &d) {
+            return;
+        }
         if dialog && d.sticky {
             window.user_data().insert_if_missing(|| crate::rules::Sticky);
         }

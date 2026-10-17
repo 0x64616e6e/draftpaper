@@ -36,7 +36,9 @@ zones.*
 *Every window of the workspace parked: the sheet, the three parked titles, and the title block.*
 
 Draftpaper is also its own login screen (optional, under greetd), and the session comes up from it without
-a flicker: see [Login screen](#login-screen-experimental). What changed from release to release:
+a flicker: see [Login screen](#login-screen-experimental). After a logout or a reboot the
+applications open before come back, each window in its old place (`[session]` under
+[Configuration](#configuration)). What changed from release to release:
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
@@ -169,6 +171,10 @@ focus = true               #   false: open without taking the keyboard
 [animations]
 enabled = true             # false: every change at once
 duration_ms = 220
+
+[session]                  # at login, the applications open at the last logout, each window back
+restore = true             #   in its place (workspace, zones, floating, parked); false: none
+skip = ["org.gnome.Calculator"]   # app ids left out
 
 [outputs.eDP-1]               # when the display is plugged in (see Displays)
 scale = 1.5                # fractional scales work

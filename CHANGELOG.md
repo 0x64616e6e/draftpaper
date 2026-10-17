@@ -5,6 +5,14 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **The session comes back** after a logout or a reboot (#38). Every application open at the end starts
+  again at login, by its desktop entry or else its command line, and each window goes back to its
+  workspace and zones, floating, fullscreen or parked in its cell. Terminals start in the directory their
+  shell was in. The session is written to `~/.local/state/draftpaper/session.json` every few seconds, once
+  it has held (the windows that close on the way out are never written), and by Mod+Shift+e. The opening
+  waits for the windows a moment before it reveals the desktop. `[session] restore = false` turns it off;
+  `skip` leaves applications out. The applications restore their own state: a browser its tabs, an editor
+  its files.
 - **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,
   nothing of the windows, and one field with the fingerprint reader listening. When the reader fails or
   gives up, or you start typing, the password's dots follow its glyph. It is Draftpaper's own

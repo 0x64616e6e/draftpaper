@@ -15,8 +15,9 @@ whole zones (free-form since 0.3.0), parking with exact restore, a launcher of i
 own login screen under greetd with a flicker-free handoff to the session (0.4.0). It replaces the i3
 edition in the `draftpaper` package. Design: `docs/wayland-design.md`.
 
-Next: the session restored after a logout or a reboot, the applications back in their places (#38);
-settings for the displays and text pages (#36); drag and drop (#18).
+The session restored after a logout or a reboot, the applications back in their places (#38).
+
+Next: settings for the displays and text pages (#36); drag and drop (#18).
 
 ## 3. A distribution (vision)
 
