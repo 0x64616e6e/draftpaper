@@ -234,6 +234,7 @@ pub fn grab(args: &[String]) -> i32 {
         let mut encoder = png::Encoder::new(std::io::BufWriter::new(f), ow as u32, oh as u32);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
+        encoder.set_compression(png::Compression::Fast);
         if encoder.write_header().and_then(|mut wr| wr.write_image_data(&rgba)).is_ok() {
             eprintln!("draftpaper: grab: {}", out.display());
         }

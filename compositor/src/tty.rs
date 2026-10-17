@@ -619,14 +619,28 @@ pub fn capture(data: &Draftpaper, renderer: &mut GlesRenderer, output: &Output, 
     let (pixels, w, h) = render_pixels(data, renderer, output, None, true)?;
     let size = smithay::utils::Size::<i32, smithay::utils::Buffer>::from((w, h));
     std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
-    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    // written under a hidden name and renamed once whole: whoever waits for the picture never reads half
+    let tmp = path.with_file_name(format!(".{}.part", path.file_name().and_then(|n| n.to_str()).unwrap_or("screenshot.png")));
+    let file = std::fs::File::create(&tmp).map_err(|e| e.to_string())?;
     let mut encoder = png::Encoder::new(std::io::BufWriter::new(file), size.w as u32, size.h as u32);
     encoder.set_color(png::ColorType::Rgba);
     encoder.set_depth(png::BitDepth::Eight);
+    // the compositor waits for it: fast (png 0.18's default, balanced, is slower)
+    encoder.set_compression(png::Compression::Fast);
     // opaque: the alpha the renderer leaves is not the picture's
     let mut rgba = pixels;
     rgba.chunks_exact_mut(4).for_each(|p| p[3] = 255);
-    encoder.write_header().and_then(|mut w| w.write_image_data(&rgba)).map_err(|e| e.to_string())
+    let written = encoder.write_header().and_then(|mut w| {
+        w.write_image_data(&rgba)?;
+        w.finish()
+    });
+    match written {
+        Ok(()) => std::fs::rename(&tmp, path).map_err(|e| e.to_string()),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e.to_string())
+        }
+    }
 }
 
 /// Turn every display off (DPMS: no signal, planes and the pending frame dropped) or on again (the next

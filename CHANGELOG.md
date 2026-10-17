@@ -3,6 +3,11 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- toml 1.1 and png 0.18 (#40). Screenshots are written with fast compression, png 0.18's default being slower,
+  and under a hidden name until whole, so nothing reads half a picture.
+
 ## 0.5.1 (2026-10-17)
 
 A security fix (#41), and the login screen's fingerprint glyph lit.
