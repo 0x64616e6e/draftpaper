@@ -16,6 +16,8 @@ What changed in each release, newest first. The Debian package's own record, wit
 - **The login screen no longer gets stuck** when Escape is pressed while the fingerprint reader listens:
   greetd answers nothing until PAM is back, so nothing is sent to it then; and should greetd fail or
   not start the session once the name slides, the field comes back for another try.
+- With a wallpaper, the frost under the title block shows only once the shell letters the block (as its
+  rules): no frosted patch on the login and lock screens.
 - **A better fingerprint glyph** on both screens: Tabler Icons' fingerprint (MIT), drawn as strokes at the
   weight of the sheet's rules, in place of the ellipses drawn before.
 

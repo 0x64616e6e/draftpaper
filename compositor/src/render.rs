@@ -405,7 +405,7 @@ fn scene_elements(
         let mut sheet = sheet.0.borrow_mut();
         sheet.set_hidden(hidden);
         // the wallpaper, prepared for this output (wallpaper.rs): the picture in the frame, the ambient
-        // margins, the frosted title block, under the sheet's lines
+        // margins, the frosted title block (when lettered), under the sheet's lines
         output.user_data().insert_if_missing(crate::wallpaper::WallpaperCache::default);
         let cache = output.user_data().get::<crate::wallpaper::WallpaperCache>().unwrap();
         let physical = mode_size(output);
@@ -465,7 +465,11 @@ fn scene_elements(
                     }
                 }
             };
-            draw(&w.frosted, (w.title.size.w, w.title.size.h), w.title);
+            // the frost under the title block only when the shell letters it, as its rules (the login and
+            // lock screens, the session before its shell: no block, no frost)
+            if lettered {
+                draw(&w.frosted, (w.title.size.w, w.title.size.h), w.title);
+            }
             draw(&w.picture, (w.interior.size.w, w.interior.size.h), w.interior);
             if let Some((ambient, px)) = &w.ambient {
                 draw(ambient, *px, Rectangle::from_size(physical.into()));
