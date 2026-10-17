@@ -87,6 +87,10 @@ ShellRoot {
     function clear() {
         if (leaving) return
         if (text) { text = ""; return }
+        // back to the name only while greetd waits on us (no conversation, or a question unanswered):
+        // greetd answers one request at a time, and while PAM waits on the reader it answers none, so a
+        // cancel then would queue behind it and the replies come out of order
+        if (Greetd.state !== GreetdState.Inactive && !asked && field !== "answer") return
         if (Greetd.state !== GreetdState.Inactive) Greetd.cancelSession()
         busy = false; pending = null; asked = false; finger = false; prompt = ""; note = ""; hint = ""
         field = "name"
@@ -99,8 +103,31 @@ ShellRoot {
     readonly property bool placed: Compositor.outputs.length > 0
     onPlacedChanged: if (placed) readyTimer.start()
     Timer { id: readyTimer; interval: 150; onTriggered: Compositor.send({ request: "ready" }) }
-    // after a failure, a new session (the reader listening again)
-    Timer { id: again; interval: 300; onTriggered: root.begin() }
+    // after a failure, a new session (the reader listening again), once greetd's side is idle again
+    Timer {
+        id: again
+        interval: 300
+        property int tries: 0
+        onTriggered: {
+            if (Greetd.state === GreetdState.Inactive) { tries = 0; root.begin() }
+            else if (++tries < 20) restart()
+        }
+    }
+    // something went wrong once the name began to slide (an error, a session greetd would not start):
+    // the field back, shaken, and a new conversation; never a screen with nothing to type into
+    function recover() {
+        slide.stop()
+        stuck.stop()
+        leaving = false
+        slider.visible = false
+        card.box.opacity = 1
+        busy = false; pending = null; asked = false; finger = false; prompt = ""
+        field = user ? "password" : "name"
+        card.refuse()
+        again.restart()
+    }
+    // no word from greetd after asking it to start the session
+    Timer { id: stuck; interval: 4000; onTriggered: root.recover() }
 
     Connections {
         target: Greetd
@@ -139,9 +166,7 @@ ShellRoot {
         }
         function onError(error) {
             root.note = error
-            card.refuse()
-            root.busy = false; root.pending = null; root.asked = false; root.finger = false; root.prompt = ""
-            root.field = root.user ? "password" : "name"
+            root.recover()
         }
         function onReadyToLaunch() {
             root.leaving = true
@@ -151,6 +176,7 @@ ShellRoot {
         }
         function onLaunched() {
             // the compositor leaves this frame on screen and exits; Quickshell goes with it
+            stuck.stop()
             Compositor.send({ request: "leave" })
             quit.start()
         }
@@ -163,6 +189,7 @@ ShellRoot {
         enabled: Quickshell.env("DRAFTPAPER_GREETER_TEST") === "1"
         function type(text: string): void { root.text += text }
         function enter(): void { root.submit() }
+        function back(): void { root.clear() }
         function state(): string {
             return root.field + (root.busy ? " busy" : "") + (root.finger ? " finger" : "") + (root.note ? ": " + root.note : "")
         }
@@ -270,6 +297,10 @@ ShellRoot {
         }
         // a few frames more: the last one, the name in its place, committed before the compositor keeps it
         PauseAnimation { duration: 120 }
-        onFinished: Greetd.launch(root.session, [], false)
+        onFinished: {
+            if (Greetd.state !== GreetdState.ReadyToLaunch) { root.recover(); return }
+            Greetd.launch(root.session, [], false)
+            stuck.start()
+        }
     }
 }

@@ -78,6 +78,10 @@ ok "a password typed meanwhile, held" "$(ipc state)" "password busy finger"
 # the reader gives up (3 s), PAM asks for the password, the held one goes and is refused
 ok "then given when PAM asks, and refused" "$(until_state "Authentication failure" 60)" "password: Authentication failure"
 ok "the reader listening again" "$(until_state "finger" 20)" "password finger: Authentication failure"
+# Escape while the reader listens sends greetd nothing (it answers no request until PAM is back): the
+# replies would come out of order and the sign-in be lost
+ipc back
+ok "Escape while the reader listens: nothing sent, the password still" "$(ipc state)" "password finger: Authentication failure"
 if [ -n "${SHOT:-}" ]; then
     mkdir -p "$look/Pictures"
     kill -USR1 "$greeter"

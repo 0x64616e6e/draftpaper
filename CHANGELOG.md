@@ -13,6 +13,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 - **The login and lock screens** are one field in the middle of the sheet and no words (no heading, no
   messages): the glyph lit while the reader listens, the dots, a shake for a refusal
   (`qml/SignInField.qml`). The sheet is blurred inside its frame only; the margins stay sharp.
+- **The login screen no longer gets stuck** when Escape is pressed while the fingerprint reader listens:
+  greetd answers nothing until PAM is back, so nothing is sent to it then; and should greetd fail or
+  not start the session once the name slides, the field comes back for another try.
 - **A better fingerprint glyph** on both screens: Tabler Icons' fingerprint (MIT), drawn as strokes at the
   weight of the sheet's rules, in place of the ellipses drawn before.
 
