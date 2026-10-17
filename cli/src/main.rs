@@ -283,6 +283,19 @@ fn audio(p: &Paths, how: &str) {
             }
         }
         "restore" => {
+            // the card back first: WirePlumber, kept running from the last session (another session of the
+            // user's outlived it), saw the card go to the login screen and probed it without access: no
+            // outputs, only the dummy. Restarted, it probes the card again, now this session's
+            if dummy_output() {
+                eprintln!("draftpaper: no sound card output (WirePlumber lost it): restarting WirePlumber");
+                util::run(&["systemctl", "--user", "restart", "wireplumber.service"], 20);
+                for _ in 0..24 {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    if !dummy_output() {
+                        break;
+                    }
+                }
+            }
             let Ok(s) = serde_json::from_str::<Value>(&util::read(&state)) else { return };
             let (Some(volume), Some(muted)) = (s.get("volume").and_then(Value::as_f64), s.get("muted").and_then(Value::as_bool)) else { return };
             util::run(&["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", &util::float(volume)], 10);
@@ -546,4 +559,10 @@ fn compositor(action: &str) {
         let mut buf = [0u8; 4096];
         let _ = s.read(&mut buf);
     }
+}
+
+/// Whether the default output is PipeWire's dummy (no sound card output), or there is none.
+fn dummy_output() -> bool {
+    let out = util::run(&["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"], 10).unwrap_or_default();
+    out.is_empty() || out.contains("\"auto_null\"")
 }

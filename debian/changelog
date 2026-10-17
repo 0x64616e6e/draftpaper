@@ -41,6 +41,11 @@ draftpaper (0.3.0) unstable; urgency=medium
     hardware-decoded video on Intel passed the test commit, not the real
     one) no longer blanks or freezes the screen: from then on everything is
     composed by the GPU, the pointer alone on its plane.
+  * No sound after logging in again (under greetd another session of the
+    user's keeps PipeWire running, and WirePlumber, having lost the card
+    to the login screen, probed it without access: only the dummy output):
+    `draftpaper audio restore` at the session's start restarts WirePlumber
+    when the default output is the dummy, then restores the volume.
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through

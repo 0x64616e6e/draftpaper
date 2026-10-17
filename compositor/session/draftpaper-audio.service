@@ -2,7 +2,9 @@
 Description=Draftpaper audio (the default output's volume and mute, from one session to the next)
 Documentation=https://github.com/0x64616e6e/draftpaper
 # logging out hands the sound card to the login screen, which mutes it: saved as the session ends,
-# while it still has the card, and put back as the next one starts
+# while it still has the card, and put back as the next one starts; with no card output by then
+# (WirePlumber kept running from the last session and lost the card to the login screen), WirePlumber
+# is restarted first
 PartOf=draftpaper-session.target
 After=draftpaper-session.target wireplumber.service
 
