@@ -73,23 +73,7 @@ impl Draftpaper {
                 }
             }
             InputEvent::PointerMotion { event, .. } => {
-                // mice, touchpads and the TrackPoint move by deltas: keep the pointer on the outputs
-                let pointer = self.seat.get_pointer().unwrap();
-                let mut pos = pointer.current_location() + event.delta();
-                let bounds = self
-                    .space
-                    .outputs()
-                    .filter_map(|o| self.space.output_geometry(o))
-                    .reduce(|a, b| a.merge(b));
-                if let Some(b) = bounds {
-                    pos.x = pos.x.clamp(b.loc.x as f64, (b.loc.x + b.size.w - 1) as f64);
-                    pos.y = pos.y.clamp(b.loc.y as f64, (b.loc.y + b.size.h - 1) as f64);
-                }
-                let under = self.surface_under(pos);
-                let serial = SERIAL_COUNTER.next_serial();
-                pointer.motion(self, under, &MotionEvent { location: pos, serial, time: event.time_msec() });
-                pointer.frame(self);
-                self.follow_mouse(pos);
+                self.pointer_by(event.delta(), event.time_msec());
             }
             InputEvent::PointerMotionAbsolute { event, .. } => {
                 let output = self.space.outputs().next().unwrap();
@@ -312,6 +296,39 @@ impl Draftpaper {
             .ok();
     }
 
+    /// The pointer moved by `delta` (mice, touchpads, the TrackPoint; `pointer_by` for scripts and tests):
+    /// kept on the outputs, and while the rulers are out held to their steps (rulers.rs), from where the
+    /// motion itself took it, so that small movements add up.
+    pub fn pointer_by(&mut self, delta: smithay::utils::Point<f64, smithay::utils::Logical>, time: u32) {
+        let pointer = self.seat.get_pointer().unwrap();
+        let from = self.pointer_raw.filter(|_| self.rulers.is_some()).unwrap_or_else(|| pointer.current_location());
+        let mut raw = from + delta;
+        let bounds = self.space.outputs().filter_map(|o| self.space.output_geometry(o)).reduce(|a, b| a.merge(b));
+        let clamp = |p: &mut smithay::utils::Point<f64, smithay::utils::Logical>| {
+            if let Some(b) = bounds {
+                p.x = p.x.clamp(b.loc.x as f64, (b.loc.x + b.size.w - 1) as f64);
+                p.y = p.y.clamp(b.loc.y as f64, (b.loc.y + b.size.h - 1) as f64);
+            }
+        };
+        clamp(&mut raw);
+        let mut pos = raw;
+        if let Some(r) = self.rulers.as_ref().filter(|r| r.snap) {
+            // on the rulers' output only
+            let on = self.space.outputs().find(|o| o.name() == r.output).and_then(|o| self.space.output_geometry(o)).is_some_and(|g| g.to_f64().contains(raw));
+            if on {
+                let coarse = self.seat.get_keyboard().is_some_and(|k| k.modifier_state().shift);
+                pos = crate::rulers::snap(raw, r, coarse);
+                clamp(&mut pos);
+            }
+        }
+        self.pointer_raw = self.rulers.is_some().then_some(raw);
+        let under = self.surface_under(pos);
+        let serial = SERIAL_COUNTER.next_serial();
+        pointer.motion(self, under, &MotionEvent { location: pos, serial, time });
+        pointer.frame(self);
+        self.follow_mouse(pos);
+    }
+
     pub fn act(&mut self, action: Action) {
         let i = self.active;
         if i >= self.screens.len() && matches!(action, Action::Focus(_) | Action::Move(_) | Action::Resize(_)) {
@@ -369,6 +386,7 @@ impl Draftpaper {
             }
             Action::SessionSave => self.session_save(true),
             Action::Screenshot => crate::tty::screenshot(self),
+            Action::PointerBy(dx, dy) => self.pointer_by(smithay::utils::Point::from((dx, dy)), self.start_time.elapsed().as_millis() as u32),
             Action::Pointer(x, y) => {
                 let pos = smithay::utils::Point::<f64, smithay::utils::Logical>::from((x, y));
                 let pointer = self.seat.get_pointer().unwrap();

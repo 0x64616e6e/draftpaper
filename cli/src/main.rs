@@ -47,6 +47,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               \"custom\" theme
   draftpaper settings         open or close the settings (Mod+t, the theme cell): the colour scheme
   draftpaper launcher         open or close the launcher (Mod+d): the applications, as a register
+  draftpaper rulers           bring the rulers out or put them away (Mod+r): two rulers crossing at a zero
+                              point, true millimetres, the pointer held to them
   draftpaper menu [--prompt TEXT]
                               a menu of stdin's lines in the launcher's register; the choice on stdout
                               (exit 1: closed without one)
@@ -123,6 +125,11 @@ fn main() {
         ["launcher", ..] => {
             // the shell's IpcHandler "launcher" (qml/shell.qml)
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "launcher", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
+            std::process::exit(code);
+        }
+        ["rulers", ..] => {
+            // the shell's IpcHandler "rulers" (qml/shell.qml): out, or put away
+            let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "rulers", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
         ["menu", rest @ ..] => menu(&p, rest),

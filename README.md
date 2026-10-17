@@ -81,6 +81,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 |---|---|
 | Mod+Return | Terminal (alacritty) |
 | Mod+d | Launcher: the applications as a register on the sheet (fuzzel stays an alternative) |
+| Mod+r | Rulers: two, crossing at a zero point, true millimetres; the pointer held to them (see Rulers) |
 | Mod+h/j/k/l, Mod+Up/Down | Move the focus |
 | Mod+Shift+h/j/k/l, Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap |
 | Mod+Ctrl+h/j/k/l, Mod+Ctrl+arrows | Resize by a zone (hold to repeat): right and down larger, left and up smaller |
@@ -199,6 +200,23 @@ position = [0, 0]          # logical pixels
 [bindings]                 # key = action; "none" removes a default
 "Mod+Return" = "spawn foot"
 ```
+
+## Rulers
+
+Mod+r brings out two rulers, as clear acrylic on the drawing: a horizontal and a vertical one, each
+from the frame's line to the frame's line, crossing at a zero point that slides anywhere on the sheet.
+Where they cross they are one piece. Both long edges of each are graduated in true millimetres (the
+sheet's own, from the display's measured size), counted out from the zero both ways, numbered every 10;
+a very thin line runs down the middle of each. While they are out, the pointer is held to their
+millimetres: it moves a whole millimetre at a time (ten with Shift) from the zero along each ruler, at
+whatever angle they stand, so what you draw lands on them.
+
+The zero moves 1 mm a step (10 with Shift): the arrows, or drag a ruler. A ruler turns about the zero
+1° a step (15° with Shift): `[` `]` the horizontal one, `,` `.` the vertical one, or Ctrl and drag it.
+An inclined ruler shows its degrees on an arc from its level line. `l` locks the two at the angle between
+them (any angle: turning one turns both), `0` levels them, `s` lets the pointer go or holds it again,
+Escape puts them away. The panel by the zero point says where it is and takes the angles typed, for
+precise alignment. The rulers take clicks only on themselves: the windows around them keep theirs.
 
 ## Displays
 

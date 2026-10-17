@@ -9,6 +9,7 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM revisions shown|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM keyplan THIS FOCUSED X,Y,W,H X,Y,W,H...
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -44,6 +45,11 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "rulers") {
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<f64>().ok()).expect("rulers ZERO_X_MM ZERO_Y_MM");
+        rulers_check(&img, scale, phys_mm, margin_mm, (v(6), v(7)), &args[1]);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "keyplan") {
         let n = |i: usize| args.get(i).and_then(|v| v.parse::<usize>().ok()).expect("keyplan THIS FOCUSED X,Y,W,H...");
         let layout: Vec<(i32, i32, i32, i32)> = args[8..]
@@ -224,6 +230,40 @@ fn main() {
 }
 
 /// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+/// The level rulers (qml/Rulers.qml) with their zero `zero` mm from the frame's inside corner: on the
+/// horizontal ruler's top edge, a tick at every whole millimetre from the zero (10 to 60 mm either way),
+/// darker than the acrylic half a millimetre off; true to size, the sheet's millimetres. The ticks are
+/// drawn smooth (the rulers turn), so each is looked for within a pixel of where it falls.
+fn rulers_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, zero: (f64, f64), name: &str) {
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let inside = (mg + title::LINE) as f64;
+    let (zx, zy) = (inside + zero.0 * phys_mm, inside + zero.1 * phys_mm);
+    // the top edge, and a row across the ticks under it (the shortest, 1.6 mm, reach it)
+    let row = (zy - 8.0 * phys_mm + 0.8 * phys_mm).round() as u32;
+    let lum = |x: f64| {
+        let p = img.get_pixel(x.round() as u32, row);
+        0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+    };
+    let mut faults = Vec::new();
+    for d in (10..=60).chain(-60..=-10) {
+        let at = zx + d as f64 * phys_mm;
+        let tick = [-1.0, 0.0, 1.0].iter().map(|o| lum(at + o)).fold(f64::MAX, f64::min);
+        let between = lum(at + 0.5 * phys_mm).max(lum(at - 0.5 * phys_mm));
+        if tick > between - 18.0 {
+            faults.push(format!("{d} mm: no tick at x {at:.1} (darkest {tick:.0}, between {between:.0})"));
+        }
+    }
+    for f in faults.iter().take(10) {
+        eprintln!("  {f}");
+    }
+    if faults.is_empty() {
+        println!("{name}: rulers: a tick at every millimetre, 10 to 60 mm either way of the zero ({zx:.1}, {zy:.1})");
+    } else {
+        println!("{name}: rulers: {} faults", faults.len());
+        std::process::exit(1);
+    }
+}
+
 /// The key plan (title.rs's key_plan) of screen `this` among `layout`, `focused` the active one: every
 /// pixel of the outlines drawn, this screen's inside filled, the others' insides paper. Drawn: apart from
 /// the paper (the median of the zone's pixels) by more than 25 for the outlines, 12 for the fill.

@@ -60,6 +60,8 @@ pub enum Action {
     Zoom,
     /// the pointer to this place (logical pixels of the whole layout), for scripts and tests
     Pointer(f64, f64),
+    /// the pointer moved by this much (logical pixels), as a mouse moves it: through the rulers' steps
+    PointerBy(f64, f64),
     /// park the focused window in the first free cell, or, with nothing showing, bring every parked
     /// window back (parking.rs)
     Park,
@@ -155,6 +157,8 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Return", "spawn alacritty"),
     // the launcher, themed like the sheet by `draftpaper apply`
     ("Mod+d", "spawn draftpaper launcher"),
+    // the rulers (qml/Rulers.qml): out or away; the pointer held to their millimetres meanwhile
+    ("Mod+r", "spawn draftpaper rulers"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
     // screenshots through screencopy: a region picked with slurp into swappy (annotate, save, copy), the
@@ -205,6 +209,13 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
             match (xy.next(), xy.next()) {
                 (Some(Ok(x)), Some(Ok(y))) => Action::Pointer(x, y),
                 _ => return Err(format!("\"{s}\": pointer X Y")),
+            }
+        }
+        "pointer_by" => {
+            let mut xy = arg.split_whitespace().map(|v| v.parse::<f64>());
+            match (xy.next(), xy.next()) {
+                (Some(Ok(x)), Some(Ok(y))) => Action::PointerBy(x, y),
+                _ => return Err(format!("\"{s}\": pointer_by DX DY")),
             }
         }
         "reload" => Action::Reload,

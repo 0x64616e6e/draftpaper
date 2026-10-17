@@ -7,6 +7,9 @@
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
 //!   {"request": "sheet", "output": "eDP-1", "merged": {"top": [[7, 9]]}}   cells the shell merged
 //!   {"request": "sheet", "output": "eDP-1", "clear": {"left": [[40, 52]]}}  side spans it letters
+//!   {"request": "rulers", "output": "eDP-1", "zero": [640, 400], "angles": [0, 90], "snap": true}   the rulers out
+//!   {"request": "rulers"}                                  put away
+//!   {"request": "pointer"}                                 where the pointer is
 //!
 //! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
@@ -194,6 +197,40 @@ impl Draftpaper {
                     }
                     None => Ok(Value::Null),
                 }
+            }
+            "rulers" => {
+                // the shell's rulers (rulers.rs): {"output": NAME, "zero": [X, Y] (logical, from the output's
+                // corner), "angles": [H, V] (degrees from the horizontal), "snap": bool}; without an output,
+                // put away
+                let Some(name) = request.get("output").and_then(Value::as_str) else {
+                    self.rulers = None;
+                    self.pointer_raw = None;
+                    return Ok(Value::Null);
+                };
+                let screen = self.screens.iter().find(|s| s.output.name() == name).ok_or(format!("no output {name}"))?;
+                let at = self.space.output_geometry(&screen.output).ok_or("an output not mapped")?.loc;
+                let pair = |k: &str| -> Result<(f64, f64), String> {
+                    let v = request.get(k).and_then(Value::as_array).ok_or(format!("no \"{k}\""))?;
+                    match (v.first().and_then(Value::as_f64), v.get(1).and_then(Value::as_f64)) {
+                        (Some(a), Some(b)) => Ok((a, b)),
+                        _ => Err(format!("\"{k}\": [A, B]")),
+                    }
+                };
+                let (zero, angles) = (pair("zero")?, pair("angles")?);
+                let snap = request.get("snap").and_then(Value::as_bool).unwrap_or(true);
+                self.rulers = Some(crate::rulers::Rulers {
+                    output: name.to_string(),
+                    zero: (at.x as f64 + zero.0, at.y as f64 + zero.1).into(),
+                    angles,
+                    mm: screen.mm,
+                    snap,
+                });
+                Ok(Value::Null)
+            }
+            "pointer" => {
+                // where the pointer is (logical, in the layout), for scripts and tests
+                let p = self.seat.get_pointer().map(|p| p.current_location()).unwrap_or_default();
+                Ok(json!({ "x": p.x, "y": p.y }))
             }
             "sheet" => {
                 // the shell's merged cells: {"output": NAME, "merged": {"top": [[FROM, TO], ...], ...}},
@@ -524,12 +561,14 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|pointer|subscribe KIND...|ACTION");
             return 2;
         }
         Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output")) => {
             json!({ "request": if r == "focused-output" { "outputs" } else { r } })
         }
+        // where the pointer is; with X Y, the action that puts it there
+        Some("pointer") if args.len() == 1 => json!({ "request": "pointer" }),
         Some("subscribe") => json!({ "request": "subscribe", "events": args[1..] }),
         Some(_) => json!({ "request": "action", "action": args.join(" ") }),
     };

@@ -53,6 +53,10 @@ pub struct Draftpaper {
     pub locked: bool,
     /// the magnifier, while it is out (lens.rs)
     pub lens: Option<crate::lens::Lens>,
+    /// the rulers, while the shell has them out (rulers.rs): the pointer held to their millimetres
+    pub rulers: Option<crate::rulers::Rulers>,
+    /// the pointer where the motion took it, before it was held to the rulers' steps
+    pub pointer_raw: Option<smithay::utils::Point<f64, smithay::utils::Logical>>,
     /// the displays are off (DPMS; tty::set_power)
     pub screens_off: bool,
     /// the lock object of the locker holding the lock (handlers/lock_idle.rs)
@@ -192,6 +196,8 @@ impl Draftpaper {
             idle_inhibit_state,
             locked: false,
             lens: None,
+            rulers: None,
+            pointer_raw: None,
             screens_off: false,
             lock_holder: None,
             lock_surfaces: Default::default(),

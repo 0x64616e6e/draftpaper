@@ -255,6 +255,22 @@ ShellRoot {
         function cancel(): void { if (settings.visible) settings.cancel() }
     }
     // the launcher (Mod+d: `draftpaper launcher`) and the menu (`draftpaper menu`), Launcher.qml
+    Rulers { id: rulers; shell: root }
+    IpcHandler {
+        target: "rulers"
+        function toggle(): void { rulers.visible ? rulers.close() : rulers.open() }
+        // for scripts and tests: where the zero is (mm from the frame's corner) and how they stand
+        function set(zeroX: real, zeroY: real, angleH: real, angleV: real): void {
+            if (!rulers.visible) rulers.open()
+            rulers.zeroX = Math.round(zeroX); rulers.zeroY = Math.round(zeroY)
+            rulers.angleH = angleH; rulers.angleV = angleV
+        }
+        function lock(on: bool): void { rulers.isLocked = on }
+        function turn(which: string, to: real): void { which === "v" ? rulers.turnV(to) : rulers.turnH(to) }
+        function state(): string {
+            return rulers.visible ? JSON.stringify({ zero: [rulers.zeroX, rulers.zeroY], angles: [rulers.angleH, rulers.angleV], locked: rulers.isLocked, snap: rulers.snapOn }) : ""
+        }
+    }
     Launcher { id: launcher; shell: root }
     IpcHandler {
         target: "launcher"

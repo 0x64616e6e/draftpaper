@@ -5,6 +5,15 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **Rulers** (#48, Mod+r): a horizontal and a vertical ruler, frame line to frame line, crossing at a zero
+  point that slides anywhere on the sheet, one piece where they cross, both edges graduated in true
+  millimetres from the zero both ways. The zero moves 1 mm (10 with Shift), a ruler turns 1° (15°); each
+  turns freely or the two are locked at any angle; an inclined ruler shows its degrees, locked ones the
+  angle between them; angles can be typed in the panel by the zero. While they are out the compositor
+  holds the pointer to their millimetres at any angle (rulers.rs), small movements adding up. Checked by
+  `make pixels` (tests/rulers.sh): ticks at true millimetres, the pointer on whole millimetres level and
+  turned, free once they are away. `msg pointer` says where the pointer is; `pointer_by DX DY` moves it as
+  a mouse does.
 - **A key plan** with several screens (#47), as a drawing set shows which part of the whole a sheet is: in
   the bottom margin left of the scale bar, every screen's outline in their arrangement, this one filled,
   the focused one twice as heavy; drawn by the compositor on whole pixels. Left of it a north mark, a

@@ -11,6 +11,7 @@ mod headless;
 mod input;
 mod layout;
 mod render;
+mod rulers;
 mod screens;
 mod sheet;
 mod state;
