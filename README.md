@@ -19,8 +19,9 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
 - **The bottom margin** has Bluetooth, a scale bar true to size on the screen (under the title block, as
   a drawing keeps its scale; a ruler held to the screen reads the same; NTS, not to scale, on a display
   that reports no size), with several screens a key plan of them (their outlines as they are arranged,
-  this one filled, the focused one heavier, and a north arrow pointing to the other screen), a
-  screenshot command and the theme name (click it for the next theme).
+  this one filled, the focused one heavier, and a north mark: a square with a thin cross through it,
+  the arm toward each other screen thickened), a screenshot command and the theme name (click it for
+  the next theme).
 - **The side margins** hold parked windows. Super+Escape parks the focused window in the first free
   cell, its title lettered up the margin; clicking an empty cell parks it in that cell. Click a title to
   bring the window back. A parked window's cell is hatched, as a drawing hatches a cut, the hatch broken

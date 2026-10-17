@@ -293,8 +293,10 @@ impl Draftpaper {
                             let r = |r: smithay::utils::Rectangle<i32, smithay::utils::Physical>| {
                                 json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
                             };
-                            // the north arrow's square and its bearing (degrees clockwise from up), drawn by the shell
-                            json!({ "zone": r(p.zone), "arrow": r(p.arrow), "bearing": p.bearing })
+                            // the north mark (drawn by the compositor too): its room, and the arms thickened toward the
+                            // other screens
+                            let towards: Vec<&str> = ["up", "right", "down", "left"].into_iter().zip(p.towards).filter(|(_, on)| *on).map(|(d, _)| d).collect();
+                            json!({ "zone": r(p.zone), "mark": r(p.arrow), "towards": towards })
                         }),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),

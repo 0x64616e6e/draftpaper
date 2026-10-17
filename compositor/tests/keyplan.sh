@@ -2,8 +2,8 @@
 # make pixels (and alone): the key plan (issue #47), headless (nothing on any display), on two screens side
 # by side: the T14's panel (1920x1200, 6.4 px/mm) and a 27" monitor (2560x1440, 4.3 px/mm), both at scale
 # 1.5. Each sheet draws both screens in their arrangement in the bottom margin, itself filled, the active
-# one heavier, a north arrow left of it pointing to the other screen (examples/sheetcheck.rs checks it
-# pixel by pixel; the bearings from the IPC); the focus moved to the second screen moves
+# one heavier, a north mark left of it with the arm toward the other screen thickened (examples/sheetcheck.rs
+# checks them pixel by pixel; the directions from the IPC); the focus moved to the second screen moves
 # the heavier outline there; [title] key_plan = false takes the plans away. SHOT=DIR keeps the screenshots.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
@@ -38,7 +38,7 @@ outputs() { run "$comp" msg outputs | tr -d ' \n'; }
 i=0
 until [ "$(outputs | grep -o draftpaper-title-block | wc -l)" = 2 ] || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 sleep 2
-ok "two screens, each with a key plan" "$(outputs | grep -o '"key_plan":{"arrow"' | wc -l)" "2"
+ok "two screens, each with a key plan" "$(outputs | grep -o '"key_plan":{"mark"' | wc -l)" "2"
 # the layout as the compositor has it: x,y,width,height of each screen, in its order
 layout=$(outputs | grep -o '"width":[0-9]*,"workspace":[0-9]*,"x":[0-9-]*,"y":[0-9-]*' | sed 's/"width":\([0-9]*\),"workspace":[0-9]*,"x":\([0-9-]*\),"y":\([0-9-]*\)/\2,\3,\1/')
 heights=$(outputs | grep -o '"height":[0-9]*,"key_plan"' | grep -o '[0-9]*')
@@ -46,9 +46,9 @@ set -- $heights
 l1="$(echo "$layout" | sed -n 1p),$1"
 l2="$(echo "$layout" | sed -n 2p),$2"
 ok "side by side" "$l1 $l2" "0,0,1280,800 1280,0,1707,960"
-# the arrows: each to the other screen (the monitor's centre 80 px lower over 1493 across: 3° below the
-# horizontal, right and down, left and up)
-ok "the arrows' bearings, to the degree" "$(outputs | grep -o '"bearing":[0-9.]*' | cut -d: -f2 | cut -d. -f1 | tr '\n' ' ')" "93 273 "
+# the north marks: each the arm toward the other screen thickened (the monitor's centre is a little lower,
+# 3°: the nearest quarter is level)
+ok "the north marks: right on the panel, left on the monitor" "$(outputs | grep -o '"towards":\[[^]]*\]' | tr '\n' ' ')" '"towards":["right"] "towards":["left"] '
 shots() {
     rm -f "$t"/Pictures/*.png
     kill -USR1 $nest

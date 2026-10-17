@@ -141,11 +141,75 @@ pub struct KeyPlan {
     pub rules: Vec<Rule>,
     /// this screen, inside its outline
     pub fill: Rectangle<i32, Physical>,
-    /// the north arrow's square, left of the plan: the shell draws it there
+    /// the north mark's room, left of the plan
     pub arrow: Rectangle<i32, Physical>,
-    /// where it points, in degrees clockwise from up: from this screen's centre to the other screen's (with
-    /// several others, to the focused one; on the focused one, to the nearest)
-    pub bearing: f64,
+    /// the arms thickened, up, right, down, left: toward each other screen (its centre's bearing from this
+    /// one's, to the nearest quarter)
+    pub towards: [bool; 4],
+    /// the north mark, as a drawing's north arrow drawn square: a square, heavy, a thin cross through it a
+    /// little longer, and the arm toward each other screen a solid bar from the centre to the square's inner
+    /// edge; its pixels in rows, none twice, none over the plan
+    pub mark: Vec<Rule>,
+}
+
+/// The north mark in a square of `side` pixels (made odd: a centre pixel) at `at`: which pixels are drawn,
+/// and heavy (the square, the thick arms) or light (the cross), as one-pixel rows.
+fn north_mark(at: (i32, i32), side: i32, towards: [bool; 4]) -> Vec<Rule> {
+    let s = if side % 2 == 0 { side - 1 } else { side };
+    let c = s / 2;
+    // the cross runs past the square by `e` on every side; the square's outline `t` thick
+    let e = ((s as f64 * 0.14).round() as i32).max(2);
+    let (q0, q1) = (e, s - 1 - e);
+    let t = if q1 - q0 >= 12 { 2 } else { 1 };
+    let half = if q1 - q0 >= 10 { 1 } else { 0 };
+    // 0: nothing, 1: light, 2: heavy
+    let mut px = vec![vec![0u8; s as usize]; s as usize];
+    for i in 0..s {
+        px[c as usize][i as usize] = 1;
+        px[i as usize][c as usize] = 1;
+    }
+    for y in q0..=q1 {
+        for x in q0..=q1 {
+            if y < q0 + t || y > q1 - t || x < q0 + t || x > q1 - t {
+                px[y as usize][x as usize] = 2;
+            }
+        }
+    }
+    // the thick arms: from the centre to the square's inner edge, 2 * half + 1 wide
+    let (inner0, inner1) = (q0 + t, q1 - t);
+    for (k, &on) in towards.iter().enumerate() {
+        if !on {
+            continue;
+        }
+        for d in -half..=half {
+            let span: Box<dyn Iterator<Item = i32>> = match k {
+                0 => Box::new(inner0..=c),
+                1 => Box::new(c..=inner1),
+                2 => Box::new(c..=inner1),
+                _ => Box::new(inner0..=c),
+            };
+            for v in span {
+                let (x, y) = if k % 2 == 0 { (c + d, v) } else { (v, c + d) };
+                px[y as usize][x as usize] = 2;
+            }
+        }
+    }
+    let mut rules = Vec::new();
+    for (y, row) in px.iter().enumerate() {
+        let mut x = 0;
+        while x < row.len() {
+            let w = row[x];
+            let start = x;
+            while x < row.len() && row[x] == w {
+                x += 1;
+            }
+            if w > 0 {
+                let r = Rectangle::<i32, Physical>::new((at.0 + start as i32, at.1 + y as i32).into(), ((x - start) as i32, 1).into());
+                rules.push(Rule { rect: r, heavy: w == 2 });
+            }
+        }
+    }
+    rules
 }
 
 /// The key plan of an output of `size` physical pixels, `margin` from margin(), `mm` physical pixels per
@@ -162,8 +226,11 @@ pub fn key_plan(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), layou
     let zone = rect(a, size.1 - margin, b - a, margin);
     let pad = (1.5 * mm).round() as i32;
     let (y0, y1) = (size.1 - margin + (0.2 * margin as f64).round() as i32, size.1 - (0.2 * margin as f64).round() as i32);
-    // the north arrow's square on the left, as high as the plan may be; the plan in what is left
+    // the north mark's room on the left, as high as the plan may be; the plan in what is left
     let side = y1 - y0;
+    if side < 7 {
+        return None;
+    }
     let arrow = rect(a + pad, y0, side, side);
     let a = a + side + pad;
     let (aw, ah) = ((b - a - 2 * pad) as f64, (y1 - y0) as f64);
@@ -194,20 +261,18 @@ pub fn key_plan(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), layou
         }
     }
     rules.retain(|r| r.rect.size.w > 0 && r.rect.size.h > 0);
-    // the bearing: from this screen's centre to the focused one's, or on the focused one to the nearest other
+    // toward each other screen: its centre's bearing from this one's, clockwise from up (the layout's y
+    // runs down), to the nearest quarter
     let centre = |l: &(i32, i32, i32, i32)| (l.0 as f64 + l.2 as f64 / 2.0, l.1 as f64 + l.3 as f64 / 2.0);
     let here = centre(&layout[this]);
-    let target = if focused != this && focused < layout.len() {
-        centre(&layout[focused])
-    } else {
-        layout.iter().enumerate().filter(|(i, _)| *i != this).map(|(_, l)| centre(l)).min_by(|p, q| {
-            let d = |c: &(f64, f64)| (c.0 - here.0).hypot(c.1 - here.1);
-            d(p).partial_cmp(&d(q)).unwrap()
-        })?
-    };
-    // clockwise from up; the layout's y runs down
-    let bearing = (target.0 - here.0).atan2(-(target.1 - here.1)).to_degrees().rem_euclid(360.0);
-    Some(KeyPlan { zone, rules, fill: fill?, arrow, bearing })
+    let mut towards = [false; 4];
+    for (_, l) in layout.iter().enumerate().filter(|(i, _)| *i != this) {
+        let there = centre(l);
+        let bearing = (there.0 - here.0).atan2(-(there.1 - here.1)).to_degrees().rem_euclid(360.0);
+        towards[((bearing / 90.0).round() as usize) % 4] = true;
+    }
+    let mark = north_mark((arrow.loc.x, arrow.loc.y), side, towards);
+    Some(KeyPlan { zone, rules, fill: fill?, arrow, towards, mark })
 }
 
 /// A parking cell's room in the side margins (issue #46): `cell` counts down the left margin, then the
@@ -484,25 +549,40 @@ mod tests {
                     // in their arrangement: the second screen to the right of, or under, the first
                     let (first, second) = (p.rules[0].rect, p.rules[4].rect);
                     assert!(second.loc.x > first.loc.x || second.loc.y > first.loc.y, "{case}: out of order");
-                    // the arrow's square in the zone, left of the plan, clear of it
-                    assert!(p.zone.contains_rect(p.arrow), "{case}: the arrow leaves the zone");
-                    assert!(p.rules.iter().all(|r| r.rect.loc.x > p.arrow.loc.x + p.arrow.size.w), "{case}: the plan over the arrow");
+                    // the north mark: in its room, left of the plan, no pixel twice nor on the plan
+                    assert!(p.zone.contains_rect(p.arrow), "{case}: the mark's room leaves the zone");
+                    assert!(p.rules.iter().all(|r| r.rect.loc.x > p.arrow.loc.x + p.arrow.size.w), "{case}: the plan over the mark");
+                    let mut mark = std::collections::HashMap::new();
+                    for r in &p.mark {
+                        for px in pixels(&r.rect) {
+                            assert!(mark.insert(px, r.heavy).is_none(), "{case}: {px:?} marked twice");
+                            assert!(p.arrow.contains(px) && !seen.contains(&px), "{case}: {px:?} off the mark's room");
+                        }
+                    }
+                    // the heavy part (the square, the thick arms) inside the square; the thin cross past it on
+                    // every side
+                    let heavy: Vec<_> = mark.iter().filter(|(_, h)| **h).map(|(p, _)| *p).collect();
+                    let (hx0, hx1) = (heavy.iter().map(|p| p.0).min().unwrap(), heavy.iter().map(|p| p.0).max().unwrap());
+                    let (hy0, hy1) = (heavy.iter().map(|p| p.1).min().unwrap(), heavy.iter().map(|p| p.1).max().unwrap());
+                    assert_eq!(hx1 - hx0, hy1 - hy0, "{case}: the square not square");
+                    let (lx0, lx1) = (mark.keys().map(|p| p.0).min().unwrap(), mark.keys().map(|p| p.0).max().unwrap());
+                    let (ly0, ly1) = (mark.keys().map(|p| p.1).min().unwrap(), mark.keys().map(|p| p.1).max().unwrap());
+                    assert!(lx0 < hx0 && lx1 > hx1 && ly0 < hy0 && ly1 > hy1, "{case}: the cross not past the square");
                 }
             }
-            // the bearings: the laptop's panel points right and a little down to the monitor (whose centre,
-            // y 720, is lower than the panel's, 640), the monitor left and a little up; stacked, down
-            if let (Some(l), Some(m)) = (key_plan((w, h), mg, phys_mm, zones, layouts[0], 0, 0), key_plan((w, h), mg, phys_mm, zones, layouts[0], 1, 0)) {
-                assert!(l.bearing > 90.0 && l.bearing < 100.0, "{case}: {}", l.bearing);
-                assert!(m.bearing > 270.0 && m.bearing < 280.0, "{case}: {}", m.bearing);
-            }
-            if let Some(p) = key_plan((w, h), mg, phys_mm, zones, layouts[2], 0, 0) {
-                assert!((p.bearing - 180.0).abs() < 1e-9, "{case}: {}", p.bearing);
-            }
-            // three in a row, the middle one focused: the outer ones point to it, it to the nearer neighbour
-            // (both neighbours as near: the first of them)
-            for (this, want) in [(0, 90.0), (2, 270.0), (1, 270.0)] {
-                if let Some(p) = key_plan((w, h), mg, phys_mm, zones, layouts[1], this, 1) {
-                    assert!((p.bearing - want).abs() < 1e-9, "{case}: screen {this}: {}", p.bearing);
+            // the arms thickened: the laptop's panel toward the monitor at its right, the monitor toward the
+            // panel at its left (each a little off level: the nearest quarter); stacked, down and up; three in
+            // a row, the middle one both ways
+            let arms = |layout: &[(i32, i32, i32, i32)], this| key_plan((w, h), mg, phys_mm, zones, layout, this, 0).map(|p| p.towards);
+            for (layout, this, want) in [
+                (layouts[0], 0, [false, true, false, false]),
+                (layouts[0], 1, [false, false, false, true]),
+                (layouts[2], 0, [false, false, true, false]),
+                (layouts[2], 1, [true, false, false, false]),
+                (layouts[1], 1, [false, true, false, true]),
+            ] {
+                if let Some(t) = arms(layout, this) {
+                    assert_eq!(t, want, "{case}: screen {this} of {layout:?}");
                 }
             }
         }

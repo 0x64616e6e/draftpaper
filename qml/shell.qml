@@ -304,7 +304,8 @@ ShellRoot {
             // the scale bar in the bottom margin (the compositor's; null when off or without room): it takes
             // the zone next to the last
             readonly property var scaleBar: output && output.scale_bar ? output.scale_bar : null
-            // the key plan (the compositor's, with several screens): the zone left of the scale bar's
+            // the key plan and its north mark (the compositor's, with several screens): the zone left of
+            // the scale bar's
             readonly property var keyPlan: output && output.key_plan ? output.key_plan : null
             // the bottom margin's zones taken from the right: the theme's, the scale bar's, the key plan's; the
             // custom cells and the column numbers stop short of the first of them
@@ -498,10 +499,6 @@ ShellRoot {
                 ScaleBar {      // the scale bar's numbers (or NTS); the compositor draws the bar
                     visible: edge.scaleBar !== null
                     band: bottomMargin; edge: edge; bar: edge.scaleBar || { zone: { x: 0, width: 0 }, measured: false, marks: [] }
-                }
-                NorthArrow {    // the key plan's arrow, to the other screen; the compositor draws the plan
-                    visible: edge.keyPlan !== null
-                    band: bottomMargin; edge: edge; plan: edge.keyPlan
                 }
                 Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
                     id: extraCells

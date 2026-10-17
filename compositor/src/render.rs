@@ -512,6 +512,8 @@ fn scene_elements(
                 let pattern = sheet.theme.sheet.pattern_strength;
                 let mut v: Vec<_> = p.rules.iter().map(|r| (r.rect, if r.heavy { 0.85 * pattern + 0.1 } else { 0.6 * pattern + 0.1 })).collect();
                 v.push((p.fill, 0.35 * pattern + 0.05));
+                // the north mark: the square and the thick arms as heavy as the frame, the cross as the ticks
+                v.extend(p.mark.iter().map(|r| (r.rect, if r.heavy { 0.85 * pattern + 0.1 } else { 0.6 * pattern + 0.1 })));
                 v
             })
             .unwrap_or_default();

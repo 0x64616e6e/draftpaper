@@ -249,10 +249,17 @@ fn keyplan_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, layo
             }
         }
     }
-    // the north arrow in its square (the shell's: drawn there, its way the IPC's bearing)
-    let needle = pixels(&p.arrow).filter(|&(x, y)| (lum(x, y) - paper).abs() > 25.0).count();
-    if needle < 15 {
-        faults.push(format!("no north arrow in its square ({needle} pixels)"));
+    // the north mark: every pixel of it drawn (the square and thick arms heavy, the cross light), and
+    // nothing else in its room
+    let marked: std::collections::HashSet<(i32, i32)> = p.mark.iter().flat_map(|r| pixels(&r.rect).collect::<Vec<_>>()).collect();
+    for &(x, y) in &marked {
+        if (lum(x, y) - paper).abs() <= 25.0 {
+            faults.push(format!("north mark pixel ({x}, {y}) not drawn"));
+        }
+    }
+    let stray = pixels(&p.arrow).filter(|q| !marked.contains(q)).filter(|&(x, y)| (lum(x, y) - paper).abs() > 25.0).count();
+    if stray > 4 {
+        faults.push(format!("{stray} pixels drawn in the north mark's room off the mark"));
     }
     let filled = pixels(&p.fill).filter(|&(x, y)| (lum(x, y) - paper).abs() > 12.0).count();
     if filled * 10 < p.fill.size.w as usize * p.fill.size.h as usize * 9 {
