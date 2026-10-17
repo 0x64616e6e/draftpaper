@@ -1,13 +1,14 @@
 // The lock screen (`draftpaper lock`: Mod+Shift+x, idle, before sleep), as the login screen looks: the
-// sheet blurred (the compositor draws it behind the lock surface, without the windows) and the sign-in
-// card (SignInCard.qml) on whole zones in the middle of it.
+// sheet blurred inside its frame (the compositor draws it behind the lock surface, without the windows;
+// the margins sharp) and one field in the middle (SignInField.qml), no words: the reader's glyph, lit
+// while it listens, then the password's dots.
 //
 // PAM's conversation runs as soon as the lock is secure, through the service draftpaper-lock
 // (/etc/pam.d/draftpaper-lock: the system's common-auth, so a fingerprint reader set up with
-// pam_fprintd comes first). While the reader listens the card shows only it, its glyph lit; when PAM
-// asks for the password (the reader failed or gave up, or there is none), or as soon as something is
-// typed, the row becomes the password's; a password typed early is held until PAM asks. A failure starts
-// a new conversation (the reader listens again). Enter gives the password, Escape clears it.
+// pam_fprintd comes first). While the reader listens the field holds only its glyph, lit; when PAM asks
+// for the password (the reader failed or gave up, or there is none), or as soon as something is typed,
+// the dots follow the glyph; a password typed early is held until PAM asks. A failure shakes the field
+// and starts a new conversation (the reader listens again). Enter gives the password, Escape clears it.
 //
 // An IPC handler "lock" tells `draftpaper lock` the state ("locked" once the compositor has confirmed);
 // with DRAFTPAPER_LOCK_TEST=1 it also types and presses Enter, and DRAFTPAPER_LOCK_PAM_DIR names another
@@ -33,6 +34,8 @@ ShellRoot {
     property bool busy: false
     property bool unlocking: false
     readonly property bool passwordRow: asked || typing || pending !== null
+    // a password refused: the field shakes (no words on the lock screen)
+    signal refusal()
 
     function submit() {
         if (busy || unlocking) return
@@ -93,6 +96,7 @@ ShellRoot {
             } else {
                 root.note = "Not unlocked"
                 root.typing = true
+                root.refusal()
                 again.restart()
             }
         }
@@ -133,20 +137,17 @@ ShellRoot {
                         e.accepted = true
                     }
 
-                    SignInCard {
+                    // the field alone (SignInField.qml): the reader's glyph, the password's dots once typed
+                    SignInField {
+                        id: signin
                         visible: surface.main
                         theme: look
                         screenName: surface.screen ? surface.screen.name : ""
-                        heading: "LOCKED · " + root.host.toUpperCase()
+                        text: "●".repeat(root.text.length)
                         finger: root.finger
-                        caret: !root.busy && !root.unlocking
-                        rows: [
-                            root.passwordRow
-                                ? { label: "PASSWORD", value: "●".repeat(root.text.length), here: !root.unlocking, reader: true }
-                                : { label: "UNLOCK", value: root.hint || "Touch the reader", reader: true },
-                            { label: "", value: root.unlocking ? "Unlocked" : root.note || (root.busy && !root.finger ? "Checking…" : root.passwordRow ? root.hint : ""),
-                              note: true, alert: root.note !== "" && !root.unlocking }
-                        ]
+                        busy: root.busy
+                        caret: root.passwordRow && !root.busy && !root.unlocking
+                        Connections { target: root; function onRefusal() { signin.refuse() } }
                     }
                 }
             }
@@ -165,7 +166,4 @@ ShellRoot {
         function type(text: string): void { if (Quickshell.env("DRAFTPAPER_LOCK_TEST") === "1") { root.typing = true; root.text += text } }
         function enter(): void { if (Quickshell.env("DRAFTPAPER_LOCK_TEST") === "1") root.submit() }
     }
-
-    FileView { id: hostFile; path: "/etc/hostname"; blockLoading: true; printErrors: false }
-    readonly property string host: Quickshell.env("DRAFTPAPER_GREETER_HOST") || (hostFile.text() || "").trim()
 }

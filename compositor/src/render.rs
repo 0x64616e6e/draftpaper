@@ -89,10 +89,11 @@ pub fn output_elements(
         elements.pop();
         let (sheet, _) = scene_elements(state, renderer, output, None, true);
         let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
-        match crate::blur::blur(renderer, output, mode_size(output), &sheet, crate::opening::BLUR_MM * mm) {
-            Some(blurred) => elements.push(OutputElements::Texture(blurred)),
-            None => elements.extend(sheet),
+        // inside the frame blurred, the margins sharp (the sheet behind)
+        if let Some(blurred) = crate::blur::blur(renderer, output, mode_size(output), &sheet, crate::opening::BLUR_MM * mm, frame_inside(state, output)) {
+            elements.push(OutputElements::Texture(blurred));
         }
+        elements.extend(sheet);
         return elements;
     }
     // the opening (opening.rs): the picture the displays showed, alone until the desktop is up, then
@@ -113,16 +114,16 @@ pub fn output_elements(
         let (mut elements, front) = scene_elements(state, renderer, output, pointer, false);
         let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
         let back = elements.split_off(front.min(elements.len()));
-        if let Some(mut blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm) {
+        if let Some(mut blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm, frame_inside(state, output)) {
             // the blur is drawn at a quarter of the resolution: light, it would still be softer than the
             // scene, and the step to the sharp scene at the end shows. Under BLUR_FADE_MM it is laid over the
             // sharp scene, ever fainter, so it goes to nothing without a step
             let k = (blur_mm / BLUR_FADE_MM).min(1.0) as f32;
             blurred.alpha = k;
             elements.push(OutputElements::Texture(blurred));
-            if k < 1.0 {
-                elements.extend(back);
-            }
+            // the scene behind: sharp in the margins (the blur covers only the inside of the frame), and
+            // under the fading blur at the end
+            elements.extend(back);
         } else {
             elements.extend(back);
         }
@@ -472,4 +473,13 @@ fn scene_elements(
         }
     }
     (elements, front)
+}
+
+/// The inside of `output`'s frame (inside its line), in physical pixels: what the blur covers, the
+/// margins and the frame left sharp. The whole output when it has no screen.
+fn frame_inside(state: &Draftpaper, output: &Output) -> Rectangle<i32, Physical> {
+    let (w, h) = mode_size(output);
+    let Some(s) = state.screens.iter().find(|s| &s.output == output) else { return Rectangle::from_size((w, h).into()) };
+    let inset = crate::title::margin(s.margin_mm, s.mm, output.current_scale().fractional_scale()) + crate::title::LINE;
+    Rectangle::new((inset, inset).into(), ((w - 2 * inset).max(1), (h - 2 * inset).max(1)).into())
 }

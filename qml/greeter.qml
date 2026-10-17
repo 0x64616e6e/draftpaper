@@ -1,17 +1,17 @@
-// The login screen (draftpaper-greeter, under greetd): a sign-in card on the sheet, whole zones wide in
-// the middle of the frame, ruled like the title block: the name, the password (with the fingerprint
-// reader's glyph), and what greetd says. The sheet is the user's own (draftpaper-greeter runs the
-// compositor on their copy of it), blurred behind the card once the name is known.
+// The login screen (draftpaper-greeter, under greetd): one field in the middle of the sheet
+// (SignInField.qml), no words: the name while it is typed, then the fingerprint reader's glyph and the
+// password's dots; a refusal shakes it. The sheet is the user's own (draftpaper-greeter runs the
+// compositor on their copy of it), blurred inside its frame (the margins sharp) once the name is known.
 //
 // With the name known, greetd is asked for a session at once, so a fingerprint reader (pam_fprintd) is
 // listening from the start; a password typed meanwhile is held and given when PAM asks for it (after
 // the reader, which gives up after its timeout). Enter goes on (the name to the password, the password
 // to greetd); Escape clears.
 //
-// Once greetd accepts, the name slides from the card into its place in the title block (the DRAWN cell,
-// lettered there as the session's shell letters it) while the card fades; the session is started and
-// the compositor told to leave (IPC "leave"): it exits with that frame on screen, and the session takes
-// it over as its opening picture, revealing the desktop under it as the blur goes
+// Once greetd accepts, the name appears in the field and slides into its place in the title block (the
+// DRAWN cell, lettered there as the session's shell letters it) while the field fades; the session is
+// started and the compositor told to leave (IPC "leave"): it exits with that frame on screen, and the
+// session takes it over as its opening picture, revealing the desktop under it as the blur goes
 // (compositor/src/handoff.rs, opening.rs).
 //
 // Started by the compositor (--greeter) with DRAFTPAPER_GREETER_USER (the name to fill in) and
@@ -132,12 +132,14 @@ ShellRoot {
         }
         function onAuthFailure(message) {
             root.note = message || "Not signed in"
+            card.refuse()
             root.busy = false; root.pending = null; root.asked = false; root.finger = false; root.prompt = ""
             if (root.field === "answer") root.field = "password"
             again.restart()
         }
         function onError(error) {
             root.note = error
+            card.refuse()
             root.busy = false; root.pending = null; root.asked = false; root.finger = false; root.prompt = ""
             root.field = root.user ? "password" : "name"
         }
@@ -196,24 +198,17 @@ ShellRoot {
                 e.accepted = true
             }
 
-            // the card (SignInCard.qml): the name, the password (or greetd's further question), what
-            // greetd says
-            SignInCard {
+            // the field alone (SignInField.qml), no words: the name while it is typed, then the reader's
+            // glyph and the password's dots (or the answer to greetd's further question)
+            SignInField {
                 id: card
                 theme: look
                 screenName: win.screen ? win.screen.name : ""
-                heading: "SIGN IN · " + root.host.toUpperCase()
+                text: root.field === "name" || (root.field === "answer" && root.echo) ? root.text : "●".repeat(root.text.length)
+                reader: root.field !== "name"
                 finger: root.finger
-                caret: !root.busy && !root.leaving
-                hideName: root.leaving && slider.visible
-                rows: [
-                    { label: "NAME", value: root.field === "name" ? root.text : root.user, here: root.field === "name" && !root.leaving, name: true },
-                    { label: root.field === "answer" ? root.prompt.toUpperCase() : "PASSWORD",
-                      value: root.field === "name" ? "" : root.field === "answer" && root.echo ? root.text : "●".repeat(root.text.length),
-                      here: root.field !== "name" && !root.leaving, reader: root.field === "password" },
-                    { label: "", value: root.leaving ? "Signed in" : root.note || (root.busy && !root.finger ? "Checking…" : root.hint),
-                      note: true, alert: root.note !== "" && !root.leaving }
-                ]
+                busy: root.busy
+                caret: !root.busy && !root.leaving && (root.field !== "password" || root.text !== "" || !root.finger)
             }
 
             // the name, sliding from the card into the title block's DRAWN cell, lettered there at the
@@ -253,14 +248,16 @@ ShellRoot {
         readonly property int duration: look.animations ? 450 : 0
         ScriptAction {
             script: {
-                const name = card.nameItem
-                if (!card.drawnCell || !name) return
-                // the letters over the name on the card: the cell placed so, scaled down to the card's size
+                const name = card.letters
+                if (!card.drawnCell) return
+                // the name appears where the typed letters are (the field shows no name), at their size, and
+                // slides into the cell, fading in on the way
                 const p = name.mapToItem(keys, 0, 0)
                 const s = slider.fromScale, l = slider.letters
                 slider.x = p.x - l.x * s
                 slider.y = p.y + (name.height - l.height * s) / 2 - l.y * s
                 slider.scale = slider.fromScale
+                slider.opacity = 0
                 slider.visible = true
             }
         }
@@ -269,13 +266,10 @@ ShellRoot {
             NumberAnimation { target: slider; property: "x"; to: slider.toX; duration: slide.duration; easing.type: Easing.InOutCubic }
             NumberAnimation { target: slider; property: "y"; to: slider.toY; duration: slide.duration; easing.type: Easing.InOutCubic }
             NumberAnimation { target: slider; property: "scale"; to: 1; duration: slide.duration; easing.type: Easing.InOutCubic }
+            NumberAnimation { target: slider; property: "opacity"; to: 1; duration: slide.duration * 0.4; easing.type: Easing.OutCubic }
         }
         // a few frames more: the last one, the name in its place, committed before the compositor keeps it
         PauseAnimation { duration: 120 }
         onFinished: Greetd.launch(root.session, [], false)
     }
-
-    // the machine's name in the heading (DRAFTPAPER_GREETER_HOST, for screenshots; else /etc/hostname)
-    FileView { id: hostFile; path: "/etc/hostname"; blockLoading: true; printErrors: false }
-    readonly property string host: Quickshell.env("DRAFTPAPER_GREETER_HOST") || (hostFile.text() || "").trim()
 }

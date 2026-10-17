@@ -97,10 +97,11 @@ and changes on scroll; the theme name switches theme.
 *The launcher (Super+D): a register of the applications on whole zones, what you type lettered in the
 margin above it; the most used come first. `draftpaper menu` shows any list of lines in it, for scripts.*
 
-![The lock screen: the sheet blurred, the fingerprint reader listening](docs/lock.jpg)
+![The lock screen: the sheet blurred inside its frame, one field with the fingerprint reader listening](docs/lock.jpg)
 
-*The lock screen (Super+Shift+X), as the login screen: the sheet blurred, nothing of the windows, the
-fingerprint reader listening. If it fails or gives up, or you start typing, the row takes the password.*
+*The lock screen (Super+Shift+X), as the login screen: the sheet blurred inside its frame, nothing of
+the windows, one field with the fingerprint reader listening. If it fails or gives up, or you start
+typing, the password's dots follow the glyph.*
 
 ## Configuration
 
@@ -224,18 +225,21 @@ scripts), `power off|on`, `reload`, `quit`, `spawn COMMAND`.
 ## Login screen (experimental)
 
 Draftpaper can be its own login screen under [greetd](https://sr.ht/~kennylevinsen/greetd/):
-`draftpaper-greeter` draws your sheet, blurred, with a sign-in card on whole zones in the middle of it.
+`draftpaper-greeter` draws your sheet, blurred inside its frame (the margins sharp), with one field in
+the middle of it and no words.
 With your name known the session is asked for at once, so a fingerprint reader (pam_fprintd) listens
-from the start, its glyph lit on the card; a password typed meanwhile is given when PAM asks for it.
-Once you are in, your name slides from the card into the title block's DRAWN cell, and the session
+from the start, its glyph lit in the field; a password typed meanwhile is given when PAM asks for it;
+a refusal shakes the field.
+Once you are in, your name appears in the field and slides into the title block's DRAWN cell, and the session
 starts on the same VT without a flicker: the login screen leaves that frame on screen when it exits,
 the session takes the displays over as they are, in the same mode, shows that very frame until its
 shell is up, then fades it into the desktop as the blur goes (Linux 6.8 or later). After any display
 manager the session opens the same way, from whatever was on screen.
 
-![The login screen: the sheet blurred, a sign-in card in the middle, the fingerprint reader listening](docs/greeter.jpg)
+![The login screen: the sheet blurred inside its frame, one field in the middle, the fingerprint reader listening](docs/greeter.jpg)
 
-*The login screen: the name filled in, the fingerprint reader listening; Enter takes a password instead.*
+*The login screen: your name remembered, the fingerprint reader listening; type the password and Enter
+instead.*
 
 The login screen runs as greetd's own user and cannot read your home, so `draftpaper apply` (every
 login, every theme change) copies what your sheet looks like (theme, margin, wallpaper, the outputs'

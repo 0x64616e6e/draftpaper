@@ -138,7 +138,7 @@ start --command true
 mkdir -p "$t/pam"
 printf 'auth required pam_echo.so Place your finger on the fingerprint reader\nauth required pam_exec.so quiet /bin/sleep 60\n' > "$t/pam/draftpaper-lock"
 as_home WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" DRAFTPAPER_LOCK_TEST=1 DRAFTPAPER_LOCK_PAM_DIR="$t/pam" \
-    DRAFTPAPER_GREETER_HOST=draftpaper "$cli" lock
+    "$cli" lock
 sleep 1.5
 shot lock
 # the lock screen is daemonized (qs -d): not among pids
@@ -150,7 +150,7 @@ setup blueprint
 as_home "$cli" apply > /dev/null
 "$fake" "$t/greetd.sock" "$t/started" "$t/finger" 60 &
 pids="$pids $!"
-export GREETD_SOCK="$t/greetd.sock" DRAFTPAPER_GREETER_USER=0x64616e6e DRAFTPAPER_GREETER_HOST=draftpaper
+export GREETD_SOCK="$t/greetd.sock" DRAFTPAPER_GREETER_USER=0x64616e6e
 start --greeter
 sleep 4
 shot greeter

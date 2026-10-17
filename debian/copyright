@@ -6,7 +6,7 @@ Files: *
 Copyright: 2026 0x64616e6e <daniel@este.systems>
 License: MIT
 
-Files: qml/SignInCard.qml
+Files: qml/SignInField.qml
 Copyright: 2026 0x64616e6e <daniel@este.systems>
            2020-2024 Paweł Kuna (the fingerprint glyph, from Tabler Icons)
 License: MIT

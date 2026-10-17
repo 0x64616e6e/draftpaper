@@ -146,9 +146,9 @@ fn pass(renderer: &mut GlesRenderer, from: &GlesTexture, from_size: (i32, i32), 
 }
 
 /// `scene` (the elements of `output`, front first) blurred by `radius` physical pixels (about the
-/// Gaussian's reach, two and a half deviations), as one element over the whole output. None when it
-/// cannot be drawn.
-pub fn blur<E: RenderElement<GlesRenderer>>(renderer: &mut GlesRenderer, output: &Output, size: (i32, i32), scene: &[E], radius: f64) -> Option<TextureElement> {
+/// Gaussian's reach, two and a half deviations), as one element over `area` of the output (physical
+/// pixels: the inside of the frame, the margins left sharp). None when it cannot be drawn.
+pub fn blur<E: RenderElement<GlesRenderer>>(renderer: &mut GlesRenderer, output: &Output, size: (i32, i32), scene: &[E], radius: f64, area: Rectangle<i32, Physical>) -> Option<TextureElement> {
     if size.0 < 8 || size.1 < 8 {
         return None;
     }
@@ -200,8 +200,12 @@ pub fn blur<E: RenderElement<GlesRenderer>>(renderer: &mut GlesRenderer, output:
         id: t.id.clone(),
         commit: t.commit,
         texture: t.quarter[0].clone(),
-        src: Rectangle::from_size((quarter_size.0 as f64, quarter_size.1 as f64).into()),
-        dst: Rectangle::from_size(size.into()),
+        // the area, in the quarter texture's pixels
+        src: Rectangle::new(
+            (area.loc.x as f64 * quarter_size.0 as f64 / size.0 as f64, area.loc.y as f64 * quarter_size.1 as f64 / size.1 as f64).into(),
+            (area.size.w as f64 * quarter_size.0 as f64 / size.0 as f64, area.size.h as f64 * quarter_size.1 as f64 / size.1 as f64).into(),
+        ),
+        dst: area,
         alpha: 1.0,
     })
 }
