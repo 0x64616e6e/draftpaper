@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **Security: tmux restore no longer types control characters.** A program saved in a tmux pane is typed
+  back into its shell, and a file name holding control characters (Ctrl+C, Enter) could run a command of
+  its own the next time the server started. A word with one is no longer typed: the pane gets its shell.
+- The dependencies are checked against the RustSec advisories on every change and weekly (GitHub
+  Actions); Dependabot proposes updates. SECURITY.md says how to report a vulnerability privately.
 - **The login screen's fingerprint glyph lights up** while the reader listens: it stayed faint (Qt's curve
   renderer does not repaint a stroke colour changed once drawn; the glyph is now the ink, faint by its
   opacity).

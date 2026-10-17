@@ -1,0 +1,28 @@
+# The dependencies checked against the RustSec advisory database (https://rustsec.org): on every push
+# and pull request that changes a lock file, and every Monday, since advisories appear without any
+# change here. Unmaintained or unsound crates are warnings; a vulnerability fails the run.
+name: Dependency audit
+
+on:
+  push:
+    paths: ["**/Cargo.lock", "**/Cargo.toml", ".github/workflows/audit.yml"]
+  pull_request:
+    paths: ["**/Cargo.lock", "**/Cargo.toml", ".github/workflows/audit.yml"]
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: The command (cli/)
+        run: cargo audit --file cli/Cargo.lock
+      - name: The compositor (compositor/)
+        run: cargo audit --file compositor/Cargo.lock

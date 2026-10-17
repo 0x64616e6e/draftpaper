@@ -85,9 +85,13 @@ pub fn keep(p: &Paths, socket: &str) {
     let _ = std::fs::remove_file(&lock);
 }
 
-/// A word as both POSIX shells and fish read it; None when it cannot be said simply.
+/// A word as both POSIX shells and fish read it; None when it cannot be said simply. The words are typed
+/// into the shell (send-keys), so a control character (in a file name) would be a key: Ctrl+C and Enter
+/// would run what follows. Such a word is none: the pane gets its shell alone.
 fn quote(a: &str) -> Option<String> {
-    if !a.is_empty() && a.chars().all(|c| c.is_ascii_alphanumeric() || "_./=:,+@%-".contains(c)) {
+    if a.chars().any(char::is_control) {
+        None
+    } else if !a.is_empty() && a.chars().all(|c| c.is_ascii_alphanumeric() || "_./=:,+@%-".contains(c)) {
         Some(a.to_string())
     } else if !a.contains('\'') && !a.contains('\\') {
         Some(format!("'{a}'"))
@@ -170,5 +174,22 @@ pub fn command(p: &Paths, args: &[&str]) {
         Some(&"keep") => keep(p, &socket),
         Some(&"restore") => restore(p, &socket),
         _ => util::die("draftpaper tmux save|keep|restore [SOCKET]"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::quote;
+
+    #[test]
+    fn words_typed_back() {
+        assert_eq!(quote("notes.md").as_deref(), Some("notes.md"));
+        assert_eq!(quote("my notes.md").as_deref(), Some("'my notes.md'"));
+        assert_eq!(quote("$(rm -rf ~)").as_deref(), Some("'$(rm -rf ~)'"));
+        assert_eq!(quote("it's"), None);
+        // a control character would be a key in the shell: Ctrl+C, then a command and Enter
+        assert_eq!(quote("x\u{3}touch pwned\r"), None);
+        assert_eq!(quote("a\nb"), None);
+        assert_eq!(quote("a\u{1b}[A"), None);
     }
 }

@@ -1,0 +1,17 @@
+# Pull requests for dependency updates: security fixes as soon as an advisory names a crate in a lock
+# file, version updates once a month. smithay is pinned (=0.7.0) and moves by hand.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directories: ["/cli", "/compositor"]
+    schedule:
+      interval: monthly
+    ignore:
+      - dependency-name: smithay
+    groups:
+      crates:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
