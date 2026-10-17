@@ -52,7 +52,7 @@ recommended wireplumber has to come from the same place.
 Log out and pick **Draftpaper** from the display manager's session menu (in GDM, the gear under the
 password field). From a text console, run `draftpaper-session`.
 
-The recommended packages are the defaults the keys run: alacritty (or foot), swaylock, swayidle,
+The recommended packages are the defaults the keys run: alacritty (or foot), swayidle,
 grim, slurp and swappy, wireplumber and brightnessctl. Screen sharing in browsers and calls goes through
 xdg-desktop-portal-wlr. The sheet is lettered in IBM Plex Mono when it is installed, DejaVu Sans Mono
 otherwise; Plex is in Debian's `contrib` section.
@@ -78,7 +78,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Mod+Escape | Park the focused window in the side margin; with every window parked, bring them all back |
 | Mod+Left / Mod+Right | Bring back the parked window in the first / last cell, parking the focused one; with nothing parked, move the focus |
 | Mod+t | Settings: the colour scheme (presets, or one built from checked choices) |
-| Mod+Shift+x | Lock the screen (swaylock) |
+| Mod+Shift+x | Lock the screen: the sheet blurred, the fingerprint reader first, then the password (`draftpaper lock`) |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Print | A region to swappy (slurp, grim) |
 | Shift+Print | The screen you are on to ~/Pictures |
@@ -96,6 +96,11 @@ and changes on scroll; the theme name switches theme.
 
 *The launcher (Super+D): a register of the applications on whole zones, what you type lettered in the
 margin above it; the most used come first. `draftpaper menu` shows any list of lines in it, for scripts.*
+
+![The lock screen: the sheet blurred, the fingerprint reader listening](docs/lock.jpg)
+
+*The lock screen (Super+Shift+X), as the login screen: the sheet blurred, nothing of the windows, the
+fingerprint reader listening. If it fails or gives up, or you start typing, the row takes the password.*
 
 ## Configuration
 

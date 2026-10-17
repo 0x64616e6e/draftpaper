@@ -42,6 +42,8 @@ install: $(COMPOSITOR) $(CLI) $(SHADERS)
 		$(DESTDIR)$(PREFIX)/lib/systemd/user/
 	install -Dm644 compositor/session/draftpaper-portals.conf $(DESTDIR)$(PREFIX)/share/xdg-desktop-portal/draftpaper-portals.conf
 	install -Dm644 compositor/session/xdg-desktop-portal-wlr.conf $(DESTDIR)/etc/xdg/xdg-desktop-portal-wlr/Draftpaper
+	# the lock screen's PAM service
+	install -Dm644 compositor/session/draftpaper-lock.pam $(DESTDIR)/etc/pam.d/draftpaper-lock
 
 check: $(CLI)
 	cd cli && $(CARGO) test --release --locked
@@ -50,14 +52,15 @@ check: $(CLI)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
 # the sheet at every scale, pixel by pixel, and windows in zones, headless: nothing is shown on any
-# display, the launcher, and the login screen against a stand-in for greetd (compositor/tests/pixels.sh,
-# zones.sh, launcher.sh, greeter.sh)
+# display, the launcher, the login screen against a stand-in for greetd, and the lock screen against
+# a PAM service of the test's own (compositor/tests/pixels.sh, zones.sh, launcher.sh, greeter.sh, lock.sh)
 pixels: $(COMPOSITOR) $(CLI)
 	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd
 	compositor/tests/pixels.sh
 	compositor/tests/zones.sh
 	compositor/tests/launcher.sh
 	compositor/tests/greeter.sh
+	compositor/tests/lock.sh
 
 # the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
 screenshots: $(COMPOSITOR) $(CLI)

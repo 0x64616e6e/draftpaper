@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Draftpaper's lock screen (draftpaper lock, qml/lock.qml): the system's authentication, so a
+# fingerprint reader set up with pam_fprintd (pam-auth-update) is asked first, then the password
+@include common-auth

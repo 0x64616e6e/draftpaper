@@ -59,6 +59,7 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
   draftpaper readings         the readings the shell polls, as JSON
+  draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
   draftpaper version
@@ -117,6 +118,7 @@ fn main() {
             std::process::exit(code);
         }
         ["menu", rest @ ..] => menu(&p, rest),
+        ["lock", ..] => lock(&p),
         ["lock-on-sleep", how, ..] => lock_on_sleep(&p, how),
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
@@ -565,4 +567,46 @@ fn compositor(action: &str) {
 fn dummy_output() -> bool {
     let out = util::run(&["wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"], 10).unwrap_or_default();
     out.is_empty() || out.contains("\"auto_null\"")
+}
+
+/// The lock screen (qml/lock.qml), started detached; back once the compositor has confirmed the lock (so
+/// swayidle's before-sleep waits for it), or at once when it is locked already. Exit 1 when it did not
+/// lock within 5 seconds, and swaylock (when there is one) did not either.
+fn lock(p: &Paths) {
+    if util::which("qs").is_none() {
+        util::die("draftpaper: quickshell (qs) is not installed");
+    }
+    let qml = p.root.join("qml/lock.qml");
+    let state = || util::run(&["qs", "ipc", "-p", &qml.display().to_string(), "call", "lock", "state"], 3).unwrap_or_default();
+    if state().starts_with("locked") {
+        return;
+    }
+    let started = Command::new("qs")
+        .args(["-p"])
+        .arg(&qml)
+        .args(["-n", "-d"])
+        .env("DRAFTPAPER_CACHE", &p.cache)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+    if started.is_err() {
+        util::die("draftpaper: the lock screen did not start");
+    }
+    for _ in 0..50 {
+        if state().starts_with("locked") {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    // never left unlocked (before sleep above all): swaylock, when there is one, themed
+    if util::which("swaylock").is_some() {
+        eprintln!("draftpaper: the lock screen did not lock within 5 seconds: swaylock instead");
+        let conf = p.cache.join("swaylock.conf");
+        let ok = Command::new("swaylock").arg("-f").arg("-C").arg(&conf).status().is_ok_and(|s| s.success());
+        if ok {
+            return;
+        }
+    }
+    util::die("draftpaper: the screen did not lock within 5 seconds");
 }

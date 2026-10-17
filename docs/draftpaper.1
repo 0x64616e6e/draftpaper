@@ -128,6 +128,13 @@ settings' wallpaper page sets them.
 .BR margins " " paper "|" ambient
 With a wallpaper: the margins in the theme's paper or in the picture's colours.
 .TP
+.B lock
+Lock the screen: the sheet blurred, the fingerprint reader first (when pam_fprintd is set up), then
+the password, through the PAM service
+.BR draftpaper-lock .
+Back once it is locked (swayidle's before-sleep waits for it); swaylock locks instead when the lock
+screen does not.
+.TP
 .BR lock-on-sleep " [" on "|" off "|" toggle ]
 Lock before every suspend, until turned off or the next login.
 .TP

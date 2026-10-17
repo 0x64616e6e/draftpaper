@@ -130,6 +130,21 @@ three
 shot blueprint
 stop
 
+# the lock screen, on the Blueprint sheet: the reader listening (a PAM service of the script's own:
+# the reader's prompt, then a minute's wait)
+setup blueprint
+as_home "$cli" apply > /dev/null
+start --command true
+mkdir -p "$t/pam"
+printf 'auth required pam_echo.so Place your finger on the fingerprint reader\nauth required pam_exec.so quiet /bin/sleep 60\n' > "$t/pam/draftpaper-lock"
+as_home WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" DRAFTPAPER_LOCK_TEST=1 DRAFTPAPER_LOCK_PAM_DIR="$t/pam" \
+    DRAFTPAPER_GREETER_HOST=draftpaper "$cli" lock
+sleep 1.5
+shot lock
+# the lock screen is daemonized (qs -d): not among pids
+as_home WAYLAND_DISPLAY="$wl" qs kill -p "$repo/qml/lock.qml" > /dev/null 2>&1
+stop
+
 # the login screen, on the same sheet: the name filled in, the fingerprint reader listening
 setup blueprint
 as_home "$cli" apply > /dev/null

@@ -43,7 +43,7 @@ places other windows.
 | Shift+Print | The screen you are on into ~/Pictures |
 | Mod+Print | Every screen into ~/Pictures (the compositor's own) |
 | Mod+z | The magnifier on the pointer, each pixel a block; scroll zooms (2–64×), Shift+scroll sizes it, Escape or Mod+z puts it away |
-| Mod+Shift+x | Lock now (swaylock) |
+| Mod+Shift+x | Lock now (`draftpaper lock`): touch the fingerprint reader, or type the password and Enter |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Volume, mic, brightness keys | wpctl (volume up to 150%), brightnessctl |
 
@@ -114,6 +114,7 @@ between them, ← → along, each change shown at once.
 | `draftpaper settings` | Open or close the settings |
 | `draftpaper wallpaper [FILE \| none]` | A picture in the frame, or none |
 | `draftpaper margins paper\|ambient` | With a wallpaper: the margins in paper, or the picture's colours |
+| `draftpaper lock` | Lock the screen; back once it is locked (swaylock if the lock screen does not lock) |
 | `draftpaper lock-on-sleep [on\|off\|toggle]` | Lock before every suspend |
 | `draftpaper apply` | Write the theme's files again (shell, launcher, lock, idle, applications) |
 | `draftpaper readings` | What the title block shows, as JSON |

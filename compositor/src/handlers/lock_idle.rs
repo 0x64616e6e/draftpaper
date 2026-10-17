@@ -1,5 +1,5 @@
-//! Locking and idle. ext-session-lock (swaylock, Quickshell's WlSessionLock): while locked, each
-//! output shows only its lock surface on black, and the lock surface has the keyboard; bindings other
+//! Locking and idle. ext-session-lock (Draftpaper's lock screen, qml/lock.qml; swaylock): while locked,
+//! each output shows only its lock surface, over the bare sheet blurred (render.rs), and the lock surface has the keyboard; bindings other
 //! than VT switches are off. One locker holds the lock: another is refused while it lives, and may take
 //! over only once it has died (a locker that crashes leaves the session locked, on black). Only the
 //! holder unlocks: Smithay calls `unlock` even for a lock that was refused, so the unlock is carried out

@@ -8,7 +8,8 @@
 //!                                     block, cells, alerts, commands); shell.qml reads it live
 //!   ~/.cache/draftpaper/fuzzel.ini    fuzzel (the launcher's alternative) drawn like the sheet: paper, ink, a square
 //!                                     frame, matches in the alert colour, the selection inverted
-//!   ~/.cache/draftpaper/swaylock.conf the lock screen (Mod+Shift+x): the paper, an ink ring, the accent
+//!   ~/.cache/draftpaper/swaylock.conf swaylock, themed (for a binding of your own; Mod+Shift+x locks with
+//!                                      Draftpaper's own lock screen, `draftpaper lock`)
 //!                                     while typing, the alert colour for a wrong password
 //!   ~/.cache/draftpaper/swayidle.conf idle (config.toml [idle]): the displays off, a lock, a lock before
 //!                                     sleep; draftpaper-idle.service runs it and is restarted on apply
@@ -158,7 +159,8 @@ radius=0
     )
 }
 
-const LOCK: &str = r#"swaylock -f -C "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/swaylock.conf""#;
+/// The lock screen (qml/lock.qml), back once locked: swayidle's before-sleep waits for it
+const LOCK: &str = "draftpaper lock";
 
 /// swaylock's config for theme t (colours RRGGBB[AA]).
 fn swaylock_conf(t: &Map<String, Value>, font: &str) -> String {

@@ -3,6 +3,17 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,
+  nothing of the windows, and the same card with the fingerprint reader listening. When the reader fails
+  or gives up, or you start typing, the row takes the password. It is Draftpaper's own
+  (`draftpaper lock`, `qml/lock.qml`, PAM service `draftpaper-lock`) in place of swaylock, which stays a
+  fallback should it not lock within 5 seconds. The login and lock screens share the card
+  (`qml/SignInCard.qml`).
+- **A better fingerprint glyph** on both screens: Tabler Icons' fingerprint (MIT), drawn as strokes at the
+  weight of the sheet's rules, in place of the ellipses drawn before.
+
 ## 0.4.0 (2026-10-17)
 
 A login screen of Draftpaper's own, and no flicker between it and the session.

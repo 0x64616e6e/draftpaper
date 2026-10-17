@@ -124,8 +124,8 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+Shift+6", "send 6"), ("Mod+Shift+7", "send 7"), ("Mod+Shift+8", "send 8"), ("Mod+Shift+9", "send 9"), ("Mod+Shift+0", "send 10"),
     ("Mod+f", "fullscreen"),
     ("Mod+Escape", "park"),
-    // lock now (swaylock, themed by `draftpaper apply`); lock before suspend for the day, or not
-    ("Mod+Shift+x", r#"spawn swaylock -f -C "${XDG_CACHE_HOME:-$HOME/.cache}/draftpaper/swaylock.conf""#),
+    // lock now (the lock screen, qml/lock.qml); lock before suspend for the day, or not
+    ("Mod+Shift+x", "spawn draftpaper lock"),
     ("Mod+Shift+p", "spawn draftpaper lock-on-sleep toggle"),
     // the settings: the colour scheme (the shell's)
     ("Mod+t", "spawn draftpaper settings"),

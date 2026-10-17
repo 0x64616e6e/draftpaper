@@ -81,6 +81,20 @@ pub fn output_elements(
     output: &Output,
     pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
 ) -> Vec<OutputElements> {
+    // locked: the lock surface (the lock screen's card) over the sheet blurred, as on the login screen:
+    // the sheet alone (no window, no surface of the shell), so nothing of the work shows through
+    if state.locked {
+        let (mut elements, _) = scene_elements(state, renderer, output, None, false);
+        // the lock surface, without the black behind it
+        elements.pop();
+        let (sheet, _) = scene_elements(state, renderer, output, None, true);
+        let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
+        match crate::blur::blur(renderer, output, mode_size(output), &sheet, crate::opening::BLUR_MM * mm) {
+            Some(blurred) => elements.push(OutputElements::Texture(blurred)),
+            None => elements.extend(sheet),
+        }
+        return elements;
+    }
     // the opening (opening.rs): the picture the displays showed, alone until the desktop is up, then
     // fading over the desktop while its blur goes
     let up = state.shell_ready;
@@ -96,7 +110,7 @@ pub fn output_elements(
     };
     // blurred (blur.rs): what is behind the pointer and the overlay and top layers
     if blur_mm > 0.05 && !state.locked {
-        let (mut elements, front) = scene_elements(state, renderer, output, pointer);
+        let (mut elements, front) = scene_elements(state, renderer, output, pointer, false);
         let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
         let back = elements.split_off(front.min(elements.len()));
         if let Some(mut blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm) {
@@ -136,9 +150,9 @@ fn output_scene(
     let at = state.seat.get_pointer().unwrap().current_location();
     let here = state.space.output_geometry(output).filter(|g| g.to_f64().contains(at));
     let (Some(lens), Some(geometry), false) = (&state.lens, here, state.locked) else {
-        return scene_elements(state, renderer, output, pointer).0;
+        return scene_elements(state, renderer, output, pointer, false).0;
     };
-    let scene = scene_elements(state, renderer, output, None).0;
+    let scene = scene_elements(state, renderer, output, None, false).0;
     let scale = output.current_scale().fractional_scale();
     let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
     let hotspot = (at - geometry.loc.to_f64()).to_physical(scale);
@@ -165,13 +179,15 @@ fn scene_elements(
     renderer: &mut GlesRenderer,
     output: &Output,
     pointer: Option<(&MemoryRenderBuffer, Point<i32, Logical>)>,
+    bare: bool,
 ) -> (Vec<OutputElements>, usize) {
     // an output not in the space (gone, or not placed yet) has nothing to show
     let Some(geometry) = state.space.output_geometry(output) else { return (Vec::new(), 0) };
     let mut elements = Vec::new();
 
-    // locked: the lock surface (if the locker has made one yet) on black, nothing else
-    if state.locked {
+    // locked: the lock surface (if the locker has made one yet) on black, nothing else (output_elements
+    // draws the blurred sheet in place of the black)
+    if state.locked && !bare {
         let scale = output.current_scale().fractional_scale();
         if let Some(lock) = state.lock_surfaces.get(&output.name()) {
             let lock_elements: Vec<WaylandSurfaceRenderElement<GlesRenderer>> =
@@ -374,7 +390,8 @@ fn scene_elements(
 
     // leaving (handoff.rs): the bare sheet, as the next compositor will first draw it; the login screen
     // leaves what it shows (the sheet blurred, the name in the title block), taken over as a picture
-    if state.leaving.is_some() && !state.greeter {
+    // bare: the sheet alone (behind the lock surface, blurred)
+    if (state.leaving.is_some() && !state.greeter) || bare {
         elements.clear();
         front = 0;
     }

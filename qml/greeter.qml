@@ -25,7 +25,7 @@ import Quickshell.Services.Greetd
 
 ShellRoot {
     id: root
-    Theme { id: theme }
+    Theme { id: look }
 
     // the copy's user: their sheet, their name in the title block
     readonly property string owner: Quickshell.env("DRAFTPAPER_GREETER_USER") || ""
@@ -177,42 +177,8 @@ ShellRoot {
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
         color: "transparent"
 
-        // ---- the sheet's geometry (logical pixels, from the output's top-left corner) ----
-        readonly property var out: Compositor.output(screen ? screen.name : "")
-        readonly property real mm: out ? out.px_per_mm : 4.2
-        readonly property real dpr: out ? out.scale : 1
-        readonly property real zoneW: out ? out.zones.width : 50 * mm
-        readonly property real zoneH: out ? out.zones.height : 50 * mm
-        readonly property real frameX: out ? out.frame.x - out.x : 6 * mm
-        readonly property real frameY: out ? out.frame.y - out.y : 6 * mm
-        readonly property int across: out ? out.zones.across : 4
-        readonly property int down: out ? out.zones.down : 3
-        // whole zones, about 130 mm across (the title block's width) and 45 mm down, in the middle
-        readonly property int spanX: Math.max(2, Math.min(across, Math.round(130 * mm / zoneW)))
-        readonly property int spanY: Math.max(1, Math.min(down, Math.round(45 * mm / zoneH)))
-        readonly property int fromX: Math.floor((across - spanX) / 2)
-        readonly property int fromY: Math.floor((down - spanY) / 2)
-        function px(v) { return Math.round(v * dpr) / dpr }     // on a physical pixel
-        readonly property real line: 2 / dpr                    // the frame's line, as the sheet draws it
-        readonly property real hair: 1 / dpr
-        // its rules start on the ticks, as the title block's do
-        readonly property real cardX: px(frameX + fromX * zoneW)
-        readonly property real cardY: px(frameY + fromY * zoneH)
-        readonly property real cardW: px(frameX + (fromX + spanX) * zoneW) + line - cardX
-        readonly property real cardH: px(frameY + (fromY + spanY) * zoneH) + line - cardY
-        readonly property real headH: px(Math.min(10 * mm, cardH / 4))
-        readonly property real rowH: (cardH - headH - 2 * line) / 3
-        readonly property real font: 2.8 * mm
-        readonly property real colLabel: px(Math.min(34 * mm, cardW * 0.3))
-        readonly property color ink: theme.ink
-        readonly property color paper: theme.data.paper || "#C9BDAE"
-        function inkA(a) { return Qt.rgba(ink.r, ink.g, ink.b, a) }
-
-        // the DRAWN cell of the title block (the last; the compositor's geometry, title.rs), when the
-        // shell letters the name there (no cell of the user's own in its place)
-        readonly property var drawnCell: out && out.title && theme.data.drawnCell !== false ? out.title.cells[out.title.cells.length - 1] : null
         // the name as the title block letters it: the copy's (config.toml's [title] drawn), for its user
-        readonly property string drawnName: root.user === root.owner && theme.data.drawn ? theme.data.drawn : root.user
+        readonly property string drawnName: root.user === root.owner && look.data.drawn ? look.data.drawn : root.user
 
         Item {
             id: keys
@@ -230,158 +196,52 @@ ShellRoot {
                 e.accepted = true
             }
 
-            Rectangle {
+            // the card (SignInCard.qml): the name, the password (or greetd's further question), what
+            // greetd says
+            SignInCard {
                 id: card
-                x: win.cardX; y: win.cardY
-                width: win.cardW; height: win.cardH
-                color: win.paper
-                // the outer rule, as heavy as the frame's line
-                border.width: win.line; border.color: win.ink
-                Rectangle { y: win.headH; width: card.width; height: win.hair; color: win.ink }
-
-                // the heading, like a title block cell
-                Text {
-                    x: 2 * win.mm
-                    y: (win.headH - height) / 2
-                    text: "SIGN IN · " + root.host.toUpperCase()
-                    font.family: Fonts.mono; font.pixelSize: win.font * 0.75; font.letterSpacing: 0.3 * win.mm
-                    color: win.inkA(0.6)
-                }
-                Text {
-                    anchors.right: parent.right; anchors.rightMargin: 2 * win.mm
-                    y: (win.headH - height) / 2
-                    text: clock.text
-                    font.family: Fonts.mono; font.pixelSize: win.font * 0.75; font.letterSpacing: 0.3 * win.mm
-                    color: win.inkA(0.6)
-                }
-
-                // the rows: the name, the password (or greetd's further question), what greetd says
-                Repeater {
-                    model: [
-                        { label: "NAME", value: root.field === "name" ? root.text : root.user, here: root.field === "name", name: true },
-                        { label: root.field === "answer" ? root.prompt.toUpperCase() : "PASSWORD",
-                          value: root.field === "name" ? "" : root.field === "answer" && root.echo ? root.text : "●".repeat(root.text.length),
-                          here: root.field !== "name", password: root.field === "password" },
-                        { label: "", value: root.leaving ? "Signed in" : root.note || (root.busy && !root.finger ? "Checking…" : root.hint),
-                          here: false, note: true }
-                    ]
-                    Item {
-                        id: row
-                        required property var modelData
-                        required property int index
-                        x: win.line; y: win.headH + win.hair + index * win.rowH
-                        width: card.width - 2 * win.line; height: win.rowH
-                        Rectangle { visible: row.index > 0; width: parent.width; height: win.hair; color: win.inkA(0.35) }
-                        Rectangle { visible: !row.modelData.note; x: win.colLabel; width: win.hair; height: row.height; color: win.inkA(0.35) }
-                        Rectangle {
-                            visible: row.modelData.here && !root.leaving
-                            anchors.fill: parent
-                            color: win.inkA(0.12)
-                            border.width: Math.max(win.line, 0.5 * win.mm); border.color: win.ink
-                        }
-                        Text {
-                            x: 2 * win.mm; width: win.colLabel - 4 * win.mm
-                            anchors.verticalCenter: parent.verticalCenter
-                            elide: Text.ElideRight
-                            text: row.modelData.label
-                            font.family: Fonts.mono; font.pixelSize: win.font * 0.7; font.letterSpacing: 0.3 * win.mm
-                            color: win.inkA(0.6)
-                        }
-                        Text {
-                            id: value
-                            // the name leaves its row when it slides into the title block
-                            visible: !(row.modelData.name && root.leaving && slider.visible)
-                            x: row.modelData.note ? 2 * win.mm : win.colLabel + 2 * win.mm
-                            width: row.width - x - (row.modelData.password ? 12 : 2) * win.mm
-                            anchors.verticalCenter: parent.verticalCenter
-                            elide: Text.ElideLeft; textFormat: Text.PlainText
-                            text: row.modelData.value + (row.modelData.here && !root.busy && !root.leaving ? "▏" : "")
-                            font.family: Fonts.mono; font.pixelSize: row.modelData.note ? win.font * 0.85 : win.font
-                            font.bold: row.modelData.here
-                            color: row.modelData.note ? (root.note ? theme.alert : win.inkA(0.7)) : win.ink
-                            Component.onCompleted: if (row.modelData.name) nameText.target = value
-                        }
-                        // the fingerprint reader, drawn (the login screen has no fonts of the user's): ridges as
-                        // open arcs about a core, faint, lit (and breathing) while the reader listens
-                        Canvas {
-                            id: reader
-                            visible: row.modelData.password === true
-                            anchors.right: parent.right; anchors.rightMargin: 3 * win.mm
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Math.round(5 * win.mm); height: Math.round(6 * win.mm)
-                            readonly property color colour: root.finger ? win.ink : win.inkA(0.3)
-                            onColourChanged: requestPaint()
-                            onWidthChanged: requestPaint()
-                            onPaint: {
-                                const c = getContext("2d")
-                                c.reset()
-                                c.strokeStyle = colour
-                                c.lineWidth = Math.max(1, width / 14)
-                                c.lineCap = "round"
-                                const cx = width / 2, cy = height * 0.55, step = width / 9
-                                // the ridges, ellipses about the core
-                                for (let i = 1; i <= 4; i++) {
-                                    const r = i * step
-                                    c.beginPath()
-                                    c.ellipse(cx - r, cy - r * 1.2, 2 * r, 2.4 * r)
-                                    c.stroke()
-                                }
-                                // the ridges open below the core, cut away
-                                c.globalCompositeOperation = "destination-out"
-                                c.fillStyle = "black"
-                                c.beginPath()
-                                c.moveTo(cx, cy)
-                                c.lineTo(cx - width * 0.28, height)
-                                c.lineTo(cx + width * 0.05, height)
-                                c.closePath()
-                                c.fill()
-                                c.globalCompositeOperation = "source-over"
-                                // the core
-                                c.beginPath()
-                                c.moveTo(cx, cy - step * 0.6)
-                                c.lineTo(cx, cy + step * 0.6)
-                                c.stroke()
-                            }
-                            SequentialAnimation on opacity {
-                                running: root.finger
-                                loops: Animation.Infinite
-                                NumberAnimation { to: 0.45; duration: 700; easing.type: Easing.InOutSine }
-                                NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
-                                onRunningChanged: if (!running) parent.opacity = 1
-                            }
-                        }
-                    }
-                }
+                theme: look
+                screenName: win.screen ? win.screen.name : ""
+                heading: "SIGN IN · " + root.host.toUpperCase()
+                finger: root.finger
+                caret: !root.busy && !root.leaving
+                hideName: root.leaving && slider.visible
+                rows: [
+                    { label: "NAME", value: root.field === "name" ? root.text : root.user, here: root.field === "name" && !root.leaving, name: true },
+                    { label: root.field === "answer" ? root.prompt.toUpperCase() : "PASSWORD",
+                      value: root.field === "name" ? "" : root.field === "answer" && root.echo ? root.text : "●".repeat(root.text.length),
+                      here: root.field !== "name" && !root.leaving, reader: root.field === "password" },
+                    { label: "", value: root.leaving ? "Signed in" : root.note || (root.busy && !root.finger ? "Checking…" : root.hint),
+                      note: true, alert: root.note !== "" && !root.leaving }
+                ]
             }
 
             // the name, sliding from the card into the title block's DRAWN cell, lettered there at the
             // size and place the session's shell letters it (TitleBlock.qml), so the session takes over
-            // the very same letters
-            QtObject { id: nameText; property var target: null }
-            // the cell, its letters set exactly as TitleBlock.qml sets a reading; it moves (and grows) from
-            // where the name is on the card to the cell
+            // the very same letters. The cell, its letters set exactly as TitleBlock.qml sets a reading;
+            // it moves (and grows) from where the name is on the card to the cell
             Item {
                 id: slider
                 visible: false
-                width: win.drawnCell ? win.drawnCell.width : 0
-                height: win.drawnCell ? win.drawnCell.height : 0
+                width: card.drawnCell ? card.drawnCell.width : 0
+                height: card.drawnCell ? card.drawnCell.height : 0
                 transformOrigin: Item.TopLeft
-                readonly property real fromScale: win.font / (3.6 * win.mm)
-                readonly property real toX: win.drawnCell ? win.drawnCell.x : 0
-                readonly property real toY: win.drawnCell ? win.drawnCell.y : 0
+                readonly property real fromScale: card.font / (3.6 * card.mm)
+                readonly property real toX: card.drawnCell ? card.drawnCell.x : 0
+                readonly property real toY: card.drawnCell ? card.drawnCell.y : 0
                 property alias letters: letters
                 Text {
                     id: letters
-                    x: 2 * win.mm; width: parent.width - 4 * win.mm
-                    anchors.bottom: parent.bottom; anchors.bottomMargin: 1.6 * win.mm
+                    x: 2 * card.mm; width: parent.width - 4 * card.mm
+                    anchors.bottom: parent.bottom; anchors.bottomMargin: 1.6 * card.mm
                     text: win.drawnName
                     textFormat: Text.StyledText
                     elide: Text.ElideRight
                     fontSizeMode: Text.HorizontalFit
-                    minimumPixelSize: 2.4 * win.mm
+                    minimumPixelSize: 2.4 * card.mm
                     font.family: Fonts.mono
-                    font.pixelSize: 3.6 * win.mm
-                    color: win.ink
+                    font.pixelSize: 3.6 * card.mm
+                    color: card.ink
                 }
             }
         }
@@ -390,21 +250,22 @@ ShellRoot {
     // the card fades and the name slides (or, with no DRAWN cell, only the fading); then the session
     SequentialAnimation {
         id: slide
-        readonly property int duration: theme.animations ? 450 : 0
+        readonly property int duration: look.animations ? 450 : 0
         ScriptAction {
             script: {
-                if (!win.drawnCell || !nameText.target) return
-                // the letters over the name on the card: the cell placed so, scaled down to the card.s size
-                const p = nameText.target.mapToItem(keys, 0, 0)
+                const name = card.nameItem
+                if (!card.drawnCell || !name) return
+                // the letters over the name on the card: the cell placed so, scaled down to the card's size
+                const p = name.mapToItem(keys, 0, 0)
                 const s = slider.fromScale, l = slider.letters
                 slider.x = p.x - l.x * s
-                slider.y = p.y + (nameText.target.height - l.height * s) / 2 - l.y * s
+                slider.y = p.y + (name.height - l.height * s) / 2 - l.y * s
                 slider.scale = slider.fromScale
                 slider.visible = true
             }
         }
         ParallelAnimation {
-            NumberAnimation { target: card; property: "opacity"; to: 0; duration: slide.duration * 0.6; easing.type: Easing.OutCubic }
+            NumberAnimation { target: card.box; property: "opacity"; to: 0; duration: slide.duration * 0.6; easing.type: Easing.OutCubic }
             NumberAnimation { target: slider; property: "x"; to: slider.toX; duration: slide.duration; easing.type: Easing.InOutCubic }
             NumberAnimation { target: slider; property: "y"; to: slider.toY; duration: slide.duration; easing.type: Easing.InOutCubic }
             NumberAnimation { target: slider; property: "scale"; to: 1; duration: slide.duration; easing.type: Easing.InOutCubic }
@@ -414,10 +275,7 @@ ShellRoot {
         onFinished: Greetd.launch(root.session, [], false)
     }
 
-    // the date and time in the heading, and the machine's name
-    SystemClock { id: time; precision: SystemClock.Minutes }
-    QtObject { id: clock; readonly property string text: Qt.formatDateTime(time.date, "yyyy-MM-dd · HH:mm") }
-    FileView { id: hostFile; path: "/etc/hostname"; blockLoading: true; printErrors: false }
     // the machine's name in the heading (DRAFTPAPER_GREETER_HOST, for screenshots; else /etc/hostname)
+    FileView { id: hostFile; path: "/etc/hostname"; blockLoading: true; printErrors: false }
     readonly property string host: Quickshell.env("DRAFTPAPER_GREETER_HOST") || (hostFile.text() || "").trim()
 }
