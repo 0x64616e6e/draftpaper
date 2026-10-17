@@ -80,6 +80,9 @@ pub struct TtyData {
     reset: bool,
     /// the outputs that have had a frame queued (logged once, with the time since the start: handoff.rs)
     drawn: std::collections::HashSet<crtc::Handle>,
+    /// a frame was refused with a client's buffer on a display plane (Firefox's decoded video on Intel):
+    /// from then on everything is composed by the GPU, only the pointer on its own plane
+    composite: bool,
 }
 
 impl TtyData {
@@ -165,7 +168,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false, drawn: Default::default() });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false, drawn: Default::default(), composite: false });
 
     let handle = event_loop.handle();
     handle
@@ -494,7 +497,8 @@ fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> 
     // leaving (handoff.rs): no pointer
     let pointer = data.leaving.is_none().then_some((&tty.cursor.buffer, tty.cursor.hotspot));
     let elements = output_elements(data, &mut tty.renderer, &output, pointer);
-    let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], FrameFlags::DEFAULT) {
+    let flags = if tty.composite { FrameFlags::ALLOW_CURSOR_PLANE_SCANOUT } else { FrameFlags::DEFAULT };
+    let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], flags) {
         Ok(result) if !result.is_empty => match surface.queue_frame(()) {
             Ok(()) => {
                 if tty.drawn.insert(crtc) {
@@ -889,15 +893,23 @@ pub fn capture_into(data: &mut Draftpaper, dir: &std::path::Path) {
     data.tty_data = Some(tty);
 }
 
-/// A first frame the driver refused, likely on the state the previous owner left (adopt): reset every display,
+/// A frame the driver refused. The first, likely on the state the previous owner left (adopt): reset every display,
 /// as Draftpaper did before it took them over as they were, once; the next frames set their modes anew.
 /// Not when the frame was refused for want of the device (not its master yet: the previous owner's
-/// session still ending, or another VT): that passes, and a reset then would darken the displays.
+/// session still ending, or another VT): that passes, and a reset then would darken the displays. Once
+/// frames are on screen: everything composed from then on (`composite`), no reset.
 fn reset_once(tty: &mut TtyData, why: &str) {
     let master = why.contains("PermissionDenied") || why.contains("DeviceInactive") || why.contains("os error 13") || why.contains("os error 1)");
-    // only while taking over: once a frame is on screen, the state is Draftpaper's own, and a refused
-    // frame (a client's buffer a plane would not take) is dropped, not answered by darkening the displays
-    if master || !tty.session.is_active() || !tty.drawn.is_empty() {
+    if master || !tty.session.is_active() {
+        return;
+    }
+    // once a frame is on screen the state is Draftpaper's own: a refused frame is a client's buffer a plane
+    // would not take (it passed the test, not the commit); compose everything from now on, the next
+    // frame goes through (rather than darkening the displays)
+    if !tty.drawn.is_empty() {
+        if !std::mem::replace(&mut tty.composite, true) {
+            eprintln!("draftpaper: a client's buffer refused on a display plane: everything composed from now on");
+        }
         return;
     }
     if std::mem::replace(&mut tty.reset, true) {
