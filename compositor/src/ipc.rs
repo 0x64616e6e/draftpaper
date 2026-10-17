@@ -290,7 +290,11 @@ impl Draftpaper {
                         // shell letters nothing there; null with one screen or switched off
                         "key_plan": self.key_plan(i).map(|p| {
                             let scale = s.output.current_scale().fractional_scale();
-                            json!({ "zone": { "x": p.zone.loc.x as f64 / scale, "y": p.zone.loc.y as f64 / scale, "width": p.zone.size.w as f64 / scale, "height": p.zone.size.h as f64 / scale } })
+                            let r = |r: smithay::utils::Rectangle<i32, smithay::utils::Physical>| {
+                                json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
+                            };
+                            // the north arrow's square and its bearing (degrees clockwise from up), drawn by the shell
+                            json!({ "zone": r(p.zone), "arrow": r(p.arrow), "bearing": p.bearing })
                         }),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),

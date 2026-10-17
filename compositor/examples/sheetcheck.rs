@@ -249,6 +249,11 @@ fn keyplan_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, layo
             }
         }
     }
+    // the north arrow in its square (the shell's: drawn there, its way the IPC's bearing)
+    let needle = pixels(&p.arrow).filter(|&(x, y)| (lum(x, y) - paper).abs() > 25.0).count();
+    if needle < 15 {
+        faults.push(format!("no north arrow in its square ({needle} pixels)"));
+    }
     let filled = pixels(&p.fill).filter(|&(x, y)| (lum(x, y) - paper).abs() > 12.0).count();
     if filled * 10 < p.fill.size.w as usize * p.fill.size.h as usize * 9 {
         faults.push(format!("this screen not filled ({filled} pixels)"));

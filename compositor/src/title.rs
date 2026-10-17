@@ -141,6 +141,11 @@ pub struct KeyPlan {
     pub rules: Vec<Rule>,
     /// this screen, inside its outline
     pub fill: Rectangle<i32, Physical>,
+    /// the north arrow's square, left of the plan: the shell draws it there
+    pub arrow: Rectangle<i32, Physical>,
+    /// where it points, in degrees clockwise from up: from this screen's centre to the other screen's (with
+    /// several others, to the focused one; on the focused one, to the nearest)
+    pub bearing: f64,
 }
 
 /// The key plan of an output of `size` physical pixels, `margin` from margin(), `mm` physical pixels per
@@ -157,6 +162,10 @@ pub fn key_plan(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), layou
     let zone = rect(a, size.1 - margin, b - a, margin);
     let pad = (1.5 * mm).round() as i32;
     let (y0, y1) = (size.1 - margin + (0.2 * margin as f64).round() as i32, size.1 - (0.2 * margin as f64).round() as i32);
+    // the north arrow's square on the left, as high as the plan may be; the plan in what is left
+    let side = y1 - y0;
+    let arrow = rect(a + pad, y0, side, side);
+    let a = a + side + pad;
     let (aw, ah) = ((b - a - 2 * pad) as f64, (y1 - y0) as f64);
     let (bx, by) = (layout.iter().map(|l| l.0).min()?, layout.iter().map(|l| l.1).min()?);
     let (bw, bh) = ((layout.iter().map(|l| l.0 + l.2).max()? - bx) as f64, (layout.iter().map(|l| l.1 + l.3).max()? - by) as f64);
@@ -185,7 +194,20 @@ pub fn key_plan(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), layou
         }
     }
     rules.retain(|r| r.rect.size.w > 0 && r.rect.size.h > 0);
-    Some(KeyPlan { zone, rules, fill: fill? })
+    // the bearing: from this screen's centre to the focused one's, or on the focused one to the nearest other
+    let centre = |l: &(i32, i32, i32, i32)| (l.0 as f64 + l.2 as f64 / 2.0, l.1 as f64 + l.3 as f64 / 2.0);
+    let here = centre(&layout[this]);
+    let target = if focused != this && focused < layout.len() {
+        centre(&layout[focused])
+    } else {
+        layout.iter().enumerate().filter(|(i, _)| *i != this).map(|(_, l)| centre(l)).min_by(|p, q| {
+            let d = |c: &(f64, f64)| (c.0 - here.0).hypot(c.1 - here.1);
+            d(p).partial_cmp(&d(q)).unwrap()
+        })?
+    };
+    // clockwise from up; the layout's y runs down
+    let bearing = (target.0 - here.0).atan2(-(target.1 - here.1)).to_degrees().rem_euclid(360.0);
+    Some(KeyPlan { zone, rules, fill: fill?, arrow, bearing })
 }
 
 /// A parking cell's room in the side margins (issue #46): `cell` counts down the left margin, then the
@@ -462,6 +484,25 @@ mod tests {
                     // in their arrangement: the second screen to the right of, or under, the first
                     let (first, second) = (p.rules[0].rect, p.rules[4].rect);
                     assert!(second.loc.x > first.loc.x || second.loc.y > first.loc.y, "{case}: out of order");
+                    // the arrow's square in the zone, left of the plan, clear of it
+                    assert!(p.zone.contains_rect(p.arrow), "{case}: the arrow leaves the zone");
+                    assert!(p.rules.iter().all(|r| r.rect.loc.x > p.arrow.loc.x + p.arrow.size.w), "{case}: the plan over the arrow");
+                }
+            }
+            // the bearings: the laptop's panel points right and a little down to the monitor (whose centre,
+            // y 720, is lower than the panel's, 640), the monitor left and a little up; stacked, down
+            if let (Some(l), Some(m)) = (key_plan((w, h), mg, phys_mm, zones, layouts[0], 0, 0), key_plan((w, h), mg, phys_mm, zones, layouts[0], 1, 0)) {
+                assert!(l.bearing > 90.0 && l.bearing < 100.0, "{case}: {}", l.bearing);
+                assert!(m.bearing > 270.0 && m.bearing < 280.0, "{case}: {}", m.bearing);
+            }
+            if let Some(p) = key_plan((w, h), mg, phys_mm, zones, layouts[2], 0, 0) {
+                assert!((p.bearing - 180.0).abs() < 1e-9, "{case}: {}", p.bearing);
+            }
+            // three in a row, the middle one focused: the outer ones point to it, it to the nearer neighbour
+            // (both neighbours as near: the first of them)
+            for (this, want) in [(0, 90.0), (2, 270.0), (1, 270.0)] {
+                if let Some(p) = key_plan((w, h), mg, phys_mm, zones, layouts[1], this, 1) {
+                    assert!((p.bearing - want).abs() < 1e-9, "{case}: screen {this}: {}", p.bearing);
                 }
             }
         }

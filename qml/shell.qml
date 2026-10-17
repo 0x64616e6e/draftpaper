@@ -499,6 +499,10 @@ ShellRoot {
                     visible: edge.scaleBar !== null
                     band: bottomMargin; edge: edge; bar: edge.scaleBar || { zone: { x: 0, width: 0 }, measured: false, marks: [] }
                 }
+                NorthArrow {    // the key plan's arrow, to the other screen; the compositor draws the plan
+                    visible: edge.keyPlan !== null
+                    band: bottomMargin; edge: edge; plan: edge.keyPlan
+                }
                 Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
                     id: extraCells
                     model: theme.cells.slice(1)
