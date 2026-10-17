@@ -82,6 +82,8 @@ pub struct Draftpaper {
     pub leaving: Option<std::collections::HashSet<smithay::reexports::drm::control::crtc::Handle>>,
     /// the sheet blurred behind the login card (blur.rs), in millimetres: from, to, since (IPC "blur")
     pub blur: (f64, f64, std::time::Instant),
+    /// the shell (or the login card) has drawn everything once (IPC "ready"): the opening may reveal it
+    pub shell_ready: bool,
     /// the X11 window manager, once Xwayland is up (handlers/xwayland.rs)
     pub xwm: Option<smithay::xwayland::X11Wm>,
     pub xwayland_shell_state: smithay::wayland::xwayland_shell::XWaylandShellState,
@@ -205,6 +207,7 @@ impl Draftpaper {
             greeter: false,
             leaving: None,
             blur: (0.0, 0.0, std::time::Instant::now()),
+            shell_ready: false,
             xwm: None,
             xwayland_shell_state,
             config: crate::config::Config::default_config(),

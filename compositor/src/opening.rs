@@ -5,8 +5,9 @@
 //!
 //! On the TTY the picture is the framebuffer the display scans out, read back (GETFB2, as master) and
 //! imported as a texture: the very pixels, whoever drew them. Headless, DRAFTPAPER_OPENING=FILE.png
-//! stands in for it (the tests). The desktop is up when a layer surface (the shell) is on the output, a
-//! moment later; or after DRAFTPAPER_OPENING_WAIT seconds (5) whatever happens.
+//! stands in for it (the tests). The desktop is up when the shell (or the login card) says it has
+//! lettered everything once (IPC "ready"), a moment later; or after DRAFTPAPER_OPENING_WAIT seconds (5)
+//! whatever happens.
 
 use std::{
     cell::RefCell,
@@ -38,8 +39,8 @@ use crate::blur::TextureElement;
 
 /// How blurred the sheet is behind the login card, and so at the start of the reveal, in millimetres.
 pub const BLUR_MM: f64 = 6.0;
-/// After the shell's first surface, before the reveal: its first frames drawn.
-const SETTLE: Duration = Duration::from_millis(300);
+/// After the shell said it is ready, before the reveal: its last frames on screen.
+const SETTLE: Duration = Duration::from_millis(100);
 /// The picture fading into the blurred desktop, and the blur going.
 const FADE: Duration = Duration::from_millis(250);
 const REVEAL: Duration = Duration::from_millis(700);
@@ -79,7 +80,7 @@ pub fn start(output: &Output, texture: GlesTexture, size: (i32, i32)) {
 
 /// What the opening adds to a frame of `output` now: the picture over everything (its opacity going
 /// from 1 to 0) and how blurred the desktop under it is (millimetres); `alone` while only the picture is
-/// shown. None once it is over (or there was none). `up`: the desktop has a surface on this output.
+/// shown. None once it is over (or there was none). `up`: the shell has said it is ready (IPC "ready").
 pub fn frame(output: &Output, up: bool) -> Option<(TextureElement, f64, bool)> {
     let cell = output.user_data().get::<OpeningCell>()?;
     let mut slot = cell.0.borrow_mut();

@@ -173,6 +173,12 @@ impl Draftpaper {
                 self.set_blur(mm);
                 Ok(Value::Null)
             }
+            // {"request": "ready"}: the shell (or the login card) has lettered everything once; the opening
+            // reveals the desktop now (opening.rs)
+            "ready" => {
+                self.shell_ready = true;
+                Ok(Value::Null)
+            }
             // the login screen, its session started: leave what it shows on screen and exit (handoff.rs)
             "leave" if self.greeter => {
                 self.loop_signal.stop();

@@ -118,6 +118,17 @@ ShellRoot {
             root.cpuPrev = [idle, total]
         }
     }
+    // a second sample a quarter second in, so the CPU reading is there from the start (not after 2 s)
+    Timer { interval: 250; running: true; onTriggered: stat.rerun() }
+
+    // everything the title block letters is in (the readings, the network, memory and CPU): told to the
+    // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing
+    // is painted in after it (compositor/src/opening.rs)
+    readonly property bool lettered: readingsPoll.ran && wifi.ran && eth.ran && meminfo.ran && cpuBusy >= 0 && Compositor.outputs.length > 0
+    property bool readySent: false
+    onLetteredChanged: if (lettered && !readySent) { readySent = true; readyTimer.start() }
+    Timer { id: readyTimer; interval: 150; onTriggered: Compositor.send({ request: "ready" }) }
+
     readonly property real brightness: {
         const v = backlight.output.split("\n").map(Number)
         return v.length === 2 && v[1] > 0 ? v[0] / v[1] : -1

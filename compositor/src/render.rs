@@ -83,7 +83,7 @@ pub fn output_elements(
 ) -> Vec<OutputElements> {
     // the opening (opening.rs): the picture the displays showed, alone until the desktop is up, then
     // fading over the desktop while its blur goes
-    let up = layer_map_for_output(output).layers().next().is_some();
+    let up = state.shell_ready;
     let opening = crate::opening::frame(output, up);
     let mut blur_mm = state.blur_mm();
     let picture = match opening {

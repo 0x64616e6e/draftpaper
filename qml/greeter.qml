@@ -95,6 +95,10 @@ ShellRoot {
     }
 
     Component.onCompleted: if (user) { blur(true); begin() }
+    // the card placed (the outputs known) and drawn: the compositor's opening may reveal it (opening.rs)
+    readonly property bool placed: Compositor.outputs.length > 0
+    onPlacedChanged: if (placed) readyTimer.start()
+    Timer { id: readyTimer; interval: 150; onTriggered: Compositor.send({ request: "ready" }) }
     // after a failure, a new session (the reader listening again)
     Timer { id: again; interval: 300; onTriggered: root.begin() }
 
