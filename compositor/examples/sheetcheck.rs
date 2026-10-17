@@ -10,6 +10,7 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM keyplan THIS FOCUSED X,Y,W,H X,Y,W,H...
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lum X Y        (a pixel's lightness)
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -45,6 +46,13 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "lum") {
+        // a pixel's lightness (0 to 255), for a test's own comparison
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<u32>().ok()).expect("lum X Y");
+        let p = img.get_pixel(v(6), v(7));
+        println!("{:.0}", 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "rulers") {
         let v = |i: usize| args.get(i).and_then(|v| v.parse::<f64>().ok()).expect("rulers ZERO_X_MM ZERO_Y_MM");
         rulers_check(&img, scale, phys_mm, margin_mm, (v(6), v(7)), &args[1]);

@@ -89,6 +89,7 @@ chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d
 | 0 | Level both |
 | s | Hold the pointer to their millimetres (Shift: ten), or let it go |
 | Type in the panel's H, V, Enter | Turn a ruler to that angle |
+| p · the panel's × · its tab | Hide the panel by the zero (a tab stays), or show it |
 
 `draftpaper rulers` does what Mod+r does.
 

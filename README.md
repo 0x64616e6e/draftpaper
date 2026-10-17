@@ -216,7 +216,8 @@ The zero moves 1 mm a step (10 with Shift): the arrows, or drag a ruler. A ruler
 An inclined ruler shows its degrees on an arc from its level line. `l` locks the two at the angle between
 them (any angle: turning one turns both), `0` levels them, `s` lets the pointer go or holds it again,
 Escape puts them away. The panel by the zero point says where it is and takes the angles typed, for
-precise alignment. The rulers take clicks only on themselves: the windows around them keep theirs.
+precise alignment; `p` (or its ×) hides it when it is in the way of the angles, leaving a small tab by
+the zero that brings it back. The rulers take clicks only on themselves: the windows around them keep theirs.
 
 ## Displays
 

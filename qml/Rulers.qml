@@ -13,7 +13,8 @@
 // the windows, taking clicks only on the rulers and the panel; the keyboard once clicked.
 //
 // Keys: arrows move the zero; [ ] turn the horizontal ruler, , . the vertical one (with Shift by 15°); l
-// locks and unlocks; s holds the pointer or lets it go; 0 levels both; Escape puts them away.
+// locks and unlocks; s holds the pointer or lets it go; 0 levels both; p hides the panel (a tab by the zero
+// brings it back) or shows it; Escape puts them away.
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
@@ -51,6 +52,7 @@ PanelWindow {
     property real angleV: 90
     property bool isLocked: false
     property bool snapOn: true            // the pointer held to the millimetres
+    property bool panelShown: true        // the panel by the zero, or only its tab (it may hide the angles)
     readonly property real zx: frameX + zeroX * mm
     readonly property real zy: frameY + zeroY * mm
     readonly property real wide: 16 * mm  // a ruler's width
@@ -95,6 +97,7 @@ PanelWindow {
     onAngleHChanged: changed()
     onAngleVChanged: changed()
     onSnapOnChanged: changed()
+    onPanelShownChanged: changed()
     property bool dragging: false
     onDraggingChanged: changed()
 
@@ -128,6 +131,7 @@ PanelWindow {
             else if (k === Qt.Key_L) rulers.isLocked = !rulers.isLocked
             else if (k === Qt.Key_S) rulers.snapOn = !rulers.snapOn
             else if (k === Qt.Key_0) rulers.level()
+            else if (k === Qt.Key_P) rulers.panelShown = !rulers.panelShown
             else return
             e.accepted = true
         }
@@ -290,12 +294,31 @@ PanelWindow {
     // ---- the panel by the zero point ----
     Rectangle {
         id: panel
+        visible: rulers.panelShown
         readonly property bool rightSide: rulers.zx + rulers.wide / 2 + 5 * rulers.mm + width < rulers.frameX + rulers.frameW
         x: rightSide ? rulers.zx + rulers.wide / 2 + 5 * rulers.mm : rulers.zx - rulers.wide / 2 - 5 * rulers.mm - width
         y: Math.min(rulers.zy + rulers.wide / 2 + 5 * rulers.mm, rulers.frameY + rulers.frameH - height)
         width: 50 * rulers.mm; height: column.implicitHeight + 4 * rulers.mm
         color: Qt.rgba(rulers.ink.r, rulers.ink.g, rulers.ink.b, 0.93)
         MouseArea { anchors.fill: parent; onPressed: keys.forceActiveFocus() }
+        // hide the panel (p): its tab stays by the zero to bring it back
+        Rectangle {
+            anchors { top: parent.top; right: parent.right; margins: 1.2 * rulers.mm }
+            width: 4.2 * rulers.mm; height: width
+            color: hideArea.containsMouse ? Qt.rgba(1, 1, 1, 0.12) : "transparent"
+            Text {
+                anchors.centerIn: parent
+                text: "×"
+                font.family: Fonts.mono; font.pixelSize: 3.2 * rulers.mm; color: "#EDE3D2"
+            }
+            MouseArea {
+                id: hideArea
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: { rulers.panelShown = false; keys.forceActiveFocus() }
+            }
+        }
         Column {
             id: column
             x: 2.4 * rulers.mm; y: 2 * rulers.mm; spacing: 1.6 * rulers.mm
@@ -363,6 +386,26 @@ PanelWindow {
         }
     }
 
+    // ---- the panel hidden: its tab, where its corner by the zero was ----
+    Rectangle {
+        id: tab
+        visible: !rulers.panelShown
+        width: 6 * rulers.mm; height: width
+        x: panel.rightSide ? rulers.zx + rulers.wide / 2 + 5 * rulers.mm : rulers.zx - rulers.wide / 2 - 5 * rulers.mm - width
+        y: Math.min(rulers.zy + rulers.wide / 2 + 5 * rulers.mm, rulers.frameY + rulers.frameH - height)
+        color: Qt.rgba(rulers.ink.r, rulers.ink.g, rulers.ink.b, 0.93)
+        Text {
+            anchors.centerIn: parent
+            text: "∠"
+            font.family: Fonts.mono; font.pixelSize: 3.4 * rulers.mm; font.weight: Font.Medium; color: "#EDE3D2"
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: { rulers.panelShown = true; keys.forceActiveFocus() }
+        }
+    }
+
     // ---- dragging ----
     // where a drag began, on the sheet, and the zero then; and whether it turns (Ctrl) or moves
     property point pressAt: Qt.point(0, 0)
@@ -415,7 +458,8 @@ PanelWindow {
         }
         band(angleH)
         band(angleV)
-        add(panel.x, panel.y, panel.width, panel.height)
+        if (panelShown) add(panel.x, panel.y, panel.width, panel.height)
+        else add(tab.x, tab.y, tab.width, tab.height)
         pieces = list
     }
     mask: Region { regions: rulers.pieces }

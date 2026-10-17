@@ -266,6 +266,7 @@ ShellRoot {
             rulers.angleH = angleH; rulers.angleV = angleV
         }
         function lock(on: bool): void { rulers.isLocked = on }
+        function panel(on: bool): void { rulers.panelShown = on }
         function turn(which: string, to: real): void { which === "v" ? rulers.turnV(to) : rulers.turnH(to) }
         function state(): string {
             return rulers.visible ? JSON.stringify({ zero: [rulers.zeroX, rulers.zeroY], angles: [rulers.angleH, rulers.angleV], locked: rulers.isLocked, snap: rulers.snapOn }) : ""

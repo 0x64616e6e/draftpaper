@@ -4,7 +4,8 @@
 # the shell's surface up, a tick at every true millimetre on the horizontal one's edge
 # (examples/sheetcheck.rs). The pointer, moved a third of a pixel at a time (pointer_by), keeps to whole
 # millimetres from the zero, and moves (small moves add up); the same with the rulers turned to 30° and
-# 120° (along each ruler); put away, it moves freely again. SHOT=FILE keeps the screenshot of the rulers.
+# 120° (along each ruler); put away, it moves freely again. The panel by the zero hides (its tab stays)
+# and shows. SHOT=FILE keeps the screenshot of the rulers.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -51,6 +52,27 @@ sleep 0.3
 mv "$(ls "$t"/Pictures/*.png | head -n 1)" "$t/rulers.png"
 [ -n "${SHOT:-}" ] && cp "$t/rulers.png" "$SHOT"
 "$check" "$t/rulers.png" 1.5 6.4 6 rulers 150 90 | sed 's/^/  /' || fail=1
+# the panel by the zero (right of it and below, 50 mm wide): dark where it is; hidden (p), the rulers and
+# their angles show there again, and its tab stays by the zero
+shot() {
+    rm -f "$t"/Pictures/*.png
+    kill -USR1 $nest
+    i=0
+    until ls "$t"/Pictures/*.png > /dev/null 2>&1 || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    sleep 0.3
+    mv "$(ls "$t"/Pictures/*.png | head -n 1)" "$1"
+}
+# its middle: 13 mm right of the zero and 25 more; 13 mm below it and 6 more (physical pixels)
+px=$(awk 'BEGIN { printf "%d", 1001 + 38 * 6.4 }'); py=$(awk 'BEGIN { printf "%d", 617 + 19 * 6.4 }')
+ok "the panel there" "$([ "$("$check" "$t/rulers.png" 1.5 6.4 6 lum $px $py)" -lt 90 ] && echo dark)" "dark"
+ipc panel false
+sleep 0.5
+shot "$t/hidden.png"
+ok "hidden: not there" "$([ "$("$check" "$t/hidden.png" 1.5 6.4 6 lum $px $py)" -gt 120 ] && echo light)" "light"
+# (a corner of it, clear of its sign)
+tx=$(awk 'BEGIN { printf "%d", 1001 + 13.6 * 6.4 }'); ty=$(awk 'BEGIN { printf "%d", 617 + 18.4 * 6.4 }')
+ok "and its tab by the zero" "$([ "$("$check" "$t/hidden.png" 1.5 6.4 6 lum $tx $ty)" -lt 90 ] && echo dark)" "dark"
+ipc panel true
 
 # the pointer, a third of a pixel at a time: each place whole millimetres from the zero along each ruler
 # (H, V degrees), and somewhere else by the end. The zero: inside the frame's line (26 + 2/1.5 logical
