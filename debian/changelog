@@ -1,3 +1,20 @@
+draftpaper (0.5.1) unstable; urgency=high
+
+  * Security (#41): `draftpaper tmux restore` no longer types a saved
+    program back when one of its words holds a control character. A file
+    name with Ctrl+C and Enter in it, opened in a tmux pane, could run a
+    command of its own the next time the tmux server started.
+  * The login screen's fingerprint glyph lights up while the reader
+    listens: Qt 6.8's curve renderer did not repaint the stroke colour
+    changed after the first frame; the glyph is now the ink, faint by its
+    opacity.
+  * The dependencies are audited against RustSec on every change and
+    weekly; SECURITY.md says how to report a vulnerability privately.
+  * The README's pictures are new, in Soft Glow, the settings' wallpaper
+    page among them.
+
+ -- 0x64616e6e <daniel@este.systems>  Sat, 17 Oct 2026 22:21:57 +0300
+
 draftpaper (0.5.0) unstable; urgency=medium
 
   * The session comes back after a logout or a reboot (#38): every

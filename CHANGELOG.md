@@ -3,7 +3,9 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.5.1 (2026-10-17)
+
+A security fix (#41), and the login screen's fingerprint glyph lit.
 
 - **Security: tmux restore no longer types control characters.** A program saved in a tmux pane is typed
   back into its shell, and a file name holding control characters (Ctrl+C, Enter) could run a command of

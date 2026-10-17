@@ -46,7 +46,7 @@ as they were (`[session]` under [Configuration](#configuration)). What changed f
 Draftpaper is a Debian package (Debian 13, amd64). It needs Quickshell 0.3 or later, which Debian 13
 provides in trixie-backports:
 
-    sudo apt install -t trixie-backports quickshell ./draftpaper_0.5.0_amd64.deb   # from the latest release
+    sudo apt install -t trixie-backports quickshell ./draftpaper_0.5.1_amd64.deb   # from the latest release
 
 Install both from backports in one go: Quickshell brings newer PipeWire libraries from there, and the
 recommended wireplumber has to come from the same place.
