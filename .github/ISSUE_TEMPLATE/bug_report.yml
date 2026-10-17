@@ -1,0 +1,80 @@
+name: Bug report
+description: Something in Draftpaper doesn't work or looks wrong
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The more of the fields below you fill in, the sooner it can be fixed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The keys, clicks or commands that lead to it, one per line. Say if it happens every time.
+      placeholder: |
+        1. Open two terminals on workspace 1
+        2. Mod+Shift+l
+        3. ...
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Tiling, workspaces, parked windows
+        - The sheet, margins or title block
+        - Launcher
+        - Lock screen
+        - Login screen (greetd)
+        - Session restore
+        - Themes, settings, wallpaper
+        - Applications' colours (GTK, Qt, terminals, editors)
+        - Displays, scaling, docking
+        - Install and packaging
+        - Something else
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Draftpaper version
+      description: The output of `draftpaper version`.
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: System
+      description: Distribution and release, and the Quickshell version (`qs --version`).
+      placeholder: Debian 13, Quickshell 0.3.1
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and displays
+      description: |
+        The machine and graphics (Intel, AMD, NVIDIA), and the displays: their size, resolution and how they are connected.
+        For anything about sizes or the sheet's geometry, the output of `draftpaper-compositor msg outputs` helps a lot.
+      placeholder: ThinkPad T14 Gen 6, Intel graphics; built-in 14" 1920x1200, a 27" 4K over USB-C
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        From around the time it happened: `journalctl -b -t draftpaper -t draftpaper-greeter`
+        (and `journalctl --user -b -u draftpaper-shell` for the margins and title block).
+        Look them over for anything private before posting.
+      render: text
+  - type: textarea
+    id: pictures
+    attributes:
+      label: Screenshots
+      description: A screenshot or photo often says it at once (Shift+Print takes one into ~/Pictures). Drag it in here.

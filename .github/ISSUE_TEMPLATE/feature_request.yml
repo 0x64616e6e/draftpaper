@@ -1,0 +1,30 @@
+name: Idea
+description: Something Draftpaper could do, or do differently
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you'd like to do
+      description: The situation and what gets in the way today. A use case says more than a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How it could work
+      description: Keys, where it would show on the sheet, how other desktops do it. A sketch is welcome.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where
+      options:
+        - Tiling, workspaces, parked windows
+        - The sheet, margins or title block
+        - Launcher
+        - Lock or login screen
+        - Session restore
+        - Themes, settings, wallpaper
+        - Applications' colours
+        - Displays
+        - Something else
