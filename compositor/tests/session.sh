@@ -81,6 +81,22 @@ ok "every window back where it was" "$after" "$before"
 ok "the entry's terminals started in their directories" "$(grep -c "session: started drafttest (foot --app-id=drafttest) in $t/\(one\|three\)$" "$t/log")" "2"
 ok "the other by its command line, in its directory" "$(grep -c "session: started draftother (foot --app-id=draftother) in $t/two$" "$t/log")" "1"
 ok "the session file not written half back" "$(saved)" "3"
+# the windows put back on a workspace not shown, or parked, were told to draw too: shown, they have
+# drawn (what the client draws is as large as its tile)
+drawn() {
+    DRAFTPAPER_SOCKET=$sock "$comp" msg windows | tr -d ' ,"' | awk -F: -v app="$1" '
+        /^app_id/{a=$2} /^geometry:\{/{g=1} /^surface:\{/{g=0; s=1} s&&/^width/{w=$2; s=0}
+        /^xwayland/{if (a == app) print (w > 100 ? "drawn" : "blank " w)}' | sort | uniq -c | awk '{$1=$1; print}'
+}
+msg workspace 2
+sleep 0.5
+ok "the window put back on workspace 2 draws once shown" "$(drawn draftother)" "1 drawn"
+msg workspace 1
+# parked: the one shown goes to a cell too, then, nothing showing, both come back
+msg park
+msg park
+sleep 0.5
+ok "the parked one draws once back" "$(drawn drafttest)" "2 drawn"
 kill "$comp_pid"
 sleep 1
 

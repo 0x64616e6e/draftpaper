@@ -41,9 +41,17 @@ impl CompositorHandler for Draftpaper {
             }
             if let Some(i) = self.pending.iter().position(|w| w.toplevel().unwrap().wl_surface() == &root) {
                 let window = self.pending.remove(i);
-                self.place(window);
+                self.place(window.clone());
+                // told to draw wherever it went: a window placed out of sight (on a workspace not shown,
+                // or parked: a restored session's) would otherwise wait for it, and never draw
+                if let Some(t) = window.toplevel() {
+                    if !t.is_initial_configure_sent() {
+                        t.send_configure();
+                    }
+                }
             }
-            let window = self.space.elements().find(|w| w.wl_surface().as_deref() == Some(&root)).cloned();
+            // any window of ours, shown or not, keeps up with what its client commits
+            let window = self.window_where(|w| w.wl_surface().as_deref() == Some(&root));
             if let Some(window) = window {
                 window.on_commit();
                 self.float_if_fixed(&window);

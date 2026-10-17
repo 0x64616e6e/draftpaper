@@ -13,6 +13,8 @@ What changed in each release, newest first. The Debian package's own record, wit
   waits for the windows a moment before it reveals the desktop. `[session] restore = false` turns it off;
   `skip` leaves applications out. The applications restore their own state: a browser its tabs, an editor
   its files.
+- Windows put back on a workspace not shown, or parked, no longer stay blank when shown: every new
+  window is told to draw wherever it goes.
 - **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,
   nothing of the windows, and one field with the fingerprint reader listening. When the reader fails or
   gives up, or you start typing, the password's dots follow its glyph. It is Draftpaper's own
