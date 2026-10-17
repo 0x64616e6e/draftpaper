@@ -48,7 +48,11 @@ shot() {
             sleep 0.5
         done
     fi
-    sleep 4
+    # the shell up: its title block on the output (the compositor draws the block's rules once it is;
+    # with a large wallpaper that can take longer than any fixed wait), then a moment for the frames
+    i=0
+    until DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
+    sleep 1.5
     rm -f "$t"/Pictures/*.png
     # the magnifier: a screenshot without it, then the pointer at $4 $5 and the lens out
     if [ "${3:-}" = lens ]; then

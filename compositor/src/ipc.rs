@@ -11,7 +11,8 @@
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
 //! {"event": "workspaces", "workspaces": [...]} (likewise outputs, windows): clients replace their model
 //! and never apply deltas. Outputs carry the sheet's geometry (frame, margin, zones, parking cells), for
-//! the shell; windows say whether they are parked, and in which cell.
+//! the shell, and the layer surfaces on them by namespace (as they are when asked: no event when they
+//! change); windows say whether they are parked, and in which cell.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -259,6 +260,8 @@ impl Draftpaper {
                         "margin_ink": margin_ink(&s.output),
                         // the title block and its cells (title.rs), lettered by the shell: inside their rules
                         "title": title_block(s, s.output.current_scale().fractional_scale()),
+                        // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
+                        "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
                 })
                 .collect(),
