@@ -129,6 +129,65 @@ pub fn title_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) ->
     TitleBlock { rect: rect(left, top, right, bottom), inner: rect(ix0, iy0, ix1, iy1), cells, rules }
 }
 
+/// The key plan (issue #47): with several screens, a small plan of them all in the bottom margin's zone
+/// left of the scale bar, as a drawing set marks which part of the whole a sheet shows. Each screen an
+/// outline in their arrangement, scaled to fit the zone and centred in it, a pixel apart from its
+/// neighbours; the focused screen's outline twice as heavy; this screen filled.
+#[derive(Debug, Clone)]
+pub struct KeyPlan {
+    /// the zone's room in the margin, between its ticks
+    pub zone: Rectangle<i32, Physical>,
+    /// the outlines, none over another
+    pub rules: Vec<Rule>,
+    /// this screen, inside its outline
+    pub fill: Rectangle<i32, Physical>,
+}
+
+/// The key plan of an output of `size` physical pixels, `margin` from margin(), `mm` physical pixels per
+/// millimetre, cut into `zones`, among the screens `layout` (each x, y, width, height, in the layout's
+/// logical pixels): `this` one and the `focused` one. None with one screen, fewer than four zones across,
+/// or a screen too small to draw.
+pub fn key_plan(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), layout: &[(i32, i32, i32, i32)], this: usize, focused: usize) -> Option<KeyPlan> {
+    let n = zones.0;
+    if layout.len() < 2 || n < 4 || this >= layout.len() {
+        return None;
+    }
+    let (a, b) = (tick(size.0, margin, n, n - 3).0 + 1, tick(size.0, margin, n, n - 2).0);
+    let rect = |x: i32, y: i32, w: i32, h: i32| Rectangle::<i32, Physical>::new((x, y).into(), (w, h).into());
+    let zone = rect(a, size.1 - margin, b - a, margin);
+    let pad = (1.5 * mm).round() as i32;
+    let (y0, y1) = (size.1 - margin + (0.2 * margin as f64).round() as i32, size.1 - (0.2 * margin as f64).round() as i32);
+    let (aw, ah) = ((b - a - 2 * pad) as f64, (y1 - y0) as f64);
+    let (bx, by) = (layout.iter().map(|l| l.0).min()?, layout.iter().map(|l| l.1).min()?);
+    let (bw, bh) = ((layout.iter().map(|l| l.0 + l.2).max()? - bx) as f64, (layout.iter().map(|l| l.1 + l.3).max()? - by) as f64);
+    if aw <= 0.0 || ah <= 0.0 || bw <= 0.0 || bh <= 0.0 {
+        return None;
+    }
+    let s = (aw / bw).min(ah / bh);
+    let (ox, oy) = (a + pad + ((aw - bw * s) / 2.0).round() as i32, y0 + ((ah - bh * s) / 2.0).round() as i32);
+    let mut rules = Vec::new();
+    let mut fill = None;
+    for (i, &(x, y, w, h)) in layout.iter().enumerate() {
+        // a pixel short on the right and at the bottom: apart from a neighbour that starts there
+        let (x0, y0) = (ox + ((x - bx) as f64 * s).round() as i32, oy + ((y - by) as f64 * s).round() as i32);
+        let (x1, y1) = (ox + ((x + w - bx) as f64 * s).round() as i32 - 1, oy + ((y + h - by) as f64 * s).round() as i32 - 1);
+        let (w, h) = (x1 - x0, y1 - y0);
+        if w < 4 || h < 4 {
+            return None;
+        }
+        let t = if i == focused && w >= 6 && h >= 6 { 2 } else { 1 };
+        rules.push(Rule { rect: rect(x0, y0, w, t), heavy: i == focused });
+        rules.push(Rule { rect: rect(x0, y1 - t, w, t), heavy: i == focused });
+        rules.push(Rule { rect: rect(x0, y0 + t, t, h - 2 * t), heavy: i == focused });
+        rules.push(Rule { rect: rect(x1 - t, y0 + t, t, h - 2 * t), heavy: i == focused });
+        if i == this {
+            fill = Some(rect(x0 + t, y0 + t, w - 2 * t, h - 2 * t));
+        }
+    }
+    rules.retain(|r| r.rect.size.w > 0 && r.rect.size.h > 0);
+    Some(KeyPlan { zone, rules, fill: fill? })
+}
+
 /// A parking cell's room in the side margins (issue #46): `cell` counts down the left margin, then the
 /// right (parking.rs), one per zone; between its zone ticks (whose pixels it leaves out), from the screen's
 /// edge to the frame's line. None past the last cell.
@@ -367,6 +426,43 @@ mod tests {
             }
             for p in pixels(&t.inner) {
                 assert!(seen.contains(&p), "{case}: {p:?} neither a rule nor a cell");
+            }
+        }
+    }
+
+    #[test]
+    fn the_key_plan_draws_every_screen() {
+        // the laptop's panel with a 27" monitor to its right, a little lower; and three side by side; and two stacked
+        let layouts: [&[(i32, i32, i32, i32)]; 3] = [&[(0, 240, 1280, 800), (1280, 0, 2560, 1440)], &[(0, 0, 1920, 1080), (1920, 0, 1920, 1080), (3840, 0, 1920, 1080)], &[(0, 0, 2560, 1440), (0, 1440, 2560, 1440)]];
+        for ((w, h), phys_mm, scale, margin_mm) in cases() {
+            let mg = margin(margin_mm, phys_mm / scale, scale);
+            let zones = zones((w, h), mg, phys_mm);
+            let case = format!("{w}x{h} {phys_mm} px/mm, scale {scale}, margin {margin_mm} mm");
+            assert!(key_plan((w, h), mg, phys_mm, zones, &layouts[0][..1], 0, 0).is_none(), "{case}: one screen, no plan");
+            for layout in layouts {
+                for this in 0..layout.len() {
+                    let Some(p) = key_plan((w, h), mg, phys_mm, zones, layout, this, 0) else {
+                        assert!(zones.0 < 4 || margin_mm < 4.0 || layout.len() > 2, "{case}: no plan for {layout:?}");
+                        continue;
+                    };
+                    assert_eq!(p.zone.loc.x, tick(w, mg, zones.0, zones.0 - 3).0 + 1, "{case}: left of the scale bar's zone");
+                    let mut seen = std::collections::HashSet::new();
+                    for r in &p.rules {
+                        for px in pixels(&r.rect) {
+                            assert!(seen.insert(px), "{case}: {px:?} drawn twice");
+                            assert!(p.zone.contains(px), "{case}: {px:?} off the zone");
+                        }
+                    }
+                    assert_eq!(p.rules.len(), 4 * layout.len(), "{case}: four sides a screen");
+                    for px in pixels(&p.fill) {
+                        assert!(!seen.contains(&px), "{case}: the fill over an outline");
+                    }
+                    // the focused one heavier, when there is room
+                    assert!(p.rules[0].heavy && !p.rules[4].heavy, "{case}");
+                    // in their arrangement: the second screen to the right of, or under, the first
+                    let (first, second) = (p.rules[0].rect, p.rules[4].rect);
+                    assert!(second.loc.x > first.loc.x || second.loc.y > first.loc.y, "{case}: out of order");
+                }
             }
         }
     }

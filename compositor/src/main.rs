@@ -48,17 +48,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(handoff::holder(&args[1..]));
     }
 
-    // draftpaper-compositor [--tty | --headless WxH [--scale S]] [--session | --greeter] [--command PROGRAM] | msg REQUEST...
+    // draftpaper-compositor [--tty | --headless WxH[,WxH...] [--scale S]] [--session | --greeter] [--command PROGRAM] | msg REQUEST...
     // the TTY backend (the displays and input devices themselves) only when asked for: a compositor
     // started without it from inside a session, with no display to nest in, must not take the hardware
     let tty = args.iter().any(|a| a == "--tty");
     let value = |flag: &str| args.iter().position(|a| a == flag).and_then(|i| args.get(i + 1)).cloned();
+    // --headless WxH[,WxH...]: an output each, side by side
     let headless = value("--headless").map(|v| {
-        let (w, h) = v.split_once('x').and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?))).unwrap_or_else(|| {
-            eprintln!("draftpaper: --headless WIDTHxHEIGHT, as 3840x2160");
+        let sizes: Option<Vec<(i32, i32)>> =
+            v.split(',').map(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse::<i32>().ok()?, h.parse::<i32>().ok()?)))).collect();
+        let sizes = sizes.filter(|s| !s.is_empty()).unwrap_or_else(|| {
+            eprintln!("draftpaper: --headless WIDTHxHEIGHT[,WIDTHxHEIGHT...], as 3840x2160 or 1920x1200,2560x1440");
             std::process::exit(2);
         });
-        (w, h, value("--scale").and_then(|s| s.parse::<f64>().ok()).unwrap_or(1.0))
+        (sizes, value("--scale").and_then(|s| s.parse::<f64>().ok()).unwrap_or(1.0))
     });
     if !tty && headless.is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() && std::env::var_os("DISPLAY").is_none() {
         eprintln!("draftpaper: no display to nest in: --tty to run on the displays themselves (a login session), --headless WxH for tests");
@@ -98,8 +101,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
         std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
-    } else if let Some((w, h, scale)) = headless {
-        if let Err(e) = crate::headless::init_headless(&mut event_loop, &mut data, (w, h), scale) {
+    } else if let Some((sizes, scale)) = &headless {
+        if let Err(e) = crate::headless::init_headless(&mut event_loop, &mut data, sizes, *scale) {
             eprintln!("draftpaper: headless: {e}");
             std::process::exit(1);
         }

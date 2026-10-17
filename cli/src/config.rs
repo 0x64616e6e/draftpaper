@@ -9,7 +9,8 @@
 //!
 //!     [title]                       # the title block's fixed cells: project (the host name), drawn (you);
 //!                                   # scale = false takes the scale bar away (the compositor's);
-//!                                   # revisions = true shows the revision block (qml/RevisionBlock.qml)
+//!                                   # revisions = true shows the revision block (qml/RevisionBlock.qml);
+//!                                   # key_plan = false takes the key plan away (the compositor's)
 //!     [[cell]]                      # cells of your own: label, command, interval, left, right
 //!     [alerts]                      # cpu = 85, nvme = 60 (°C), fan = 5000 (RPM), battery = 15 (%)
 //!     [idle]                        # screens_off = 15, lock_after = 0 (minutes), lock_on_sleep = false

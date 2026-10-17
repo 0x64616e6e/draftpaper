@@ -63,6 +63,23 @@ pub struct Screen {
 }
 
 impl Draftpaper {
+    /// Screen `i`'s key plan (title.rs's key_plan): every screen in its place in the layout, `i` filled,
+    /// the active one heavier. None when switched off ([title] key_plan) or with one screen.
+    pub fn key_plan(&self, i: usize) -> Option<crate::title::KeyPlan> {
+        if !self.config.key_plan || self.screens.len() < 2 {
+            return None;
+        }
+        let layout: Vec<(i32, i32, i32, i32)> =
+            self.screens.iter().filter_map(|s| self.space.output_geometry(&s.output)).map(|g| (g.loc.x, g.loc.y, g.size.w, g.size.h)).collect();
+        if layout.len() != self.screens.len() {
+            return None;
+        }
+        let s = self.screens.get(i)?;
+        let scale = s.output.current_scale().fractional_scale();
+        let margin = crate::title::margin(s.margin_mm, s.mm, scale);
+        crate::title::key_plan(crate::render::mode_size(&s.output), margin, s.phys_mm, s.grid.zones, &layout, i, self.active)
+    }
+
     /// Add a screen for `output`, already mapped in the space; `mm` in physical pixels per millimetre,
     /// `measured` when it comes from the display's size (or config.toml), not the 160 PPI guess.
     pub fn add_screen(&mut self, output: Output, mm: f64, margin_mm: f64, measured: bool) {

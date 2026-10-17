@@ -5,6 +5,12 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **A key plan** with several screens (#47), as a drawing set shows which part of the whole a sheet is: in
+  the bottom margin left of the scale bar, every screen's outline in their arrangement, this one filled,
+  the focused one twice as heavy; drawn by the compositor on whole pixels. `[title] key_plan = false`
+  takes it away.
+- The headless backend drives several outputs side by side (`--headless 1920x1200,2560x1440`, a
+  `DRAFTPAPER_MM` each), so `make pixels` checks the multi-screen sheet (tests/keyplan.sh).
 - **Hatching** for parked windows' cells (#46), as a drawing hatches a cut: one-pixel lines at 45°, 1.5 mm
   apart, laid from the screen's corner so they run on from cell to cell, in the margins' ink at a low
   strength; broken around the zone letter and the title, which the shell reports to the compositor.

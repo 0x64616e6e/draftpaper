@@ -62,6 +62,9 @@ struct TitleRules(RefCell<Vec<SolidColorBuffer>>);
 type HatchKey = (Rectangle<i32, smithay::utils::Physical>, i32, [u32; 3], u32, Vec<(i32, i32)>);
 struct Hatches(RefCell<HashMap<usize, (HatchKey, MemoryRenderBuffer)>>);
 
+/// The key plan's outlines and fill (title.rs), kept with the output.
+struct PlanRules(RefCell<Vec<SolidColorBuffer>>);
+
 /// The revision block's rules (title.rs), kept with the output.
 struct RevisionRules(RefCell<Vec<SolidColorBuffer>>);
 
@@ -495,6 +498,27 @@ fn scene_elements(
         let t = &sheet.theme;
         let a = (0.85 * t.sheet.pattern_strength + 0.1).min(1.0);
         for (buffer, r) in buffers.iter_mut().zip(&ink) {
+            buffer.update((r.size.w, r.size.h), [t.ink[0] * a, t.ink[1] * a, t.ink[2] * a, a]);
+            elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, r.loc, 1.0, 1.0, Kind::Unspecified)));
+        }
+        drop(buffers);
+        // the key plan (title.rs), when the shell letters the margins: the screens' outlines in the ink, the
+        // active one as heavy as the frame, this one filled lightly
+        let plan = (margins && !bare).then(|| state.screens.iter().position(|s| &s.output == output).and_then(|i| state.key_plan(i))).flatten();
+        let buffers = output.user_data().get_or_insert(|| PlanRules(RefCell::new(Vec::new())));
+        let mut buffers = buffers.0.borrow_mut();
+        let parts: Vec<(Rectangle<i32, smithay::utils::Physical>, f32)> = plan
+            .map(|p| {
+                let pattern = sheet.theme.sheet.pattern_strength;
+                let mut v: Vec<_> = p.rules.iter().map(|r| (r.rect, if r.heavy { 0.85 * pattern + 0.1 } else { 0.6 * pattern + 0.1 })).collect();
+                v.push((p.fill, 0.35 * pattern + 0.05));
+                v
+            })
+            .unwrap_or_default();
+        buffers.resize_with(parts.len(), SolidColorBuffer::default);
+        let t = &sheet.theme;
+        for (buffer, (r, a)) in buffers.iter_mut().zip(&parts) {
+            let a = a.min(1.0);
             buffer.update((r.size.w, r.size.h), [t.ink[0] * a, t.ink[1] * a, t.ink[2] * a, a]);
             elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, r.loc, 1.0, 1.0, Kind::Unspecified)));
         }

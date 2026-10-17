@@ -8,6 +8,7 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM scale bar|nts|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM revisions shown|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM keyplan THIS FOCUSED X,Y,W,H X,Y,W,H...
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -43,6 +44,18 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "keyplan") {
+        let n = |i: usize| args.get(i).and_then(|v| v.parse::<usize>().ok()).expect("keyplan THIS FOCUSED X,Y,W,H...");
+        let layout: Vec<(i32, i32, i32, i32)> = args[8..]
+            .iter()
+            .map(|l| {
+                let v: Vec<i32> = l.split(',').filter_map(|x| x.parse().ok()).collect();
+                (v[0], v[1], v[2], v[3])
+            })
+            .collect();
+        keyplan_check(&img, scale, phys_mm, margin_mm, &layout, n(6), n(7), &args[1]);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "hatch") {
         let cell: usize = args.get(6).and_then(|c| c.parse().ok()).expect("hatch CELL SPACING_MM|none");
         let spacing = args.get(7).and_then(|s| s.parse::<f64>().ok());
@@ -211,6 +224,72 @@ fn main() {
 }
 
 /// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+/// The key plan (title.rs's key_plan) of screen `this` among `layout`, `focused` the active one: every
+/// pixel of the outlines drawn, this screen's inside filled, the others' insides paper. Drawn: apart from
+/// the paper (the median of the zone's pixels) by more than 25 for the outlines, 12 for the fill.
+fn keyplan_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, layout: &[(i32, i32, i32, i32)], this: usize, focused: usize, name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let Some(p) = title::key_plan((w, h), mg, phys_mm, title::zones((w, h), mg, phys_mm), layout, this, focused) else {
+        println!("{name}: no key plan");
+        std::process::exit(1);
+    };
+    let lum = |x: i32, y: i32| {
+        let q = img.get_pixel(x as u32, y as u32);
+        0.2126 * q[0] as f64 + 0.7152 * q[1] as f64 + 0.0722 * q[2] as f64
+    };
+    let mut all: Vec<f64> = pixels(&p.zone).map(|(x, y)| lum(x, y)).collect();
+    all.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let paper = all[all.len() / 2];
+    let mut faults = Vec::new();
+    for r in &p.rules {
+        for (x, y) in pixels(&r.rect) {
+            if (lum(x, y) - paper).abs() <= 25.0 {
+                faults.push(format!("outline pixel ({x}, {y}) not drawn"));
+            }
+        }
+    }
+    let filled = pixels(&p.fill).filter(|&(x, y)| (lum(x, y) - paper).abs() > 12.0).count();
+    if filled * 10 < p.fill.size.w as usize * p.fill.size.h as usize * 9 {
+        faults.push(format!("this screen not filled ({filled} pixels)"));
+    }
+    // the other screens' insides: inside their outlines, not this one's fill, not an outline
+    let outline: std::collections::HashSet<(i32, i32)> = p.rules.iter().flat_map(|r| pixels(&r.rect).collect::<Vec<_>>()).collect();
+    let (mut inside, mut drawn) = (0, 0);
+    for (i, r) in p.rules.chunks(4).enumerate() {
+        if i == this {
+            continue;
+        }
+        let (top, bottom) = (r[0].rect, r[1].rect);
+        for y in top.loc.y + top.size.h..bottom.loc.y {
+            for x in top.loc.x..top.loc.x + top.size.w {
+                if !outline.contains(&(x, y)) {
+                    inside += 1;
+                    if (lum(x, y) - paper).abs() > 12.0 {
+                        drawn += 1;
+                    }
+                }
+            }
+        }
+    }
+    if drawn * 10 > inside {
+        faults.push(format!("another screen filled ({drawn} of {inside})"));
+    }
+    for f in faults.iter().take(10) {
+        eprintln!("  {f}");
+    }
+    if faults.is_empty() {
+        println!("{name}: key plan, screen {this} of {}, focused {focused}: exact ({}x{} filled at {},{})", layout.len(), p.fill.size.w, p.fill.size.h, p.fill.loc.x, p.fill.loc.y);
+    } else {
+        println!("{name}: key plan: {} faults", faults.len());
+        std::process::exit(1);
+    }
+}
+
+fn pixels(r: &smithay::utils::Rectangle<i32, smithay::utils::Physical>) -> impl Iterator<Item = (i32, i32)> + '_ {
+    (r.loc.y..r.loc.y + r.size.h).flat_map(move |y| (r.loc.x..r.loc.x + r.size.w).map(move |x| (x, y)))
+}
+
 /// A parking cell's hatching (title.rs's side_cell and hatched): with `spacing` (mm), the lines drawn on
 /// their pixels (each standing apart from its right-hand neighbour, which is off the lines) along a quarter
 /// of the cell's lines at least (the rest is where the shell letters it, left clear: in a short cell, more

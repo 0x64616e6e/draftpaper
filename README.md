@@ -18,7 +18,9 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
   it keeps the repository last worked in.
 - **The bottom margin** has Bluetooth, a scale bar true to size on the screen (under the title block, as
   a drawing keeps its scale; a ruler held to the screen reads the same; NTS, not to scale, on a display
-  that reports no size), a screenshot command and the theme name (click it for the next theme).
+  that reports no size), with several screens a key plan of them (their outlines as they are arranged,
+  this one filled, the focused one heavier), a screenshot command and the theme name (click it for the
+  next theme).
 - **The side margins** hold parked windows. Super+Escape parks the focused window in the first free
   cell, its title lettered up the margin; clicking an empty cell parks it in that cell. Click a title to
   bring the window back. A parked window's cell is hatched, as a drawing hatches a cut, the hatch broken
@@ -136,6 +138,7 @@ project = "WORKSTATION"    # default: the host name
 drawn = "me"               # default: the user name (shown when there is no custom cell)
 scale = true               # the scale bar in the bottom margin
 revisions = false          # the revision block: the focused repository's last commits
+key_plan = true            # with several screens, a plan of them in the bottom margin
 
 [[cell]]                   # cells of your own: the first in the title block's last row, the others
                            # in the bottom margin's free zones, one per zone

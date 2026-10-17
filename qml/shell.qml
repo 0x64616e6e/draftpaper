@@ -304,6 +304,11 @@ ShellRoot {
             // the scale bar in the bottom margin (the compositor's; null when off or without room): it takes
             // the zone next to the last
             readonly property var scaleBar: output && output.scale_bar ? output.scale_bar : null
+            // the key plan (the compositor's, with several screens): the zone left of the scale bar's
+            readonly property var keyPlan: output && output.key_plan ? output.key_plan : null
+            // the bottom margin's zones taken from the right: the theme's, the scale bar's, the key plan's; the
+            // custom cells and the column numbers stop short of the first of them
+            readonly property int bottomFree: zonesAcross - 1 - (scaleBar !== null || keyPlan !== null ? 1 : 0) - (keyPlan !== null ? 1 : 0)
             // the margins' lettering: the theme's ink, or with a wallpaper's ambient margins whichever ink
             // the compositor found to read on them (and the focused workspace in it, bold)
             readonly property color ink: output && output.margin_ink ? output.margin_ink : root.ink
@@ -487,7 +492,7 @@ ShellRoot {
                 }
                 ZoneNumbers {   // the columns' numbers, in the zones nothing else takes
                     band: bottomMargin; edge: edge
-                    taken: k => k === 0 || k === bottomMargin.zones - 1 || (edge.scaleBar !== null && k === bottomMargin.zones - 2)
+                    taken: k => k === 0 || k >= edge.bottomFree
                         || (extraCells.itemAt(k - 1)?.busy ?? false)
                 }
                 ScaleBar {      // the scale bar's numbers (or NTS); the compositor draws the bar
@@ -502,7 +507,7 @@ ShellRoot {
                         required property var modelData
                         required property int index
                         // the last zone is taken, and the one before by the scale bar; the rest are dropped
-                        visible: index + 1 < bottomMargin.zones - 1 - (edge.scaleBar !== null ? 1 : 0)
+                        visible: index + 1 < edge.bottomFree
                         readonly property bool busy: visible && extraPoll.output !== ""
                         Poll {
                             id: extraPoll

@@ -21,6 +21,7 @@
 //!
 //!     [title]
 //!     scale = true                     # the scale bar in the bottom margin, true to size (title.rs)
+//!     key_plan = true                  # with several screens, a plan of them in the bottom margin
 //!
 //!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,
 //!     title = "^Picture"               # sticky, place = "centre"|"corner", focus
@@ -116,6 +117,8 @@ pub struct Config {
     pub session: Session,
     /// [title] scale: the scale bar in the bottom margin (title.rs's scale_bar)
     pub scale_bar: bool,
+    /// [title] key_plan: with several screens, a plan of them in the bottom margin (title.rs's key_plan)
+    pub key_plan: bool,
 }
 
 /// [session] (session.rs): the windows put back at login, but those of the applications in `skip`.
@@ -305,7 +308,8 @@ impl Config {
         };
         // [title]: scale = true|false (the rest of [title] is the shell's: project, drawn)
         let scale_bar = table.get("title").and_then(|v| v.get("scale")).and_then(|v| v.as_bool()).unwrap_or(true);
-        Ok(Config { input, bindings, animations, rules, session, scale_bar })
+        let key_plan = table.get("title").and_then(|v| v.get("key_plan")).and_then(|v| v.as_bool()).unwrap_or(true);
+        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

@@ -286,6 +286,12 @@ impl Draftpaper {
                         "revisions": revision_block(s, s.output.current_scale().fractional_scale()),
                         // the scale bar (title.rs), drawn by the compositor, its numbers lettered by the shell
                         "scale_bar": scale_bar(s, s.output.current_scale().fractional_scale(), self.config.scale_bar),
+                        // the key plan's zone (title.rs), drawn by the compositor with several screens: the
+                        // shell letters nothing there; null with one screen or switched off
+                        "key_plan": self.key_plan(i).map(|p| {
+                            let scale = s.output.current_scale().fractional_scale();
+                            json!({ "zone": { "x": p.zone.loc.x as f64 / scale, "y": p.zone.loc.y as f64 / scale, "width": p.zone.size.w as f64 / scale, "height": p.zone.size.h as f64 / scale } })
+                        }),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
