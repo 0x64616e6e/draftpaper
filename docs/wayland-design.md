@@ -1,8 +1,9 @@
 # Draftpaper as a Wayland compositor: design
 
-Status: in progress. Decided 2026-10-14: Draftpaper is this compositor. The i3 edition is frozen at 0.1.x
-(no further releases; the last one stays installable), and nothing in the compositor imitates i3: its IPC
-is its own, and the shell is ported to it.
+Status: the daily session since 0.2.0. This is the design as first written; where it differs, the code
+and the README are right. Decided 2026-10-14: Draftpaper is this compositor. The i3 edition is frozen at
+0.1.x (no further releases; the last one stays installable), and nothing in the compositor imitates i3:
+its IPC is its own, and the shell is ported to it.
 
 ## Why
 
@@ -125,6 +126,11 @@ the scratchpad) is the one Draftpaper leaves behind.
 ## The layout
 
 ### Within the frame
+
+> Superseded in 0.3.0: windows are no longer in columns and rows. Each takes a rectangle of whole
+> zones of its own (free-form tiling, `compositor/src/layout.rs`): it moves and resizes a zone at a time,
+> a new window takes the largest free rectangle or half of the focused one. The rest of this section is
+> the first design, kept for its reasoning.
 
 A workspace is a row of **columns**; a column holds one or more windows stacked vertically (its
 **rows**). Both align to the **zones**: a column is a whole number of the top margin's zones wide and a

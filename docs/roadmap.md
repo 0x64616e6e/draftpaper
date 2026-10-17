@@ -8,11 +8,15 @@ Draftpaper as an add-on to i3 on X11: the sheet, the live title block and margin
 Debian package. Frozen since 2026-10-14: no further releases; 0.1.x stays installable. Draftpaper is now
 the compositor.
 
-## 2. The Wayland compositor (in progress)
+## 2. The Wayland compositor (the daily session: 0.2.0 on)
 
-Draftpaper as a compositor of its own, on Smithay: the sheet drawn by the compositor, windows tiled in
-columns and rows aligned to the zones, parking with exact restore. Design: `docs/wayland-design.md`;
-plan: milestones M0 to M3 on GitHub. It replaces the i3 edition in the `draftpaper` package.
+Draftpaper as a compositor of its own, on Smithay: the sheet drawn by the compositor, windows tiled on
+whole zones (free-form since 0.3.0), parking with exact restore, a launcher of its own (0.3.0), and its
+own login screen under greetd with a flicker-free handoff to the session (0.4.0). It replaces the i3
+edition in the `draftpaper` package. Design: `docs/wayland-design.md`.
+
+Next: the session restored after a logout or a reboot, the applications back in their places (#38);
+settings for the displays and text pages (#36); drag and drop (#18).
 
 ## 3. A distribution (vision)
 

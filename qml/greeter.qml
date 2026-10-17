@@ -418,5 +418,6 @@ ShellRoot {
     SystemClock { id: time; precision: SystemClock.Minutes }
     QtObject { id: clock; readonly property string text: Qt.formatDateTime(time.date, "yyyy-MM-dd · HH:mm") }
     FileView { id: hostFile; path: "/etc/hostname"; blockLoading: true; printErrors: false }
-    readonly property string host: (hostFile.text() || "").trim()
+    // the machine's name in the heading (DRAFTPAPER_GREETER_HOST, for screenshots; else /etc/hostname)
+    readonly property string host: Quickshell.env("DRAFTPAPER_GREETER_HOST") || (hostFile.text() || "").trim()
 }

@@ -120,6 +120,10 @@ between them, ← → along, each change shown at once.
 | `draftpaper-as USER [COMMAND]` | A program, or a shell, as another user on the session |
 | `draftpaper-compositor msg outputs\|workspaces\|windows` | The compositor's state, as JSON |
 | `draftpaper-compositor msg ACTION` | Any bindable action, e.g. `workspace 3`, `power off` |
+| `draftpaper menu [--prompt TEXT] < lines` | A choice among stdin's lines, in the launcher's register |
+| `draftpaper audio save\|restore` | The output's volume and mute, kept from one session to the next |
+| `draftpaper-greeter [USER]` | The login screen, for greetd (README: Login screen) |
+| `draftpaper-compositor grab DEVICE DIR [WIDTH]` | As root: what each display shows, read back to PNGs |
 | `wlr-randr` | The displays: names, modes, `--scale`, `--pos`, `--transform`, `--off` (until changed again) |
 
 ## Files
@@ -131,6 +135,18 @@ between them, ← → along, each change shown at once.
 | `/usr/share/draftpaper/themes/` | The shipped themes |
 | `~/.cache/draftpaper/` | Generated: the shell's theme, launcher, lock screen, idle |
 | `journalctl --user -u draftpaper-shell` | The shell's log |
+| `journalctl -t draftpaper -t draftpaper-greeter` | The compositor's log, and the login screen's |
+| `/var/lib/draftpaper/greeter/USER/` | The login screen's copy of your sheet (`draftpaper apply` writes it, when the directory exists) |
+
+## Login screen
+
+| | |
+|---|---|
+| (the name filled in) | The fingerprint reader listens at once; touch it, or type the password and Enter |
+| Enter | The name to the password, the password to greetd |
+| Escape | Clear what is typed; again, the name too |
+| Ctrl+u | Clear what is typed |
+| Ctrl+Alt+F2 | A text console (VT1 has none: `fbcon=vc:2-63`) |
 
 ## Settings at a glance
 

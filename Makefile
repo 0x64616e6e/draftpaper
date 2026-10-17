@@ -59,9 +59,14 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/launcher.sh
 	compositor/tests/greeter.sh
 
+# the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
+screenshots: $(COMPOSITOR) $(CLI)
+	cd compositor && $(CARGO) build --release --locked --example fakegreetd
+	docs/screenshots.sh
+
 clean:
 	cd compositor && $(CARGO) clean
 	cd cli && $(CARGO) clean
 	rm -f $(SHADERS)
 
-.PHONY: all build install check pixels clean
+.PHONY: all build install check pixels screenshots clean

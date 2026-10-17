@@ -1,60 +1,37 @@
-draftpaper (0.3.0) unstable; urgency=medium
+draftpaper (0.4.0) unstable; urgency=medium
 
   * A login screen of Draftpaper's own, for greetd (#37, experimental):
-    draftpaper-greeter draws the user's sheet with a sign-in card on whole
-    zones; once greetd accepts the password the card fades and
+    draftpaper-greeter draws the user's sheet, blurred, with a sign-in card
+    on whole zones. With the name known a fingerprint reader (pam_fprintd)
+    listens from the start; a password typed meanwhile is given when PAM
+    asks. Signed in, the name slides into the title block's DRAWN cell and
     draftpaper-session starts on the same VT. `draftpaper apply` copies the
     sheet's look to /var/lib/draftpaper/greeter/<user>/ when that exists.
-  * The compositor takes the displays over as they are instead of resetting
-    them (the CRTC each display is on, its mode kept when it is the one
-    wanted), and switches off only what it does not drive: no blank flash
-    at the start of a session. If the driver refuses a frame on that
-    state, the displays are reset once, as before.
-  * Leaving, the compositor draws the bare sheet and keeps it on screen
-    (CLOSEFB, Linux 6.8), a child holding the device until the next
-    compositor shows a frame of its own, so the screen does not go dark
-    between the login screen and the session.
-  * The login screen blurs the sheet behind its card once the name is
-    known, and asks greetd for the session at once, so a fingerprint reader
-    listens from the start (a drawn glyph on the card, lit while it does);
-    a password typed meanwhile is given when PAM asks. Signed in, the name
-    slides into the title block's DRAWN cell before the session starts.
-  * The session opens on what the displays showed (read back from the
-    framebuffer on screen and imported, GETFB2): that very frame until the
-    shell is up, then fading into the desktop drawn blurred, the blur
-    going to nothing.
-  * A session no longer opens a terminal at the start (that default is for
-    the compositor nested, without --command). The compositors log to the
-    journal (journalctl -t draftpaper, -t draftpaper-greeter), the handoff
-    with its timings; a frame refused before the session has the device
-    no longer resets the displays.
-  * The holder runs outside the login session (a scope of the user's own
-    systemd): left in it, it kept the session from ending, and logind
-    would not give the device to the next one; a login could fail outright.
-  * A picture on screen that reads back black is no opening (on Intel the
-    previous frame read back can be); the startup logs what each CRTC
-    shows at each step. `draftpaper-compositor grab DEVICE DIR [WIDTH]`
-    (as root) reads back what each display shows, as the opening does.
-  * The login screen's copy of the sheet is written only from the user's
-    own home (not by programs run with a home of their own, as the tests).
-  * The opening reveals the desktop once the shell has lettered it all (the
-    readings, the network, memory and CPU in: IPC "ready", the login card
-    likewise), not when its first surface appears: nothing is painted in
-    after the reveal. The blur fades out over the sharp scene at the end.
-  * The black moment after signing in: Smithay commits a first frame on a
-    new output inside initialize_output (to lock in its primary plane),
-    drawn from the elements it is given, and it was given none: black. The
-    picture the display shows is now read back before that, and given as
-    that frame's element; the opening starts from it.
-  * A frame refused with a client's buffer on a display plane (Firefox's
-    hardware-decoded video on Intel passed the test commit, not the real
-    one) no longer blanks or freezes the screen: from then on everything is
-    composed by the GPU, the pointer alone on its plane.
-  * No sound after logging in again (under greetd another session of the
-    user's keeps PipeWire running, and WirePlumber, having lost the card
-    to the login screen, probed it without access: only the dummy output):
-    `draftpaper audio restore` at the session's start restarts WirePlumber
-    when the default output is the dummy, then restores the volume.
+  * No flicker between the login screen and the session, either way. The
+    compositor takes the displays over as they are (the same CRTC, the mode
+    kept) instead of resetting them; leaving, it keeps its last frame on
+    screen (CLOSEFB, Linux 6.8), a holder outside the login session keeping
+    the device open until the next one draws. The next compositor opens on
+    that very picture, read back from the display (and given as Smithay's
+    first frame on the output), and reveals the desktop under it once the
+    shell has lettered everything (IPC "ready"), the blur fading to nothing.
+  * A frame the display refuses with a client's buffer on a plane (Firefox's
+    hardware-decoded video on Intel) switches the outputs to composing
+    everything, instead of a black or frozen screen.
+  * Sound after logging in again: `draftpaper audio restore` restarts
+    WirePlumber when only the dummy output is left (another session of the
+    user's kept it running through the login screen, which took the card).
+  * A session no longer opens a terminal at the start. The compositors log
+    to the journal (journalctl -t draftpaper, -t draftpaper-greeter).
+    `draftpaper-compositor grab DEVICE DIR [WIDTH]` (as root) reads back
+    what each display shows.
+  * The IPC's outputs list the layer surfaces on each; requests "blur",
+    "ready" and, on the login screen, "leave".
+
+ -- 0x64616e6e <daniel@este.systems>  Sat, 17 Oct 2026 05:13:04 +0300
+
+draftpaper (0.3.0) unstable; urgency=medium
+
   * A launcher of its own on Mod+d (#34): the applications as a register in
     the frame's top-left corner, whole zones, what you type lettered in the
     margin above; fuzzy, the most used and recent first, launched through

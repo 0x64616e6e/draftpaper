@@ -18,23 +18,33 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
   brings them all back.
 
 Everything is sized in millimetres of the screen (from the physical size the display reports), so the
-sheet looks the same on a laptop panel and a 4K monitor.
+sheet looks the same on a laptop panel and a 4K monitor. Windows tile on the zones the margins number
+and letter: each takes a rectangle of whole zones, its edges on the ticks, and moves and resizes a zone at
+a time.
 
-![A window open on the sheet, two more parked in the left margin](docs/parked.png)
+![Three terminals tiled on the sheet's zones](docs/tiles.jpg)
 
-*One window open (the sheet's own shader); `notes.md` and `build.log` parked in the left margin's cells B
-and C.*
+*Three windows on the zones: the README on the left half, `layout.rs` and the git log on the right.*
+
+![One window parked in the left margin](docs/parked.jpg)
+
+*`git log` parked (Super+Escape): its title lettered up the left margin's cell A, `layout.rs` taking its
+zones.*
 
 ![Every window parked: the whole sheet with its title block](docs/sheet.jpg)
 
 *Every window of the workspace parked: the sheet, the three parked titles, and the title block.*
+
+Draftpaper is also its own login screen (optional, under greetd), and the session comes up from it without
+a flicker: see [Login screen](#login-screen-experimental). What changed from release to release:
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
 Draftpaper is a Debian package (Debian 13, amd64). It needs Quickshell 0.3 or later, which Debian 13
 provides in trixie-backports:
 
-    sudo apt install -t trixie-backports quickshell ./draftpaper_0.2.0_amd64.deb   # from the latest release
+    sudo apt install -t trixie-backports quickshell ./draftpaper_0.4.0_amd64.deb   # from the latest release
 
 Install both from backports in one go: Quickshell brings newer PipeWire libraries from there, and the
 recommended wireplumber has to come from the same place.
@@ -81,6 +91,11 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 Clicks: a workspace number switches to it; an empty side cell parks the focused window there and a
 parked window's title brings it back; the profile cell cycles the power profile; volume mutes on click
 and changes on scroll; the theme name switches theme.
+
+![The launcher: the applications as a register in the frame's top-left corner](docs/launcher.jpg)
+
+*The launcher (Super+D): a register of the applications on whole zones, what you type lettered in the
+margin above it; the most used come first. `draftpaper menu` shows any list of lines in it, for scripts.*
 
 ## Configuration
 
@@ -213,6 +228,10 @@ the session takes the displays over as they are, in the same mode, shows that ve
 shell is up, then fades it into the desktop as the blur goes (Linux 6.8 or later). After any display
 manager the session opens the same way, from whatever was on screen.
 
+![The login screen: the sheet blurred, a sign-in card in the middle, the fingerprint reader listening](docs/greeter.jpg)
+
+*The login screen: the name filled in, the fingerprint reader listening; Enter takes a password instead.*
+
 The login screen runs as greetd's own user and cannot read your home, so `draftpaper apply` (every
 login, every theme change) copies what your sheet looks like (theme, margin, wallpaper, the outputs'
 scales) to `/var/lib/draftpaper/greeter/<you>/` when that directory exists. The copy is readable by
@@ -279,7 +298,7 @@ the focused workspace and window lit in amber, warnings in red).
 
 ![The Blueprint theme: two windows side by side, one parked in the right margin](docs/blueprint.jpg)
 
-*Blueprint, with the terminal and the editor in the theme's colours; `build.log` parked on the right.*
+*Blueprint, with the terminals in the theme's colours.*
 
 ![The settings: the themes as drawings on the board, and the scheme builder below them](docs/picker.jpg)
 
@@ -322,7 +341,14 @@ draws the sheet (paper, frame, dot grid, zone ticks, or the wallpaper), tiles th
 frame and keeps the parked windows. Once it is up it starts `draftpaper-session.target`: the shell
 (Quickshell, `/usr/share/draftpaper/qml`), swayidle and the volume keeper, as systemd user services.
 The shell letters the margins and the title block as layer-shell surfaces and talks to the compositor
-over a JSON socket (`$DRAFTPAPER_SOCKET`; `draftpaper-compositor msg …` from a shell).
+over a JSON socket (`$DRAFTPAPER_SOCKET`; `draftpaper-compositor msg …` from a shell): the outputs and
+their sheet's geometry, the workspaces and windows, any action a key can name, and `ready` once it has
+lettered everything (the session's opening waits for it).
+
+A compositor that takes over the displays from another (the login screen, the session, any display
+manager) keeps them in their mode and opens on the very picture they show, read back from the display;
+leaving, it keeps its last frame on screen. Between the two nothing goes dark (`compositor/src/handoff.rs`,
+`opening.rs`). The compositors log to the journal: `journalctl -t draftpaper -t draftpaper-greeter`.
 
 `draftpaper` (Rust, `cli/`) is the rest: themes and colour schemes, the generated files for the
 launcher, the lock screen and the applications, the readings the shell polls.
@@ -332,6 +358,10 @@ launcher, the lock screen and the applications, the readings the shell polls.
     make                         # the compositor and the draftpaper command (cargo; a recent Rust, e.g.
                                  # from rustup), the shaders (qsb)
     dpkg-buildpackage -us -uc -b # the package
+    make check                   # the unit tests
+    make pixels                  # the sheet pixel by pixel, the zones, the launcher and the login screen,
+                                 # headless (nothing is shown on any display)
+    make screenshots             # the pictures in docs/ (needs foot and ImageMagick)
 
 The build needs the development packages in `debian/control` and fetches the crates with cargo.
 
