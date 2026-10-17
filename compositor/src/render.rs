@@ -56,6 +56,9 @@ struct Border(RefCell<[SolidColorBuffer; 4]>);
 /// The title block's rules (title.rs), kept with the output.
 struct TitleRules(RefCell<Vec<SolidColorBuffer>>);
 
+/// The revision block's rules (title.rs), kept with the output.
+struct RevisionRules(RefCell<Vec<SolidColorBuffer>>);
+
 /// The scale bar's rules and fills (title.rs), kept with the output.
 struct ScaleRules(RefCell<Vec<SolidColorBuffer>>);
 
@@ -451,6 +454,27 @@ fn scene_elements(
                 elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, rule.rect.loc, 1.0, 1.0, Kind::Unspecified)));
             }
         }
+        // the revision block's rules (title.rs), while the shell letters it (in a repository, switched on):
+        // as the title block's, the outer rule heavy, the cells' light
+        let revised = layer_map_for_output(output).layers().any(|l| l.namespace() == "draftpaper-revisions");
+        let block = revised.then(|| crate::title::revision_block(physical, margin, mm, zones)).flatten();
+        let buffers = output.user_data().get_or_insert(|| RevisionRules(RefCell::new(Vec::new())));
+        let mut buffers = buffers.0.borrow_mut();
+        let rules = block.map(|b| b.rules).unwrap_or_default();
+        buffers.resize_with(rules.len(), SolidColorBuffer::default);
+        {
+            let t = &sheet.theme;
+            let colour = |alpha: f32| {
+                let a = alpha.min(1.0);
+                [t.ink[0] * a, t.ink[1] * a, t.ink[2] * a, a]
+            };
+            let (heavy, light) = (colour(0.85 * t.sheet.pattern_strength + 0.1), colour(0.6 * t.sheet.pattern_strength + 0.1));
+            for (buffer, rule) in buffers.iter_mut().zip(&rules) {
+                buffer.update((rule.rect.size.w, rule.rect.size.h), if rule.heavy { heavy } else { light });
+                elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, rule.rect.loc, 1.0, 1.0, Kind::Unspecified)));
+            }
+        }
+        drop(buffers);
         // the scale bar (title.rs), when the shell letters the margins (it letters the numbers): in the
         // frame's ink at its weight, true to size on screens that report theirs
         let margins = layer_map_for_output(output).layers().any(|l| l.namespace() == "draftpaper-margin");
@@ -491,6 +515,9 @@ fn scene_elements(
             // lock screens, the session before its shell: no block, no frost)
             if lettered {
                 draw(&w.frosted, (w.title.size.w, w.title.size.h), w.title);
+            }
+            if let (true, Some((place, frosted))) = (revised, &w.revisions) {
+                draw(frosted, (place.size.w, place.size.h), *place);
             }
             draw(&w.picture, (w.interior.size.w, w.interior.size.h), w.interior);
             if let Some((ambient, px)) = &w.ambient {

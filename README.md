@@ -12,6 +12,10 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
 - **The top margin** letters the workspaces in its first zone. The focused one is bold black; one shown
   on another screen is bold. Notifications appear there; alerts (temperatures past a threshold, a low
   battery) appear in its last zone in red, and volume and brightness for a few seconds after they change.
+- **The revision block** above the title block (off by default: `[title] revisions = true`) letters the
+  latest commits of the git repository the focused window works in (for a terminal, its shell's
+  directory): REV, DESCRIPTION, DATE and BY, as a drawing keeps its revisions. With every window parked
+  it keeps the repository last worked in.
 - **The bottom margin** has Bluetooth, a scale bar true to size on the screen (under the title block, as
   a drawing keeps its scale; a ruler held to the screen reads the same; NTS, not to scale, on a display
   that reports no size), a screenshot command and the theme name (click it for the next theme).
@@ -130,6 +134,7 @@ wallpaper_dirs = ["~/Pictures/Wallpapers", "/usr/share/backgrounds"]   # where t
 project = "WORKSTATION"    # default: the host name
 drawn = "me"               # default: the user name (shown when there is no custom cell)
 scale = true               # the scale bar in the bottom margin
+revisions = false          # the revision block: the focused repository's last commits
 
 [[cell]]                   # cells of your own: the first in the title block's last row, the others
                            # in the bottom margin's free zones, one per zone

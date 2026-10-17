@@ -149,6 +149,11 @@ Keep tmux's sessions, windows and panes across a reboot ([session] apps). tmux r
 .B readings
 Print the readings the shell polls, as JSON.
 .TP
+.B revisions
+Print what the revision block letters, as JSON: the git repository the focused window works in (a
+terminal's shell's directory) and its latest commits; {} outside any repository, {"focused":false} with
+nothing focused. Shown above the title block with [title] revisions = true.
+.TP
 .B version
 Print the version.
 .SH COMPOSITOR REQUESTS

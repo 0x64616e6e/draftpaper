@@ -266,6 +266,9 @@ impl Draftpaper {
                         "margin_ink": margin_ink(&s.output),
                         // the title block and its cells (title.rs), lettered by the shell: inside their rules
                         "title": title_block(s, s.output.current_scale().fractional_scale()),
+                        // the revision block above the title block (title.rs), lettered by the shell when it has
+                        // rows: its rect and cells (the header's four, then each row's), as the title block's
+                        "revisions": revision_block(s, s.output.current_scale().fractional_scale()),
                         // the scale bar (title.rs), drawn by the compositor, its numbers lettered by the shell
                         "scale_bar": scale_bar(s, s.output.current_scale().fractional_scale(), self.config.scale_bar),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
@@ -318,6 +321,9 @@ impl Draftpaper {
                     let surface = json!({ "x": b.loc.x - g.loc.x, "y": b.loc.y - g.loc.y, "width": b.size.w, "height": b.size.h });
                     all.push(json!({
                         "id": window_id(window),
+                        // its process (the Wayland client's, or the one X11 names): `draftpaper revisions`
+                        // finds the focused window's directory from it
+                        "pid": crate::session::pid_of(self, window),
                         "app_id": app_id,
                         "title": title,
                         "xwayland": x11,
@@ -425,6 +431,18 @@ fn title_block(s: &crate::screens::Screen, scale: f64) -> Value {
         json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
     };
     json!({ "rect": r(t.rect), "inner": r(t.inner), "cells": t.cells.iter().map(|c| r(*c)).collect::<Vec<_>>() })
+}
+
+/// The revision block of screen `s` (title.rs), in logical pixels from the output's top-left corner; null
+/// when the title block leaves no zone above it.
+fn revision_block(s: &crate::screens::Screen, scale: f64) -> Value {
+    let Some(b) = crate::title::revision_block(crate::render::mode_size(&s.output), crate::title::margin(s.margin_mm, s.mm, scale), s.phys_mm as f32, s.grid.zones) else {
+        return Value::Null;
+    };
+    let r = |r: smithay::utils::Rectangle<i32, smithay::utils::Physical>| {
+        json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
+    };
+    json!({ "rect": r(b.rect), "inner": r(b.inner), "cells": b.cells.iter().map(|c| r(*c)).collect::<Vec<_>>() })
 }
 
 /// The scale bar of screen `s` (title.rs), in logical pixels from the output's top-left corner: the zone,

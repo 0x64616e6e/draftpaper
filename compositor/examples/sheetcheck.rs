@@ -41,6 +41,10 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "revisions") {
+        revisions_check(&img, scale, phys_mm, margin_mm, args.get(6).map(String::as_str) != Some("none"), &args[1]);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "scale") {
         scale_check(&img, scale, phys_mm, margin_mm, args.get(6).map(String::as_str).unwrap_or("bar"), &args[1]);
         return;
@@ -199,6 +203,62 @@ fn main() {
 }
 
 /// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+/// The revision block (title.rs's revision_block) above the title block: when `shown`, every pixel of its
+/// rules drawn, and the first row's description lettered; else none of its rules drawn. A pixel is drawn
+/// when it stands apart from the paper (the median of the block's inner pixels).
+fn revisions_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, shown: bool, name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let Some(b) = title::revision_block((w, h), mg, phys_mm as f32, title::zones((w, h), mg, phys_mm)) else {
+        println!("{name}: no room for a revision block");
+        std::process::exit(if shown { 1 } else { 0 });
+    };
+    let lum = |x: i32, y: i32| {
+        let p = img.get_pixel(x as u32, y as u32);
+        0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+    };
+    let mut inner: Vec<f64> = (b.inner.loc.y..b.inner.loc.y + b.inner.size.h)
+        .step_by(3)
+        .flat_map(|y| (b.inner.loc.x..b.inner.loc.x + b.inner.size.w).step_by(3).map(move |x| (x, y)))
+        .map(|(x, y)| lum(x, y))
+        .collect();
+    inner.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    let paper = inner[inner.len() / 2];
+    let drawn = |x: i32, y: i32| (lum(x, y) - paper).abs() > 25.0;
+    let mut faults = Vec::new();
+    let (mut on, mut all) = (0, 0);
+    for r in &b.rules {
+        for y in r.rect.loc.y..r.rect.loc.y + r.rect.size.h {
+            for x in r.rect.loc.x..r.rect.loc.x + r.rect.size.w {
+                all += 1;
+                if drawn(x, y) {
+                    on += 1;
+                } else if shown {
+                    faults.push(format!("rule pixel ({x}, {y}) not drawn"));
+                }
+            }
+        }
+    }
+    if shown {
+        let d = b.cells[5];
+        let n = (d.loc.y..d.loc.y + d.size.h).flat_map(|y| (d.loc.x..d.loc.x + d.size.w).map(move |x| (x, y))).filter(|&(x, y)| drawn(x, y)).count();
+        if n < 20 {
+            faults.push("the first row's description not lettered".into());
+        }
+    } else if on * 2 > all {
+        faults.push(format!("{on} of its {all} rule pixels drawn"));
+    }
+    for f in faults.iter().take(10) {
+        eprintln!("  {f}");
+    }
+    if faults.is_empty() {
+        println!("{name}: revision block {}: exact ({}x{} at {},{}, {} rule pixels)", if shown { "shown" } else { "none" }, b.rect.size.w, b.rect.size.h, b.rect.loc.x, b.rect.loc.y, all);
+    } else {
+        println!("{name}: revision block: {} faults", faults.len());
+        std::process::exit(1);
+    }
+}
+
 /// The scale bar (title.rs's scale_bar) in the bottom margin, as `expect` says it should be: `bar`, every
 /// pixel of its rules and fills drawn and each centimetre's number lettered above its rule; `nts`, no bar
 /// and the zone lettered (NTS); `none`, no bar. A pixel is drawn when it stands apart from the paper

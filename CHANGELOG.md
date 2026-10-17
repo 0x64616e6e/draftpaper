@@ -5,6 +5,13 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **A revision block** above the title block (#45), as drawings keep one: the latest commits of the git
+  repository the focused window works in, REV / DESCRIPTION / DATE / BY, the repository named in the
+  header; a terminal's directory is its shell's. Off by default (`[title] revisions = true`): commit
+  subjects are then on screen. `draftpaper revisions` prints what it letters; git runs there with nothing of
+  the repository's own configuration able to start a program. Checked by `make pixels` (tests/revisions.sh).
+- `make` always hands the programs to cargo: once built they were never rebuilt, and `make pixels` could
+  test a stale build.
 - **A scale bar** in the bottom margin (#44): 0 to 50 mm (as many whole centimetres as its zone holds),
   true to size on each screen, the first centimetre ticked by the millimetre, drawn by the compositor
   on whole pixels and lettered by the shell. A display that reports no size letters NTS (not to scale)

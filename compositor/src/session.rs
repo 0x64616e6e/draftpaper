@@ -136,7 +136,7 @@ fn write(text: &str) {
 }
 
 /// The process of a window: its client's (Wayland), or the one X11 names.
-fn pid_of(state: &Draftpaper, window: &Window) -> Option<u32> {
+pub(crate) fn pid_of(state: &Draftpaper, window: &Window) -> Option<u32> {
     use smithay::{reexports::wayland_server::Resource, wayland::seat::WaylandFocus};
     if let Some(x) = window.x11_surface() {
         return x.pid();

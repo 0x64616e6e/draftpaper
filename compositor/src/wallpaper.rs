@@ -90,6 +90,8 @@ pub struct OutputWallpaper {
     /// the title block's place and the picture there, blurred and tinted
     pub title: Rectangle<i32, Physical>,
     pub frosted: MemoryRenderBuffer,
+    /// the revision block's place (title.rs) and the picture there, frosted as the title block's
+    pub revisions: Option<(Rectangle<i32, Physical>, MemoryRenderBuffer)>,
     /// the margins' lettering: the theme's ink or its counterpart, whichever reads on the ambient colours
     pub margin_ink: Option<[f32; 3]>,
 }
@@ -286,22 +288,31 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
     // over the picture as along the rest of the frame) and the picture there, blurred and tinted
     let block = crate::title::title_block(size, margin, mm, zones).rect;
     let title = Rectangle::<i32, Physical>::new(block.loc, (block.size.w - crate::title::LINE, block.size.h - crate::title::LINE).into());
-    let (bw, bh) = (title.size.w, title.size.h);
-    let (tx, ty) = ((title.loc.x - interior.loc.x).max(0) as u32, (title.loc.y - interior.loc.y).max(0) as u32);
-    let under = imageops::crop_imm(&filled, tx.min(iw - 1), ty.min(ih - 1), (bw as u32).min(iw - tx.min(iw - 1)), (bh as u32).min(ih - ty.min(ih - 1))).to_image();
     // frosted glass: blurred about 1.5 mm (blurred small and scaled back, quick), so the picture's shapes
     // still show through; how much paper lies over it is `title_tint`
-    let k = (mm / 2.0).max(1.0);
-    let tiny = imageops::resize(&under, ((under.width() as f32 / k) as u32).max(2), ((under.height() as f32 / k) as u32).max(2), FilterType::Triangle);
-    let tiny = imageops::blur(&tiny, 3.0);
-    let mut frosted = imageops::resize(&tiny, bw.max(1) as u32, bh.max(1) as u32, FilterType::Triangle);
-    let (t, paper) = (theme.title_tint, rgba(theme.paper));
-    for p in frosted.pixels_mut() {
-        for i in 0..3 {
-            p[i] = (p[i] as f32 * (1.0 - t) + paper[i] as f32 * t) as u8;
+    let frost = |place: Rectangle<i32, Physical>| {
+        let (bw, bh) = (place.size.w, place.size.h);
+        let (tx, ty) = ((place.loc.x - interior.loc.x).max(0) as u32, (place.loc.y - interior.loc.y).max(0) as u32);
+        let under = imageops::crop_imm(&filled, tx.min(iw - 1), ty.min(ih - 1), (bw as u32).min(iw - tx.min(iw - 1)), (bh as u32).min(ih - ty.min(ih - 1))).to_image();
+        let k = (mm / 2.0).max(1.0);
+        let tiny = imageops::resize(&under, ((under.width() as f32 / k) as u32).max(2), ((under.height() as f32 / k) as u32).max(2), FilterType::Triangle);
+        let tiny = imageops::blur(&tiny, 3.0);
+        let mut frosted = imageops::resize(&tiny, bw.max(1) as u32, bh.max(1) as u32, FilterType::Triangle);
+        let (t, paper) = (theme.title_tint, rgba(theme.paper));
+        for p in frosted.pixels_mut() {
+            for i in 0..3 {
+                p[i] = (p[i] as f32 * (1.0 - t) + paper[i] as f32 * t) as u8;
+            }
+            p[3] = 255;
         }
-        p[3] = 255;
-    }
+        buffer(&frosted)
+    };
+    let frosted = frost(title);
+    // the revision block's place above it (title.rs), frosted the same, drawn while the shell letters it
+    let revisions = crate::title::revision_block(size, margin, mm, zones).map(|r| {
+        let place = Rectangle::<i32, Physical>::new(r.rect.loc, (r.rect.size.w - crate::title::LINE, r.rect.size.h).into());
+        (place, frost(place))
+    });
 
     *cache.0.borrow_mut() = Some(OutputWallpaper {
         key,
@@ -309,7 +320,8 @@ pub fn prepare(cache: &WallpaperCache, theme: &Theme, size: (i32, i32), margin: 
         picture: buffer(&filled),
         ambient,
         title,
-        frosted: buffer(&frosted),
+        frosted,
+        revisions,
         margin_ink,
     });
     true

@@ -129,6 +129,69 @@ pub fn title_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) ->
     TitleBlock { rect: rect(left, top, right, bottom), inner: rect(ix0, iy0, ix1, iy1), cells, rules }
 }
 
+/// The revision block's columns (issue #45), in millimetres of the title block's 130 across: REV,
+/// DESCRIPTION, DATE, BY.
+pub const REV_COLUMNS: [f32; 5] = [0.0, 16.0, 86.0, 110.0, 130.0];
+/// Its rows under the header.
+pub const REV_ROWS: usize = 4;
+
+/// The revision block: in the zone right above the title block, as wide, its outer rule as heavy as the
+/// frame's along the top and the left, the title block's own top rule under it and the frame's line at
+/// its right. A header row (a sixth of its height) and REV_ROWS rows, each cut into REV_COLUMNS. `cells`
+/// are the header's four, then each row's four, left to right.
+#[derive(Debug, Clone)]
+pub struct RevisionBlock {
+    pub rect: Rectangle<i32, Physical>,
+    pub inner: Rectangle<i32, Physical>,
+    pub cells: Vec<Rectangle<i32, Physical>>,
+    pub rules: Vec<Rule>,
+}
+
+/// The revision block of an output (as title_block()): None when the title block leaves no whole zone
+/// above it short of the frame's top row.
+pub fn revision_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) -> Option<RevisionBlock> {
+    let block = title_block(size, margin, mm, zones);
+    let below = block.rect.loc.y;
+    let k = (1..zones.1).find(|&k| tick(size.1, margin, zones.1, k).0 == below)?;
+    if k < 2 {
+        return None;
+    }
+    let (left, top, right) = (block.rect.loc.x, tick(size.1, margin, zones.1, k - 1).0, size.0 - margin);
+    let (ix0, iy0, ix1, iy1) = (left + LINE, top + LINE, right - LINE, below);
+    if iy1 - iy0 < 2 * (REV_ROWS as i32 + 1) {
+        return None;
+    }
+    let rect = |x0: i32, y0: i32, x1: i32, y1: i32| Rectangle::<i32, Physical>::new((x0, y0).into(), ((x1 - x0).max(0), (y1 - y0).max(0)).into());
+    let mx = (right - left) as f32 / SIZE_MM.0;
+    let xs: Vec<i32> = REV_COLUMNS.iter().map(|&v| if v >= SIZE_MM.0 { ix1 } else if v <= 0.0 { ix0 } else { left + (v * mx).round() as i32 }).collect();
+    // the rows' top rules: the header's bottom, then between the rows
+    let header = ((iy1 - iy0) as f32 / 6.0).round() as i32;
+    let ys: Vec<i32> = (0..REV_ROWS).map(|r| iy0 + header + (r as f32 * (iy1 - iy0 - header) as f32 / REV_ROWS as f32).round() as i32).collect();
+
+    let mut rules = vec![Rule { rect: rect(left, top, ix1, iy0), heavy: true }, Rule { rect: rect(left, iy0, ix0, iy1), heavy: true }];
+    // the columns' rules whole, the rows' broken where they cross
+    for &x in &xs[1..xs.len() - 1] {
+        rules.push(Rule { rect: rect(x, iy0, x + 1, iy1), heavy: false });
+    }
+    for &y in &ys {
+        for c in 0..xs.len() - 1 {
+            let from = if c == 0 { ix0 } else { xs[c] + 1 };
+            rules.push(Rule { rect: rect(from, y, xs[c + 1], y + 1), heavy: false });
+        }
+    }
+    rules.retain(|r| r.rect.size.w > 0 && r.rect.size.h > 0);
+    // the cells: from after their left and top rules to the next ones
+    let mut cells = Vec::new();
+    let bands: Vec<(i32, i32)> = std::iter::once((iy0, ys[0])).chain((0..REV_ROWS).map(|r| (ys[r] + 1, if r + 1 < REV_ROWS { ys[r + 1] } else { iy1 }))).collect();
+    for (y0, y1) in bands {
+        for c in 0..xs.len() - 1 {
+            let x0 = if c == 0 { ix0 } else { xs[c] + 1 };
+            cells.push(rect(x0, y0, xs[c + 1], y1));
+        }
+    }
+    Some(RevisionBlock { rect: rect(left, top, right, below), inner: rect(ix0, iy0, ix1, iy1), cells, rules })
+}
+
 /// The scale bar (issue #44): in the bottom margin's zone next to the last one (under the title block, where
 /// a drawing keeps its scale), a bar of whole centimetres true to the screen's size: 0 to 50 mm (less in a
 /// short zone), the first centimetre ticked by the millimetre, then alternately filled and open, outlined
@@ -276,6 +339,50 @@ mod tests {
                 assert!(seen.contains(&p), "{case}: {p:?} neither a rule nor a cell");
             }
         }
+    }
+
+    #[test]
+    fn the_revision_block_is_exact() {
+        let mut drawn = 0;
+        for ((w, h), phys_mm, scale, margin_mm) in cases() {
+            let mg = margin(margin_mm, phys_mm / scale, scale);
+            let zones = zones((w, h), mg, phys_mm);
+            let case = format!("{w}x{h} {phys_mm} px/mm, scale {scale}, margin {margin_mm} mm");
+            let t = title_block((w, h), mg, phys_mm as f32, zones);
+            let Some(r) = revision_block((w, h), mg, phys_mm as f32, zones) else { continue };
+            drawn += 1;
+            // on the title block, as wide, up to the frame's outer edge; its top on a tick
+            assert_eq!((r.rect.loc.x, r.rect.size.w), (t.rect.loc.x, t.rect.size.w), "{case}");
+            assert_eq!(r.rect.loc.y + r.rect.size.h, t.rect.loc.y, "{case}");
+            assert!((1..zones.1).any(|k| tick(h, mg, zones.1, k).0 == r.rect.loc.y), "{case}: top off the ticks");
+            assert_eq!(r.cells.len(), 4 * (REV_ROWS + 1), "{case}");
+            // no pixel twice, none off the block or on the frame's line; every inner pixel a rule's or a cell's
+            let mut seen = std::collections::HashSet::new();
+            for rule in &r.rules {
+                for p in pixels(&rule.rect) {
+                    assert!(seen.insert(p), "{case}: {p:?} ruled twice");
+                    assert!(r.rect.contains(p) && p.0 < w - mg - LINE, "{case}: {p:?} off the block");
+                }
+            }
+            for x in r.rect.loc.x..w - mg - LINE {
+                for d in 0..LINE {
+                    assert!(seen.contains(&(x, r.rect.loc.y + d)), "{case}: top rule gap at {x}");
+                }
+            }
+            for c in &r.cells {
+                assert!(c.size.w > 0 && c.size.h > 0, "{case}: an empty cell");
+                for p in pixels(c) {
+                    assert!(r.inner.contains(p), "{case}: cell {c:?} leaves the block");
+                    assert!(seen.insert(p), "{case}: {p:?} in a cell and a rule, or two cells");
+                }
+            }
+            for p in pixels(&r.inner) {
+                assert!(seen.contains(&p), "{case}: {p:?} neither a rule nor a cell");
+            }
+            // none of it over the title block
+            assert!(!r.rect.overlaps(t.rect), "{case}: over the title block");
+        }
+        assert!(drawn > 50, "a revision block on most displays ({drawn})");
     }
 
     #[test]

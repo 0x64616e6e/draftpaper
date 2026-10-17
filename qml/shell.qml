@@ -167,6 +167,27 @@ ShellRoot {
     readonly property string tempText: (readings.temps || []).map(t => tempLabel(t.label) + t.value).join("  ")
     readonly property string customText: customPoll.output.split("\n")[0]
 
+    // the revision block's rows (RevisionBlock.qml): the focused window's repository, polled while
+    // [title] revisions = true, and again at once when the focus moves
+    Poll {
+        id: revisionsPoll
+        command: [root.bin, "revisions"]
+        interval: 4000
+        running: theme.title.revisions === true
+    }
+    // nothing focused (every window parked): the last rows stay, so the bare sheet shows the work just left
+    property var revisions: ({})
+    Connections {
+        target: revisionsPoll
+        function onOutputChanged() {
+            let v = {}
+            try { v = JSON.parse(revisionsPoll.output) } catch (e) {}
+            if (v.focused !== false) root.revisions = v
+        }
+    }
+    readonly property var focusedWindow: { const w = Compositor.windows.find(w => w.focused); return w ? w.id : null }
+    onFocusedWindowChanged: revisionsPoll.rerun()
+
     // volume and brightness are lettered for a few seconds after they change (volume stays while muted)
     property bool settled: false
     Timer { interval: 3000; running: true; onTriggered: root.settled = true }
@@ -304,6 +325,7 @@ ShellRoot {
             Component.onCompleted: Compositor.setMerged(modelData.name, mergedCells)
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
+            RevisionBlock { shell: root; edge: edge }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----
