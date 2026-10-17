@@ -5,6 +5,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **A website**, https://draftpaper.este.systems/, with a theme generator (the settings' scheme builder,
+  in the browser) and a wallpaper generator (the sheet of any theme at any screen's size). Linked from the
+  README and the man page.
 - toml 1.1 and png 0.18 (#40). Screenshots are written with fast compression, png 0.18's default being slower,
   and under a hidden name until whole, so nothing reads half a picture.
 

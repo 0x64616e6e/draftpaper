@@ -1,6 +1,8 @@
 # Draftpaper
 
-A Wayland desktop drawn as a drafting sheet.
+A Wayland desktop drawn as a drafting sheet. Website: https://draftpaper.este.systems/, with a
+[theme generator](https://draftpaper.este.systems/schemes/) and a
+[wallpaper generator](https://draftpaper.este.systems/wallpapers/) (the sheet for any desktop).
 
 There is no bar. The wallpaper is a sheet of paper with a frame, a dot grid and zone ticks, and windows
 end exactly on the frame line. What a bar would show is lettered onto the sheet:
@@ -334,6 +336,10 @@ contrast between text and background carries legibility, its hue does not. The s
 picked; Enter keeps it (a built scheme is written to `[scheme]` in config.toml and to the theme
 `custom`), Escape goes back. R twice on your copy of a shipped theme brings the shipped one back
 (`draftpaper theme revert NAME`). `draftpaper theme check` holds any theme to the same rules.
+The same builder runs on the web: the [theme generator](https://draftpaper.este.systems/schemes/) makes
+the very theme file the settings would, to download into `~/.config/draftpaper/themes/`, and the
+[wallpaper generator](https://draftpaper.este.systems/wallpapers/) draws any theme's sheet, with the
+compositor's own shader, as a picture at any screen's size.
 
 Tab (or a click on the page's cell) turns to the wallpaper: the pictures as drawings (put yours in
 `~/Pictures/Wallpapers`; the system's backgrounds and the current picture are there too, and none
