@@ -39,8 +39,8 @@ env $clean $env_home "$comp" --headless 1920x1200 --scale 1.5 --command true > "
 comp_pid=$!
 pids=$comp_pid
 i=0
-until grep -aq "Created new socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
+until grep -aq "draftpaper: wayland socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+wl=$(grep -a "draftpaper: wayland socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 sock=$runtime/draftpaper-$wl.sock
 i=0
 until DRAFTPAPER_SOCKET=$sock "$comp" msg version > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done

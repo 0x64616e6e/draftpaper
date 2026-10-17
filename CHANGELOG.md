@@ -18,6 +18,11 @@ What changed in each release, newest first. The Debian package's own record, wit
   not start the session once the name slides, the field comes back for another try.
 - With a wallpaper, the frost under the title block shows only once the shell letters the block (as its
   rules): no frosted patch on the login and lock screens.
+- **The settings' wallpaper page scrolls**: every picture in the folders, not only the first few rows; a
+  wheel (or a touchpad) scrolls a row at a time, the arrows keep the picked one in view, and the heading
+  says which show ("1–10 OF 41").
+- The session no longer exports RUST_LOG to every program started in it: the compositors' log level is
+  DRAFTPAPER_LOG. The compositor prints its Wayland socket's name whatever the level.
 - **A better fingerprint glyph** on both screens: Tabler Icons' fingerprint (MIT), drawn as strokes at the
   weight of the sheet's rules, in place of the ellipses drawn before.
 

@@ -64,7 +64,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::process::exit(2);
     }
 
-    if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_default_env() {
+    // DRAFTPAPER_LOG (the session's: not RUST_LOG, which every program started in the session would
+    // inherit), else RUST_LOG
+    if let Ok(env_filter) = tracing_subscriber::EnvFilter::try_from_env("DRAFTPAPER_LOG").or_else(|_| tracing_subscriber::EnvFilter::try_from_default_env()) {
         tracing_subscriber::fmt().with_env_filter(env_filter).init();
     } else {
         tracing_subscriber::fmt().init();
@@ -75,6 +77,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let display: Display<Draftpaper> = Display::new()?;
     let mut data = Draftpaper::new(&mut event_loop, display);
+    // the socket's name, whatever the log level (the tests and scripts read it here)
+    eprintln!("draftpaper: wayland socket {}", data.socket_name.to_string_lossy());
 
     // --session: started as the login session (draftpaper-session): hand the environment to systemd
     // and D-Bus and start draftpaper-session.target, stopped again on exit

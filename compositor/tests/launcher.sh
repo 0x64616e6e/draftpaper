@@ -19,8 +19,8 @@ trap 'kill $pids 2>/dev/null; rm -rf "$t"' EXIT INT TERM
 env -u WAYLAND_DISPLAY -u DISPLAY HOME="$t" DRAFTPAPER_MM=6.2 "$comp" --headless 3840x2160 --scale 1.5 --command true > "$t/log" 2>&1 &
 pids=$!
 i=0
-until grep -aq "Created new socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
+until grep -aq "draftpaper: wayland socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+wl=$(grep -a "draftpaper: wayland socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 [ -n "$wl" ] || { echo "the headless compositor did not start"; exit 1; }
 # the shell and the command as the session runs them, with this checkout's QML and a home of the test's own
 run() {

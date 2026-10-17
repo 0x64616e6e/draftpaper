@@ -65,8 +65,8 @@ env $clean $common $greeter_env GREETD_SOCK="$t/greetd.sock" DRAFTPAPER_GREETER_
 greeter=$!
 pids="$pids $greeter"
 i=0
-until grep -aq "Created new socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
+until grep -aq "draftpaper: wayland socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+wl=$(grep -a "draftpaper: wayland socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 [ -n "$wl" ] || { echo "the headless compositor did not start"; exit 1; }
 ipc() { env $clean $common $greeter_env WAYLAND_DISPLAY="$wl" qs ipc -p "$repo/qml/greeter.qml" call greeter "$@"; }
 i=0
@@ -105,8 +105,8 @@ start_session() {
     session=$!
     pids="$pids $session"
     i=0
-    until grep -aq "Created new socket" "$t/log2" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-    wl2=$(grep -a "Created new socket" "$t/log2" | grep -o "wayland-[0-9]*" | head -1)
+    until grep -aq "draftpaper: wayland socket" "$t/log2" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+    wl2=$(grep -a "draftpaper: wayland socket" "$t/log2" | grep -o "wayland-[0-9]*" | head -1)
     i=0
     until DRAFTPAPER_SOCKET="${XDG_RUNTIME_DIR:?}/draftpaper-$wl2.sock" "$comp" msg version > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
 }

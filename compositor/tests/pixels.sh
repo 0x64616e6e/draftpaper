@@ -33,8 +33,8 @@ shot() {
     env -u WAYLAND_DISPLAY -u DISPLAY HOME="$t" DRAFTPAPER_MM=$mm "$comp" --headless $size --scale "$1" --command true >> "$t/log" 2>&1 &
     nest=$!
     i=0
-    until grep -aq "Created new socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
-    wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
+    until grep -aq "draftpaper: wayland socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+    wl=$(grep -a "draftpaper: wayland socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
     [ -n "$wl" ] || { echo "the headless compositor did not start:"; tail -5 "$t/log"; return 1; }
     env -u DISPLAY HOME="$t" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" DRAFTPAPER_BIN="$cli" \
         DRAFTPAPER_ROOT="$repo" DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" \

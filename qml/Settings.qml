@@ -399,58 +399,109 @@ PanelWindow {
             readonly property real picW: (settings.cw - (cols - 1) * gap) / cols
             readonly property real picH: picW * settings.height / Math.max(1, settings.width)
             readonly property int rowsShown: Math.max(1, Math.floor((board.inY + board.inH - settings.gutter - topY - 6 * settings.mm - settings.wpRows.length * rowH - 4 * settings.mm) / (picH + 7 * settings.mm)))
-            readonly property int shown: Math.min(settings.wpPictures.length, cols * rowsShown)
+            // every picture, in rows that scroll: as many shown as fit, the rest a wheel, a drag or the
+            // arrows away (the picked one kept in view)
+            readonly property real rowStep: picH + 7 * settings.mm
+            readonly property int rowsTotal: Math.max(1, Math.ceil(settings.wpPictures.length / cols))
+            readonly property int rowsView: Math.min(rowsTotal, rowsShown)
+            // the first row in view: a row, not pixels, so the picture stays put while the page lays out
+            property int topRow: 0
+            readonly property int firstRow: Math.max(0, Math.min(rowsTotal - rowsView, topRow))
+            function scrollTo(row) { topRow = Math.max(0, Math.min(rowsTotal - rowsView, row)) }
+            // the picked picture's row brought into view (the view slides to it)
+            function reveal() {
+                const i = settings.wpPictures.indexOf(settings.wpPicture)
+                if (i < 0) return
+                const row = Math.floor(i / cols)
+                if (row < firstRow) scrollTo(row)
+                else if (row >= firstRow + rowsView) scrollTo(row - rowsView + 1)
+            }
+            Connections { target: settings; function onWpPictureChanged() { wallPage.reveal() } function onWpPicturesChanged() { wallPage.reveal() } }
+            onRowsViewChanged: reveal()
+            onColsChanged: reveal()
             Text {
                 x: settings.x0; y: wallPage.topY
                 text: "PICTURES · " + (settings.wp ? settings.wp.dirs.join(", ") : "") + " (config.toml: wallpaper_dirs)"
+                    + (wallPage.rowsTotal > wallPage.rowsShown
+                       ? " · " + (wallPage.firstRow * wallPage.cols + 1) + "–" + Math.min(settings.wpPictures.length, (wallPage.firstRow + wallPage.rowsShown) * wallPage.cols)
+                         + " OF " + settings.wpPictures.length
+                       : "")
                     + (settings.wp && settings.wp.current && !settings.wp.exists ? " · yours is gone: " + settings.wp.current : "")
                 font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.2 * settings.mm; font.bold: settings.wpRow === 0
                 color: settings.wpRow === 0 ? settings.ink : settings.inkA(0.6)
             }
-            Repeater {
-                model: wallPage.shown
-                Item {
-                    id: pic
-                    required property int index
-                    readonly property string path: settings.wpPictures[index]
-                    readonly property bool chosen: settings.wpPicture === path
-                    x: settings.x0 + (index % wallPage.cols) * (wallPage.picW + wallPage.gap)
-                    y: wallPage.topY + 6 * settings.mm + Math.floor(index / wallPage.cols) * (wallPage.picH + 7 * settings.mm)
-                    width: wallPage.picW; height: wallPage.picH
-                    Rectangle {         // none: the paper
-                        anchors.fill: parent
-                        visible: pic.path === ""
-                        color: board.t ? board.t.paper : "#C9BDAE"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "NO PICTURE · PAPER"
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.letterSpacing: 0.2 * settings.mm
-                            color: settings.ink
+            Flickable {
+                id: picFlick
+                // a millimetre around the pictures, for the picked one's heavier frame
+                readonly property real pad: 1 * settings.mm
+                x: settings.x0 - pad; y: wallPage.topY + 6 * settings.mm - pad
+                width: settings.cw + 2 * pad
+                // the rows in view and their names, not the frame of the next row peeking in
+                height: wallPage.rowsView * wallPage.rowStep - pad
+                contentWidth: width
+                contentHeight: wallPage.rowsTotal * wallPage.rowStep + pad
+                clip: true
+                // scrolled a row at a time: the wheel (a touchpad's small steps added up to a notch), and the
+                // arrows keeping the picked picture in view; sliding there
+                interactive: false
+                contentY: wallPage.firstRow * wallPage.rowStep
+                Behavior on contentY { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                WheelHandler {
+                    property real acc: 0
+                    onWheel: e => {
+                        acc += e.angleDelta.y !== 0 ? e.angleDelta.y : e.angleDelta.x
+                        const n = Math.trunc(acc / 120)
+                        if (n !== 0) { acc -= n * 120; wallPage.scrollTo(wallPage.firstRow - n) }
+                    }
+                }
+                Repeater {
+                    model: settings.wpPictures.length
+                    Item {
+                        id: pic
+                        required property int index
+                        readonly property string path: settings.wpPictures[index]
+                        readonly property bool chosen: settings.wpPicture === path
+                        readonly property int row: Math.floor(index / wallPage.cols)
+                        // loaded only in view (and a row either side): a folder of hundreds stays light
+                        readonly property bool near: row >= wallPage.firstRow - 1 && row <= wallPage.firstRow + wallPage.rowsShown
+                        x: picFlick.pad + (index % wallPage.cols) * (wallPage.picW + wallPage.gap)
+                        y: picFlick.pad + row * wallPage.rowStep
+                        width: wallPage.picW; height: wallPage.picH
+                        Rectangle {         // none: the paper
+                            anchors.fill: parent
+                            visible: pic.path === ""
+                            color: board.t ? board.t.paper : "#C9BDAE"
+                            Text {
+                                anchors.centerIn: parent
+                                text: "NO PICTURE · PAPER"
+                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.letterSpacing: 0.2 * settings.mm
+                                color: settings.ink
+                            }
                         }
+                        Image {             // cropped to fill, as the compositor mounts it in the frame
+                            anchors.fill: parent
+                            visible: pic.path !== ""
+                            source: pic.path && pic.near ? "file://" + pic.path : ""
+                            fillMode: Image.PreserveAspectCrop
+                            sourceSize: Qt.size(Math.round(wallPage.picW * 2), Math.round(wallPage.picH * 2))
+                            asynchronous: true
+                            smooth: true
+                        }
+                        Rectangle {
+                            readonly property real w: pic.chosen ? Math.max(2, 0.7 * settings.mm) : Math.max(1, 0.2 * settings.mm)
+                            anchors.fill: parent; anchors.margins: -w
+                            color: "transparent"; border.width: w
+                            border.color: pic.chosen ? settings.ink : settings.inkA(0.5)
+                        }
+                        Text {
+                            anchors { left: parent.left; top: parent.bottom; topMargin: 1.2 * settings.mm }
+                            width: parent.width; elide: Text.ElideMiddle
+                            text: pic.path ? pic.path.split("/").pop() : "none"
+                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.7; font.bold: pic.chosen
+                            color: pic.chosen ? settings.ink : settings.inkA(0.7)
+                        }
+                        MouseArea { anchors.fill: parent; onPressed: { settings.wpRow = 0; settings.wpPick(pic.path) } }
                     }
-                    Image {             // cropped to fill, as the compositor mounts it in the frame
-                        anchors.fill: parent
-                        visible: pic.path !== ""
-                        source: pic.path ? "file://" + pic.path : ""
-                        fillMode: Image.PreserveAspectCrop
-                        sourceSize: Qt.size(Math.round(wallPage.picW * 2), Math.round(wallPage.picH * 2))
-                        asynchronous: true
-                        smooth: true
-                    }
-                    Rectangle {
-                        readonly property real w: pic.chosen ? Math.max(2, 0.7 * settings.mm) : Math.max(1, 0.2 * settings.mm)
-                        anchors.fill: parent; anchors.margins: -w
-                        color: "transparent"; border.width: w
-                        border.color: pic.chosen ? settings.ink : settings.inkA(0.5)
-                    }
-                    Text {
-                        anchors { left: parent.left; top: parent.bottom; topMargin: 1.2 * settings.mm }
-                        width: parent.width; elide: Text.ElideMiddle
-                        text: pic.path ? pic.path.split("/").pop() : "none"
-                        font.family: Fonts.mono; font.pixelSize: settings.font * 0.7; font.bold: pic.chosen
-                        color: pic.chosen ? settings.ink : settings.inkA(0.7)
-                    }
-                    MouseArea { anchors.fill: parent; onPressed: { settings.wpRow = 0; settings.wpPick(pic.path) } }
                 }
             }
             // the wallpaper's settings, as the builder's rows
@@ -462,7 +513,7 @@ PanelWindow {
                     required property int index
                     readonly property bool here: settings.wpRow === index + 1
                     x: settings.x0
-                    y: wallPage.topY + 6 * settings.mm + Math.ceil(wallPage.shown / wallPage.cols) * (wallPage.picH + 7 * settings.mm) + 2 * settings.mm + index * wallPage.rowH
+                    y: wallPage.topY + 6 * settings.mm + wallPage.rowsView * wallPage.rowStep + 2 * settings.mm + index * wallPage.rowH
                     width: settings.cw; height: wallPage.rowH
                     Rectangle { width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
                     Text {

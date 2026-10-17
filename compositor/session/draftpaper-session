@@ -11,5 +11,5 @@ export GDK_BACKEND="wayland,x11"
 export SDL_VIDEODRIVER=wayland
 export _JAVA_AWT_WM_NONREPARENTING=1
 # its log to the journal (journalctl -t draftpaper): a display manager may keep none (greetd does not)
-export RUST_LOG="${RUST_LOG:-warn}"
+export DRAFTPAPER_LOG="${DRAFTPAPER_LOG:-warn}"
 exec systemd-cat --identifier=draftpaper draftpaper-compositor --tty --session "$@"
