@@ -3,7 +3,9 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.5.0 (2026-10-17)
+
+The session comes back as it was left, and a lock screen of Draftpaper's own.
 
 - **The session comes back** after a logout or a reboot (#38). Every application open at the end starts
   again at login, by its desktop entry or else its command line, and each window goes back to its
@@ -20,15 +22,13 @@ What changed in each release, newest first. The Debian package's own record, wit
   file and, started with no file, the session it last had in that directory; tmux its sessions, windows
   and panes, each pane in its directory and running its program again, across a reboot
   (`draftpaper tmux`). `apps = false` takes these files back out.
-- Windows put back on a workspace not shown, or parked, no longer stay blank when shown: every new
-  window is told to draw wherever it goes.
 - **The fingerprint reader keeps listening** on the login and lock screens: when it gives up (a finger
   not recognised, or its timeout) and nothing is typed, it listens again, as often as it takes; a finger
   not recognised shakes the field. Typing a password still works at any time. Escape on the login screen
   while the reader listens goes back to the name once it gives up.
 - **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,
-  nothing of the windows, and one field with the fingerprint reader listening. When the reader fails or
-  gives up, or you start typing, the password's dots follow its glyph. It is Draftpaper's own
+  nothing of the windows, and one field with the fingerprint reader listening. Start typing and the
+  password's dots follow its glyph. It is Draftpaper's own
   (`draftpaper lock`, `qml/lock.qml`, PAM service `draftpaper-lock`) in place of swaylock, which stays a
   fallback should it not lock within 5 seconds.
 - **The login and lock screens** are one field in the middle of the sheet and no words (no heading, no

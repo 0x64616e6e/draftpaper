@@ -12,10 +12,10 @@ the compositor.
 
 Draftpaper as a compositor of its own, on Smithay: the sheet drawn by the compositor, windows tiled on
 whole zones (free-form since 0.3.0), parking with exact restore, a launcher of its own (0.3.0), and its
-own login screen under greetd with a flicker-free handoff to the session (0.4.0). It replaces the i3
-edition in the `draftpaper` package. Design: `docs/wayland-design.md`.
-
-The session restored after a logout or a reboot, the applications back in their places (#38).
+own login screen under greetd with a flicker-free handoff to the session (0.4.0), a lock screen as the
+login screen and the session restored after a logout or a reboot, the applications back in their places
+with their files, tabs and editors (0.5.0; #38). It replaces the i3 edition in the `draftpaper` package.
+Design: `docs/wayland-design.md`.
 
 Next: settings for the displays and text pages (#36); drag and drop (#18).
 

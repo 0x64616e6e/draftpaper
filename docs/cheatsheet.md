@@ -16,7 +16,7 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+Shift+q | Close the window |
 | Mod+1 … Mod+9, Mod+0 | Workspace 1 … 9, 10 |
 | Mod+Shift+1 … Mod+Shift+0 | Send the window to that workspace |
-| Mod+Shift+e | Leave the session |
+| Mod+Shift+e | Leave the session (written first, to come back at the next login) |
 | Ctrl+Alt+F1 … F12 | Virtual terminal |
 
 Every window takes a rectangle of zones. A new window takes the largest free one, else the second half of
@@ -55,7 +55,7 @@ across a reboot. `[session] restore = false` turns it all off, `apps = false` th
 | Shift+Print | The screen you are on into ~/Pictures |
 | Mod+Print | Every screen into ~/Pictures (the compositor's own) |
 | Mod+z | The magnifier on the pointer, each pixel a block; scroll zooms (2–64×), Shift+scroll sizes it, Escape or Mod+z puts it away |
-| Mod+Shift+x | Lock now (`draftpaper lock`): touch the fingerprint reader, or type the password and Enter |
+| Mod+Shift+x | Lock now (`draftpaper lock`): touch the fingerprint reader (it listens until it knows the finger), or type the password and Enter |
 | Mod+Shift+p | Lock before every suspend, until turned off or the next login |
 | Volume, mic, brightness keys | wpctl (volume up to 150%), brightnessctl |
 
@@ -156,9 +156,9 @@ between them, ← → along, each change shown at once.
 
 | | |
 |---|---|
-| (the name filled in) | The fingerprint reader listens at once; touch it, or type the password and Enter |
+| (the name filled in) | The fingerprint reader listens at once, and again each time it gives up; touch it, or type the password and Enter |
 | Enter | The name to the password, the password to greetd |
-| Escape | Clear what is typed; again, the name too |
+| Escape | Clear what is typed; again, the name too (while the reader listens: once it gives up) |
 | Ctrl+u | Clear what is typed |
 | Ctrl+Alt+F2 | A text console (VT1 has none: `fbcon=vc:2-63`) |
 

@@ -46,7 +46,7 @@ as they were (`[session]` under [Configuration](#configuration)). What changed f
 Draftpaper is a Debian package (Debian 13, amd64). It needs Quickshell 0.3 or later, which Debian 13
 provides in trixie-backports:
 
-    sudo apt install -t trixie-backports quickshell ./draftpaper_0.4.0_amd64.deb   # from the latest release
+    sudo apt install -t trixie-backports quickshell ./draftpaper_0.5.0_amd64.deb   # from the latest release
 
 Install both from backports in one go: Quickshell brings newer PipeWire libraries from there, and the
 recommended wireplumber has to come from the same place.
@@ -87,7 +87,7 @@ Mod is Super (the Windows key). Every key, click and command on one page: [docs/
 | Mod+Print | Every screen to ~/Pictures |
 | Mod+z | A magnifier on the pointer: scroll zooms, Shift+scroll sizes it, Escape closes |
 | Volume, brightness keys | wpctl, brightnessctl |
-| Mod+Shift+e | Leave the session |
+| Mod+Shift+e | Leave the session (written first, to come back at the next login) |
 | Ctrl+Alt+F1 … F12 | Switch virtual terminal |
 
 Clicks: a workspace number switches to it; an empty side cell parks the focused window there and a
@@ -102,8 +102,8 @@ margin above it; the most used come first. `draftpaper menu` shows any list of l
 ![The lock screen: the sheet blurred inside its frame, one field with the fingerprint reader listening](docs/lock.jpg)
 
 *The lock screen (Super+Shift+X), as the login screen: the sheet blurred inside its frame, nothing of
-the windows, one field with the fingerprint reader listening. If it fails or gives up, or you start
-typing, the password's dots follow the glyph.*
+the windows, one field with the fingerprint reader listening, again and again until it knows your
+finger (one not recognised shakes the field). Start typing and the password's dots follow the glyph.*
 
 ## Configuration
 
@@ -228,7 +228,7 @@ unplugged; when every display left is off, they come on again.
 
 Actions: `focus|move|resize left|right|up|down`, `workspace N`, `send N`, `fullscreen`, `close`, `park`,
 `park_next`, `park_prev`, `screenshot`, `zoom` (the magnifier), `pointer X Y` (the pointer there, for
-scripts), `power off|on`, `reload`, `quit`, `spawn COMMAND`.
+scripts), `power off|on`, `reload`, `quit`, `session_save` (the session written now), `spawn COMMAND`.
 
 ## Login screen (experimental)
 
@@ -236,8 +236,8 @@ Draftpaper can be its own login screen under [greetd](https://sr.ht/~kennylevins
 `draftpaper-greeter` draws your sheet, blurred inside its frame (the margins sharp), with one field in
 the middle of it and no words.
 With your name known the session is asked for at once, so a fingerprint reader (pam_fprintd) listens
-from the start, its glyph lit in the field; a password typed meanwhile is given when PAM asks for it;
-a refusal shakes the field.
+from the start, its glyph lit in the field, and keeps listening, again each time it gives up; a password
+typed meanwhile is given when PAM asks for it; a refusal shakes the field.
 Once you are in, your name appears in the field and slides into the title block's DRAWN cell, and the session
 starts on the same VT without a flicker: the login screen leaves that frame on screen when it exits,
 the session takes the displays over as they are, in the same mode, shows that very frame until its
@@ -376,8 +376,8 @@ launcher, the lock screen and the applications, the readings the shell polls.
                                  # from rustup), the shaders (qsb)
     dpkg-buildpackage -us -uc -b # the package
     make check                   # the unit tests
-    make pixels                  # the sheet pixel by pixel, the zones, the launcher and the login screen,
-                                 # headless (nothing is shown on any display)
+    make pixels                  # the sheet pixel by pixel, the zones, the launcher, the login and lock
+                                 # screens, session restore, headless (nothing is shown on any display)
     make screenshots             # the pictures in docs/ (needs foot and ImageMagick)
 
 The build needs the development packages in `debian/control` and fetches the crates with cargo.

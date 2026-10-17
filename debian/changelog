@@ -1,3 +1,35 @@
+draftpaper (0.5.0) unstable; urgency=medium
+
+  * The session comes back after a logout or a reboot (#38): every
+    application open at the end starts again at login (its desktop entry,
+    else its command line), each window back on its workspace and zones,
+    floating, fullscreen or parked in its cell. Saved to
+    ~/.local/state/draftpaper/session.json once it has held, and by
+    Mod+Shift+e; config.toml [session] restore, skip. Windows put back out
+    of sight are sent their first configure, so they draw once shown.
+  * The applications as they were left: a terminal starts in its shell's
+    directory and runs again what it ran (an editor, a pager, a monitor,
+    tmux); an application started with documents opens them again.
+    `draftpaper apply` switches on each one's own restore ([session] apps):
+    Firefox and Chromium their tabs, Emacs its files at their places
+    (desktop-save-mode), Neovim the cursor and a session per directory, tmux
+    its sessions across a reboot (`draftpaper tmux save|keep|restore`).
+  * A lock screen of Draftpaper's own (`draftpaper lock`, qml/lock.qml, PAM
+    service draftpaper-lock) in place of swaylock, which stays a fallback:
+    the sheet blurred, nothing of the windows, one field. The login and lock
+    screens are one field and no words; the margins stay sharp.
+  * The fingerprint reader listens as often as it takes on both screens:
+    when pam_fprintd gives up with nothing typed, the conversation starts
+    over; a finger not recognised shakes the field.
+  * The login screen no longer gets stuck after Escape while the reader
+    listens, and recovers when greetd does not start the session.
+  * The settings' wallpaper page scrolls through every picture.
+  * The compositors' log level is DRAFTPAPER_LOG, no longer RUST_LOG
+    exported to the whole session. A better fingerprint glyph (Tabler
+    Icons, MIT).
+
+ -- 0x64616e6e <daniel@este.systems>  Sat, 17 Oct 2026 17:39:00 +0300
+
 draftpaper (0.4.0) unstable; urgency=medium
 
   * A login screen of Draftpaper's own, for greetd (#37, experimental):

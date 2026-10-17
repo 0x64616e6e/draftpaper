@@ -28,7 +28,7 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper start            apply the theme and run the shell (draftpaper-shell.service, in the session)
   draftpaper stop             stop the shell
   draftpaper apply            write the theme's files again (the shell, launcher, lock screen, idle,
-                              applications)
+                              applications: their colours and session restore)
   draftpaper theme [list]     list the themes, the current one marked
   draftpaper theme <name> [--preview]
                               switch theme: the sheet and the applications; a --preview (the settings

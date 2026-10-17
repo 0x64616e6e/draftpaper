@@ -1,4 +1,4 @@
-.TH DRAFTPAPER 1 "2026-10-17" "draftpaper 0.4.0" "User Commands"
+.TH DRAFTPAPER 1 "2026-10-17" "draftpaper 0.5.0" "User Commands"
 .SH NAME
 draftpaper, draftpaper-compositor, draftpaper-session, draftpaper-greeter, draftpaper-as \- the Wayland desktop drawn as a drafting sheet
 .SH SYNOPSIS
@@ -78,7 +78,8 @@ Apply the theme and run the shell (draftpaper-shell.service does this in the ses
 Stop the shell.
 .TP
 .B apply
-Write the theme's files again: the shell, the launcher, the lock screen, idle, the applications.
+Write the theme's files again: the shell, the launcher, the lock screen, idle, the applications (their
+colours, and their own session restore: [session] apps).
 .TP
 .BR theme " [" list "|" next "|" json "|" \fINAME\fR " [" --preview ]]
 List the themes, switch to the next one, print every theme's values, or switch to NAME (the sheet and
@@ -129,8 +130,8 @@ settings' wallpaper page sets them.
 With a wallpaper: the margins in the theme's paper or in the picture's colours.
 .TP
 .B lock
-Lock the screen: the sheet blurred, the fingerprint reader first (when pam_fprintd is set up), then
-the password, through the PAM service
+Lock the screen: the sheet blurred, the fingerprint reader listening (when pam_fprintd is set up),
+again each time it gives up, or the password when typed, through the PAM service
 .BR draftpaper-lock .
 Back once it is locked (swayidle's before-sleep waits for it); swaylock locks instead when the lock
 screen does not.
