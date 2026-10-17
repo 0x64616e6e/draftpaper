@@ -135,7 +135,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     // the displays as they are, not reset: a display showing the greeter's last frame (or the firmware's
     // picture) in the mode Draftpaper wants is taken over without going dark (adopt)
     let (drm, drm_notifier) = DrmDevice::new(fd.clone(), false).map_err(err("drm device"))?;
-    log_screens(&drm, "device opened");
+    log_screens(&drm, if drm.is_atomic() { "device opened (atomic)" } else { "device opened (legacy: tests are commits)" });
     let gbm = GbmDevice::new(fd).map_err(err("gbm device"))?;
     let egl = unsafe { EGLDisplay::new(gbm.clone()) }.map_err(err("egl display"))?;
     let context = EGLContext::new(&egl).map_err(err("egl context"))?;
@@ -889,13 +889,15 @@ pub fn capture_into(data: &mut Draftpaper, dir: &std::path::Path) {
     data.tty_data = Some(tty);
 }
 
-/// A frame the driver refused, likely on the state the previous owner left (adopt): reset every display,
+/// A first frame the driver refused, likely on the state the previous owner left (adopt): reset every display,
 /// as Draftpaper did before it took them over as they were, once; the next frames set their modes anew.
 /// Not when the frame was refused for want of the device (not its master yet: the previous owner's
 /// session still ending, or another VT): that passes, and a reset then would darken the displays.
 fn reset_once(tty: &mut TtyData, why: &str) {
     let master = why.contains("PermissionDenied") || why.contains("DeviceInactive") || why.contains("os error 13") || why.contains("os error 1)");
-    if master || !tty.session.is_active() {
+    // only while taking over: once a frame is on screen, the state is Draftpaper's own, and a refused
+    // frame (a client's buffer a plane would not take) is dropped, not answered by darkening the displays
+    if master || !tty.session.is_active() || !tty.drawn.is_empty() {
         return;
     }
     if std::mem::replace(&mut tty.reset, true) {
