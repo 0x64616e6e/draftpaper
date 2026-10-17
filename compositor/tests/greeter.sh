@@ -6,9 +6,10 @@
 # /usr/share/pixmaps) a wallpaper; `draftpaper apply` copies its look for the login screen (cli's
 # greeter.rs). The greeter runs on that copy as draftpaper-greeter runs it, the name filled in, and is
 # driven over its test IPC as the keys drive it, the stand-in's fingerprint reader listening first (as
-# pam_fprintd): a password typed meanwhile is held, given when PAM asks and refused; then the finger
-# signs in, greetd is asked to start draftpaper-session, and the compositor leaves its last frame (the
-# sheet blurred, the name in the title block). A compositor on the user's own home opens on that very
+# pam_fprintd): a password typed meanwhile is held, given when PAM asks and refused; the reader listens
+# again each time it gives up with nothing typed; Escape meanwhile goes back to the name once it does;
+# then the finger signs in, greetd is asked to start draftpaper-session, and the compositor leaves its
+# last frame (the sheet blurred, the name in the title block). A compositor on the user's own home opens on that very
 # picture and reveals the desktop as it is without one, pixel for pixel. SHOT=FILE keeps a screenshot
 # of the card.
 set -u
@@ -78,10 +79,19 @@ ok "a password typed meanwhile, held" "$(ipc state)" "password busy finger"
 # the reader gives up (3 s), PAM asks for the password, the held one goes and is refused
 ok "then given when PAM asks, and refused" "$(until_state "Authentication failure" 60)" "password: Authentication failure"
 ok "the reader listening again" "$(until_state "finger" 20)" "password finger: Authentication failure"
+# nothing typed: each time the reader gives up (3 s), it listens again, with no refusal
+for n in 1 2; do
+    sleep 3.4
+    ok "the reader given up, listening again ($n)" "$(until_state "finger" 10)" "password finger: Authentication failure"
+done
 # Escape while the reader listens sends greetd nothing (it answers no request until PAM is back): the
-# replies would come out of order and the sign-in be lost
+# replies would come out of order and the sign-in be lost. It is done when the reader gives up
 ipc back
 ok "Escape while the reader listens: nothing sent, the password still" "$(ipc state)" "password finger: Authentication failure"
+ok "the reader given up: the name, as Escape asked" "$(until_state "^name" 45)" "name"
+ipc type drafttest
+ipc enter
+ok "the name again, the reader listening" "$(until_state "^password finger" 20)" "password finger"
 if [ -n "${SHOT:-}" ]; then
     mkdir -p "$look/Pictures"
     kill -USR1 "$greeter"

@@ -22,6 +22,10 @@ What changed in each release, newest first. The Debian package's own record, wit
   (`draftpaper tmux`). `apps = false` takes these files back out.
 - Windows put back on a workspace not shown, or parked, no longer stay blank when shown: every new
   window is told to draw wherever it goes.
+- **The fingerprint reader keeps listening** on the login and lock screens: when it gives up (a finger
+  not recognised, or its timeout) and nothing is typed, it listens again, as often as it takes; a finger
+  not recognised shakes the field. Typing a password still works at any time. Escape on the login screen
+  while the reader listens goes back to the name once it gives up.
 - **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,
   nothing of the windows, and one field with the fingerprint reader listening. When the reader fails or
   gives up, or you start typing, the password's dots follow its glyph. It is Draftpaper's own

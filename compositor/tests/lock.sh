@@ -4,8 +4,9 @@
 # DRAFTPAPER_LOCK_TEST=1), shaped as common-auth with a fingerprint reader: pam_echo says to touch the
 # reader, a stand-in reader (pam_exec, sufficient) waits 3 s for a file, then pam_exec asks the password
 # (pencil). `draftpaper lock` returns once locked, with the reader listening; a password typed meanwhile
-# is held, given when PAM asks and refused; the reader listens again, the finger unlocks; the sheet is
-# as it was before the lock, and blurred while locked. SHOT=FILE keeps a screenshot of the lock screen.
+# is held, given when PAM asks and refused; the reader listens again, and again each time it gives up
+# with nothing typed; the finger unlocks; the sheet is as it was before the lock, and blurred while
+# locked. SHOT=FILE keeps a screenshot of the lock screen.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -79,6 +80,11 @@ ok "a password typed meanwhile, held" "$(ipc state)" "locked finger password"
 # the reader gives up (3 s), PAM asks for the password, the held one goes and is refused
 ok "then given when PAM asks, and refused" "$(until_state "Not unlocked" 60)" "locked password: Not unlocked"
 ok "the reader listening again" "$(until_state "finger" 20)" "locked finger password: Not unlocked"
+# nothing typed: each time the reader gives up (3 s), it listens again, with no refusal
+for n in 1 2; do
+    sleep 3.4
+    ok "the reader given up, listening again ($n)" "$(until_state "finger" 10)" "locked finger password: Not unlocked"
+done
 touch "$t/finger"
 i=0
 while ipc state | grep -q "^locked\|^unlocking" && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done

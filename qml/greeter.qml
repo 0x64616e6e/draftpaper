@@ -5,8 +5,10 @@
 //
 // With the name known, greetd is asked for a session at once, so a fingerprint reader (pam_fprintd) is
 // listening from the start; a password typed meanwhile is held and given when PAM asks for it (after
-// the reader, which gives up after its timeout). Enter goes on (the name to the password, the password
-// to greetd); Escape clears.
+// the reader, which gives up after its timeout). When the reader gives up (a failed read, or its
+// timeout) and nothing is typed, the session starts over and the reader listens again, as often as it
+// takes. Enter goes on (the name to the password, the password to greetd); Escape clears (back to the
+// name once the reader gives up, while it listens).
 //
 // Once greetd accepts, the name appears in the field and slides into its place in the title block (the
 // DRAWN cell, lettered there as the session's shell letters it) while the field fades; the session is
@@ -45,6 +47,24 @@ ShellRoot {
     property string hint: ""            // and its last word otherwise
     property bool busy: false
     property bool leaving: false
+    property bool reader: false         // the reader took part in this conversation
+    property bool rearming: false       // the session cancelled on purpose, for the reader to listen again
+    property bool toName: false         // Escape pressed while greetd could not be asked: the name, when it can
+
+    // the reader gave up (a failed read, or its timeout) and PAM asks for the password instead: unless one
+    // is being typed, the session starts over and the reader listens again, as often as it takes. greetd
+    // waits on us then (the question is ours to answer), so the cancel is answered at once
+    function listenAgain() {
+        // Escape pressed while the reader listened: back to the name instead
+        if (toName && field === "password" && text === "") { toName = false; asked = true; clear(); return true }
+        if (!reader || field !== "password" || text !== "" || pending !== null || leaving) return false
+        rearming = true
+        asked = false
+        Greetd.cancelSession()
+        again.restart()
+        return true
+    }
+    onTextChanged: if (asked && text === "") listenAgain()
 
     function blur(on) { Compositor.send({ request: "blur", mm: on ? blurMm : 0 }) }
     // a session for the name: PAM starts (the reader listens)
@@ -52,6 +72,8 @@ ShellRoot {
         if (!user || leaving || Greetd.state !== GreetdState.Inactive) return
         asked = false
         finger = false
+        reader = false
+        rearming = false
         Greetd.createSession(user)
     }
     function submit() {
@@ -89,8 +111,10 @@ ShellRoot {
         if (text) { text = ""; return }
         // back to the name only while greetd waits on us (no conversation, or a question unanswered):
         // greetd answers one request at a time, and while PAM waits on the reader it answers none, so a
-        // cancel then would queue behind it and the replies come out of order
-        if (Greetd.state !== GreetdState.Inactive && !asked && field !== "answer") return
+        // cancel then would queue behind it and the replies come out of order: then it is done as soon as
+        // the reader gives up
+        if (Greetd.state !== GreetdState.Inactive && !asked && field !== "answer") { toName = true; return }
+        toName = false
         if (Greetd.state !== GreetdState.Inactive) Greetd.cancelSession()
         busy = false; pending = null; asked = false; finger = false; prompt = ""; note = ""; hint = ""
         field = "name"
@@ -135,6 +159,7 @@ ShellRoot {
             if (responseRequired && !echoResponse && root.field === "password") {
                 // the password
                 root.finger = false
+                if (root.listenAgain()) return
                 if (root.pending !== null) {
                     const p = root.pending
                     root.pending = null
@@ -152,12 +177,19 @@ ShellRoot {
                 root.busy = false
             } else if (error) {
                 root.note = message
+                // a finger not recognised: a shake (the reader listens again)
+                if (root.reader && /match/i.test(message)) card.refuse()
             } else {
-                if (/finger|swipe|touch|reader/i.test(message)) root.finger = true
+                if (/finger|swipe|touch|reader/i.test(message)) {
+                    root.finger = true
+                    root.reader = true
+                }
                 root.hint = message
             }
         }
         function onAuthFailure(message) {
+            // cancelled to listen again: not a refusal
+            if (root.rearming) return
             root.note = message || "Not signed in"
             card.refuse()
             root.busy = false; root.pending = null; root.asked = false; root.finger = false; root.prompt = ""
