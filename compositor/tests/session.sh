@@ -15,6 +15,9 @@ config() { printf 'theme = "softglow"\nmargin = 6\n%s\n[apps]\nskip = ["gtk", "q
 config ""
 # the test's own entry (the system's are left out: XDG_DATA_DIRS)
 printf '[Desktop Entry]\nType=Application\nName=Draft test\nExec=foot --app-id=drafttest\n' > "$t/data/applications/drafttest.desktop"
+# a viewer of documents (its entry takes files: %f)
+printf '[Desktop Entry]\nType=Application\nName=Draft viewer\nExec=foot --app-id=draftdoc less %%f\n' > "$t/data/applications/draftdoc.desktop"
+seq 1 500 > "$t/three/notes.txt"; seq 1 50 > "$t/one/doc.txt"
 pids=
 trap 'kill $pids 2>/dev/null; rm -rf "$t"' EXIT INT TERM
 fail=0
@@ -37,7 +40,7 @@ start() {
 }
 msg() { DRAFTPAPER_SOCKET=$sock "$comp" msg "$@" > /dev/null; sleep 0.3; }
 # a terminal of app id $1 in directory $2
-term() { (cd "$2" && env -u DISPLAY $user_env WAYLAND_DISPLAY="$wl" foot --app-id="$1" > /dev/null 2>&1) & pids="$pids $!"; sleep 0.8; }
+term() { a=$1 d=$2; shift 2; (cd "$d" && env -u DISPLAY $user_env WAYLAND_DISPLAY="$wl" foot --app-id="$a" "$@" > /dev/null 2>&1) & pids="$pids $!"; sleep 0.8; }
 # the windows, one line each, as the session would put them back: app id, workspace, parked, cell,
 # floating, geometry (on the workspace shown)
 windows() {
@@ -52,19 +55,20 @@ saved() { { tr -d ' \n' < "$t/state/draftpaper/session.json"; } 2>/dev/null | gr
 
 start
 term drafttest "$t/one"
-term drafttest "$t/three"
+term draftdoc "$t/one" less doc.txt
+term drafttest "$t/three" sh -c "less notes.txt; exec sh"
 msg park
 term draftother "$t/two"
 msg send 2
 for i in 1 2; do msg resize left; done
 before=$(windows)
 echo "$before" | sed 's/^/    /'
-ok "three windows: tiled, parked, on workspace 2" "$(echo "$before" | wc -l)" "3"
+ok "four windows: tiled, parked, on workspace 2" "$(echo "$before" | wc -l)" "4"
 
 # written once it has held for a whole period (2 s), checked every period
 i=0
-while [ "$(saved)" != 3 ] && [ $i -lt 80 ]; do sleep 0.1; i=$((i + 1)); done
-ok "the session written" "$(saved)" "3"
+while [ "$(saved)" != 4 ] && [ $i -lt 80 ]; do sleep 0.1; i=$((i + 1)); done
+ok "the session written" "$(saved)" "4"
 ok "with the shells' directories" "$(grep -c "\"dir\": \"$t/\(one\|two\|three\)\"" "$t/state/draftpaper/session.json")" "3"
 ok "and only the user may read it" "$(stat -c %a "$t/state/draftpaper/session.json")" "600"
 
@@ -74,13 +78,18 @@ sleep 1
 
 start
 i=0
-while [ "$(windows | wc -l)" -lt 3 ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+while [ "$(windows | wc -l)" -lt 4 ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
 sleep 0.5
 after=$(windows)
 ok "every window back where it was" "$after" "$before"
-ok "the entry's terminals started in their directories" "$(grep -c "session: started drafttest (foot --app-id=drafttest) in $t/\(one\|three\)$" "$t/log")" "2"
+ok "the entry's terminals started in their directories" "$(grep -c "session: started drafttest (foot --app-id=drafttest.*) in $t/\(one\|three\)$" "$t/log")" "2"
+ok "the terminal that ran less runs it again, then its shell" "$(grep -c "session: started drafttest (foot --app-id=drafttest sh -c \"\$@\"; exec \"\$0\" /[a-z/]*/\(sh\|dash\) less notes.txt) in $t/three$" "$t/log")" "1"
+ok "the other terminal runs its shell alone" "$(grep -c "session: started drafttest (foot --app-id=drafttest) in $t/one$" "$t/log")" "1"
+ok "the viewer opens its document again" "$(grep -c "session: started draftdoc (foot --app-id=draftdoc less $t/one/doc.txt) in " "$t/log")" "1"
 ok "the other by its command line, in its directory" "$(grep -c "session: started draftother (foot --app-id=draftother) in $t/two$" "$t/log")" "1"
-ok "the session file not written half back" "$(saved)" "3"
+ok "the session file not written half back" "$(saved)" "4"
+running() { n=0; for p in $(pgrep -x less); do [ "$(readlink /proc/$p/cwd)" = "$1" ] && n=$((n + 1)); done; echo $n; }
+ok "less runs again in its terminal" "$(running "$t/three")" "1"
 # the windows put back on a workspace not shown, or parked, were told to draw too: shown, they have
 # drawn (what the client draws is as large as its tile)
 drawn() {

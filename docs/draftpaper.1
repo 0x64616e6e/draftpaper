@@ -141,6 +141,10 @@ Lock before every suspend, until turned off or the next login.
 .BR audio " " save "|" restore
 Keep the default output's volume and mute from one session to the next.
 .TP
+.BR tmux " " save "|" keep "|" restore " [\fISOCKET\fR]"
+Keep tmux's sessions, windows and panes across a reboot ([session] apps). tmux runs these itself, from
+.IR ~/.config/tmux/draftpaper-session.conf .
+.TP
 .B readings
 Print the readings the shell polls, as JSON.
 .TP
@@ -168,8 +172,14 @@ Themes of your own, beside those in
 .IR /usr/share/draftpaper/themes/ .
 .TP
 .I ~/.local/state/draftpaper/session.json
-The session as it was last: each window's application, place and directory, put back at the next
+The session as it was last: each window's application, place, directory and documents, put back at the next
 login ([session] in config.toml).
+.TP
+.I ~/.local/state/draftpaper/tmux.json
+tmux's sessions as they were last, made again when its server starts.
+.TP
+.I ~/.local/state/draftpaper/emacs/
+Emacs's desktop: the files open, each at its place ([session] apps).
 .TP
 .I ~/.cache/draftpaper/
 Generated files: the shell's theme, fuzzel's, the lock screen's and swayidle's configuration, and the

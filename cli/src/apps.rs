@@ -50,7 +50,7 @@ fn render(p: &Paths, name: &str, pal: &Map<String, Value>) -> String {
 }
 
 /// Add `line` to the user's config at `path` (made when missing) unless `marker` is in it already.
-fn ensure_line(path: &Path, line: &str, marker: &str, first: bool) {
+pub(crate) fn ensure_line(path: &Path, line: &str, marker: &str, first: bool) {
     let text = util::read(path);
     if text.contains(marker) {
         return;

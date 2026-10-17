@@ -37,8 +37,8 @@ zones.*
 
 Draftpaper is also its own login screen (optional, under greetd), and the session comes up from it without
 a flicker: see [Login screen](#login-screen-experimental). After a logout or a reboot the
-applications open before come back, each window in its old place (`[session]` under
-[Configuration](#configuration)). What changed from release to release:
+applications open before come back, each window in its old place, with their files, tabs and editors
+as they were (`[session]` under [Configuration](#configuration)). What changed from release to release:
 [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
@@ -174,7 +174,9 @@ duration_ms = 220
 
 [session]                  # at login, the applications open at the last logout, each window back
 restore = true             #   in its place (workspace, zones, floating, parked); false: none
-skip = ["org.gnome.Calculator"]   # app ids left out
+apps = true                # the applications take up their own state (draftpaper apply): Firefox,
+                           #   Chromium, Emacs, Neovim, tmux; false: only the windows come back
+skip = ["org.gnome.Calculator"]   # app ids left out (and firefox, chromium, emacs, neovim, tmux)
 
 [outputs.eDP-1]               # when the display is plugged in (see Displays)
 scale = 1.5                # fractional scales work

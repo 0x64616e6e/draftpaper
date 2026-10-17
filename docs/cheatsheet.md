@@ -29,9 +29,14 @@ places other windows.
 The session comes back at the next login: every application open when you logged out (or the machine
 went down) starts again, by its desktop entry or else its command line, and each window takes its old
 place: its workspace, its zones, floating or parked in its cell. Terminals start in the directory their
-shell was in. What the applications keep is theirs to restore: a browser its tabs, an editor its files,
-tmux-resurrect a terminal's sessions. `[session] restore = false` turns it off; `skip` leaves applications
-out. The session is in `~/.local/state/draftpaper/session.json`.
+shell was in, running again what they ran there if it was an editor, a pager, a monitor or tmux (never a
+build, a script or ssh). An application started with documents opens them again. And the applications
+take up their own state (`[session] apps`, written by `draftpaper apply`): Firefox and Chromium their
+windows and tabs, Emacs its files each at its place (desktop-save-mode), Neovim the cursor in each file
+and, started with no file, the session it last had in that directory, tmux its sessions, windows and panes
+across a reboot. `[session] restore = false` turns it all off, `apps = false` the applications' part;
+`skip` leaves applications out (by app id, or firefox, chromium, emacs, neovim, tmux). The session is in
+`~/.local/state/draftpaper/session.json`.
 
 ## Parking (the side margins)
 
@@ -130,6 +135,7 @@ between them, ← → along, each change shown at once.
 | `draftpaper-compositor msg ACTION` | Any bindable action, e.g. `workspace 3`, `power off` |
 | `draftpaper menu [--prompt TEXT] < lines` | A choice among stdin's lines, in the launcher's register |
 | `draftpaper audio save\|restore` | The output's volume and mute, kept from one session to the next |
+| `draftpaper tmux save\|keep\|restore` | tmux's sessions kept across a reboot (`[session] apps`; run by tmux itself) |
 | `draftpaper-greeter [USER]` | The login screen, for greetd (README: Login screen) |
 | `draftpaper-compositor grab DEVICE DIR [WIDTH]` | As root: what each display shows, read back to PNGs |
 | `wlr-randr` | The displays: names, modes, `--scale`, `--pos`, `--transform`, `--off` (until changed again) |
@@ -163,6 +169,6 @@ Top level: `theme`, `margin`, `glyphs`, `wallpaper`, `margins`, `title_tint`. Ta
 firefox_text, firefox_ui_pt), `[hooks]` (theme), `[commands]` (screenshot), `[input]` (keyboard layout,
 variant, options, repeat, tap, natural_scroll, focus_follows_mouse), `[[rule]]` (window rules:
 app_id, title, pip; float, sticky, place, focus),
-`[animations]`, `[session]` (restore, skip), `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
+`[animations]`, `[session]` (restore, apps, skip), `[outputs.NAME]` (scale, position, mm), the wallpaper's `wallpaper_fit`,
 `wallpaper_position`, `wallpaper_brightness`, `wallpaper_wash`, `wallpaper_blur`, `wallpaper_dirs`, `[bindings]`. Displays are matched by connector
 name (`eDP-1`, `DP-3`); one without settings gets its preferred mode at scale 1, right of the others.

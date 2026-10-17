@@ -259,6 +259,8 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
     util::write(&p.cache.join("fuzzel.ini"), &fuzzel_ini(&t, font));
     if apps_too {
         crate::apps::apply(p, &t, &cfg);
+        // and their own session restore switched on (restore.rs)
+        crate::restore::apply(p, &cfg);
         // and the login screen's copy of the sheet (greeter.rs)
         crate::greeter::sync(p);
     }

@@ -11,8 +11,15 @@ What changed in each release, newest first. The Debian package's own record, wit
   shell was in. The session is written to `~/.local/state/draftpaper/session.json` every few seconds, once
   it has held (the windows that close on the way out are never written), and by Mod+Shift+e. The opening
   waits for the windows a moment before it reveals the desktop. `[session] restore = false` turns it off;
-  `skip` leaves applications out. The applications restore their own state: a browser its tabs, an editor
-  its files.
+  `skip` leaves applications out.
+- **The applications as they were left** (#38). A terminal runs again what it ran (an editor, a pager, a
+  monitor, tmux; never a build, a script or ssh), its shell still there when it ends. An application
+  started with documents opens them again. `draftpaper apply` switches on each application's own restore
+  (`[session] apps`, true by default): Firefox and Chromium their windows and tabs; Emacs its files, each
+  at its place (desktop-save-mode, saved as it goes, so a logout loses nothing); Neovim the cursor in every
+  file and, started with no file, the session it last had in that directory; tmux its sessions, windows
+  and panes, each pane in its directory and running its program again, across a reboot
+  (`draftpaper tmux`). `apps = false` takes these files back out.
 - Windows put back on a workspace not shown, or parked, no longer stay blank when shown: every new
   window is told to draw wherever it goes.
 - **The lock screen looks like the login screen** (Mod+Shift+x, idle, before sleep): the sheet blurred,

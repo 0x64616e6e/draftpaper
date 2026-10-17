@@ -16,6 +16,7 @@
 //!
 //!     [session]                        # at login, the applications open at the last logout, their
 //!     restore = true                   # windows back in their places (session.rs)
+//!     apps = true                      # their own state too (draftpaper apply: cli/src/restore.rs)
 //!     skip = ["org.gnome.Calculator"]  # app ids left out
 //!
 //!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,

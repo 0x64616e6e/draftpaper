@@ -5,9 +5,12 @@
 mod apps;
 mod config;
 mod greeter;
+mod programs;
 mod readings;
+mod restore;
 mod scheme;
 mod theme;
+mod tmux;
 mod util;
 
 use std::{
@@ -58,6 +61,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               any of them in one write (the settings' wallpaper page)
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
+  draftpaper tmux save|keep|restore [SOCKET]
+                              tmux's sessions kept across a reboot ([session] apps: run by tmux itself)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
@@ -80,6 +85,7 @@ fn main() {
             let t = theme::apply(&p, None, true);
             println!("{} applied.", t["label"].as_str().unwrap_or(""));
         }
+        ["tmux", rest @ ..] => tmux::command(&p, rest),
         ["theme", rest @ ..] => themes(&p, rest),
         ["scheme", rest @ ..] => schemes(&p, rest),
         ["wallpaper"] => println!("{}", config::load(&p).get("wallpaper").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or("none")),
