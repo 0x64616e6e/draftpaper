@@ -5,6 +5,7 @@
 //! of whole physical pixels, in the gutters between tiles, so they never cover content), the bottom
 //! and background layer surfaces (the shell's margins and title block), and the sheet.
 
+use std::collections::HashMap;
 use std::{cell::RefCell, time::Instant};
 
 use smithay::{
@@ -55,6 +56,11 @@ struct Border(RefCell<[SolidColorBuffer; 4]>);
 
 /// The title block's rules (title.rs), kept with the output.
 struct TitleRules(RefCell<Vec<SolidColorBuffer>>);
+
+/// The parked cells' hatching (title.rs), per cell: what it was made for (the cell, the step, the ink, the
+/// strength, the spans left clear) and its picture, kept with the output.
+type HatchKey = (Rectangle<i32, smithay::utils::Physical>, i32, [u32; 3], u32, Vec<(i32, i32)>);
+struct Hatches(RefCell<HashMap<usize, (HatchKey, MemoryRenderBuffer)>>);
 
 /// The revision block's rules (title.rs), kept with the output.
 struct RevisionRules(RefCell<Vec<SolidColorBuffer>>);
@@ -493,6 +499,45 @@ fn scene_elements(
             elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, r.loc, 1.0, 1.0, Kind::Unspecified)));
         }
         drop(buffers);
+        // the parked windows' cells hatched (issue #46), as a drawing hatches a cut: one-pixel lines at 45°
+        // (title.rs's hatched), in the margins' ink, leaving clear what the shell letters there; each cell's
+        // picture made once and kept until its cell, lettering or colour change
+        if let Some(s) = screen {
+            let st = &sheet.theme.sheet;
+            let step = crate::title::hatch_step(st.hatch_spacing as f64, s.phys_mm);
+            let a = st.hatch_strength.clamp(0.0, 1.0);
+            let ink = wallpaper.and_then(|w| w.margin_ink).unwrap_or(sheet.theme.ink);
+            // none on the bare sheet (behind the lock screen, the last frame left to the next compositor)
+            let cells: Vec<usize> = if step > 0 && a > 0.0 && !bare && state.leaving.is_none() { s.workspace().parked.iter().map(|p| p.cell).collect() } else { Vec::new() };
+            let cache = output.user_data().get_or_insert(|| Hatches(RefCell::new(HashMap::new())));
+            let mut cache = cache.0.borrow_mut();
+            cache.retain(|cell, _| cells.contains(cell));
+            for cell in cells {
+                let Some(r) = crate::title::side_cell(physical, margin, zones, cell) else { continue };
+                let side = usize::from(r.loc.x > 0);
+                let clear: Vec<(i32, i32)> = s.clear[side].iter().copied().filter(|&(y0, y1)| y1 > r.loc.y && y0 < r.loc.y + r.size.h).collect();
+                let key = (r, step, ink.map(f32::to_bits), a.to_bits(), clear.clone());
+                if cache.get(&cell).is_none_or(|(k, _)| *k != key) {
+                    let mut img = image::RgbaImage::new(r.size.w.max(1) as u32, r.size.h.max(1) as u32);
+                    let px = [ink[0] * a, ink[1] * a, ink[2] * a, a].map(|v| (v * 255.0).round() as u8);
+                    for (x, y, p) in img.enumerate_pixels_mut() {
+                        let (ox, oy) = (r.loc.x + x as i32, r.loc.y + y as i32);
+                        if crate::title::hatched(ox, oy, step) && !clear.iter().any(|&(y0, y1)| oy >= y0 && oy < y1) {
+                            *p = image::Rgba(px);
+                        }
+                    }
+                    cache.insert(cell, (key, crate::wallpaper::buffer(&img)));
+                }
+                let (_, buffer) = &cache[&cell];
+                let src = Rectangle::<f64, Logical>::from_size((r.size.w as f64, r.size.h as f64).into());
+                let logical = Size::<i32, Logical>::from(((r.size.w as f64 / scale).ceil() as i32, (r.size.h as f64 / scale).ceil() as i32));
+                if let Ok(e) = MemoryRenderBufferRenderElement::from_buffer(renderer, r.loc.to_f64(), buffer, None, Some(src), Some(logical), Kind::Unspecified) {
+                    if let Some(e) = CropRenderElement::from_element(e, scale, r) {
+                        elements.push(OutputElements::Picture(e));
+                    }
+                }
+            }
+        }
         elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale, physical, margin, zones)));
         if let Some(w) = wallpaper {
             // whole logical pixels, rounded up: the element is cropped to the rectangle's pixels after

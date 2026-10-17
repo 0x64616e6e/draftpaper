@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **Hatching** for parked windows' cells (#46), as a drawing hatches a cut: one-pixel lines at 45°, 1.5 mm
+  apart, laid from the screen's corner so they run on from cell to cell, in the margins' ink at a low
+  strength; broken around the zone letter and the title, which the shell reports to the compositor.
+  `[sheet] hatch_strength` and `hatch_spacing` (0: none) in a theme. Checked by `make pixels`
+  (tests/hatch.sh), and by hand at scales 1, 1.25 and 1.75.
 - **A revision block** above the title block (#45), as drawings keep one: the latest commits of the git
   repository the focused window works in, REV / DESCRIPTION / DATE / BY, the repository named in the
   header; a terminal's directory is its shell's. Off by default (`[title] revisions = true`): commit

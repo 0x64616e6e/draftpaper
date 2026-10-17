@@ -21,7 +21,8 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
   that reports no size), a screenshot command and the theme name (click it for the next theme).
 - **The side margins** hold parked windows. Super+Escape parks the focused window in the first free
   cell, its title lettered up the margin; clicking an empty cell parks it in that cell. Click a title to
-  bring the window back. Park every window of a workspace and the whole sheet shows; Super+Escape there
+  bring the window back. A parked window's cell is hatched, as a drawing hatches a cut, the hatch broken
+  around its lettering. Park every window of a workspace and the whole sheet shows; Super+Escape there
   brings them all back.
 
 Everything is sized in millimetres of the screen (from the physical size the display reports), so the
@@ -358,7 +359,9 @@ shows on the sheet at once; Enter keeps the page's changes along with the colour
 switches; clicking the theme name in the bottom margin moves to the next. A theme is a TOML file naming
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'
 palette (`[apps]`; see `/usr/share/draftpaper/themes/softglow.toml`); your own go in
-`~/.config/draftpaper/themes/`.
+`~/.config/draftpaper/themes/`. Its `[sheet]` shades the paper and sets how strongly the lines are drawn,
+and the parked cells' hatching: `hatch_strength` (0 to 1, 0.35 by default) and `hatch_spacing` (in mm,
+1.5 by default; 0 turns it off).
 
 ![The settings' wallpaper page: the pictures as drawings, and the wallpaper's settings below them](docs/wallpaper.jpg)
 

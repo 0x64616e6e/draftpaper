@@ -13,6 +13,9 @@ pub struct Sheet {
     pub glow_strength: f32,
     pub glow_size: f32,
     pub pattern_strength: f32,
+    /// the parked windows' cells hatched (issue #46): how strongly (0..1), and the lines' spacing in mm (0: none)
+    pub hatch_strength: f32,
+    pub hatch_spacing: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -154,6 +157,8 @@ impl Theme {
                 glow_strength: num("glow_strength", 1.0),
                 glow_size: num("glow_size", 1.0),
                 pattern_strength: num("pattern_strength", 0.5),
+                hatch_strength: num("hatch_strength", 0.35),
+                hatch_spacing: num("hatch_spacing", 1.5),
             },
             margin_mm,
             border_focused: table.get("windows").and_then(|w| w.get("focused")).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb("#E8B374").unwrap()),

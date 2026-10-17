@@ -23,6 +23,14 @@ Singleton {
         merged[name] = cells
         send({ request: "sheet", output: name, merged: cells })
     }
+    // where the shell letters each screen's side margins ({left: [[y0, y1]], right: ...}, logical pixels down
+    // the output): the hatching of parked cells leaves them clear; sent as merged is
+    property var clear: ({})
+    function setClear(name, spans) {
+        if (JSON.stringify(clear[name]) === JSON.stringify(spans)) return
+        clear[name] = spans
+        send({ request: "sheet", output: name, clear: spans })
+    }
     function action(text) { send({ request: "action", action: text }) }
     function send(request) {
         if (!socket.connected) return
@@ -38,6 +46,7 @@ Singleton {
             if (connected) {
                 compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
                 for (const name in compositor.merged) compositor.send({ request: "sheet", output: name, merged: compositor.merged[name] })
+                for (const name in compositor.clear) compositor.send({ request: "sheet", output: name, clear: compositor.clear[name] })
             }
             else retry.restart()
         }

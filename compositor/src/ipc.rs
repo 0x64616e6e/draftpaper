@@ -6,6 +6,7 @@
 //!   {"request": "action", "action": "workspace 3"}        any binding action (config.rs)
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
 //!   {"request": "sheet", "output": "eDP-1", "merged": {"top": [[7, 9]]}}   cells the shell merged
+//!   {"request": "sheet", "output": "eDP-1", "clear": {"left": [[40, 52]]}}  side spans it letters
 //!
 //! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
@@ -199,7 +200,21 @@ impl Draftpaper {
                 // zone ranges counted from the frame's corner; the ticks inside each are not drawn
                 let name = request.get("output").and_then(Value::as_str).ok_or("no \"output\"")?;
                 let screen = self.screens.iter_mut().find(|s| s.output.name() == name).ok_or(format!("no output {name}"))?;
-                let merged = request.get("merged").and_then(Value::as_object).ok_or("no \"merged\"")?;
+                // where the shell letters the side margins: {"clear": {"left": [[Y0, Y1], ...], "right": ...}},
+                // logical pixels down the output; the hatching of parked cells leaves them clear
+                if let Some(clear) = request.get("clear").and_then(Value::as_object) {
+                    let scale = screen.output.current_scale().fractional_scale();
+                    for (side, spans) in ["left", "right"].iter().zip(screen.clear.iter_mut()) {
+                        *spans = clear
+                            .get(*side)
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|r| Some(((r.get(0)?.as_f64()? * scale).floor() as i32, (r.get(1)?.as_f64()? * scale).ceil() as i32)))
+                            .collect();
+                    }
+                }
+                let Some(merged) = request.get("merged").and_then(Value::as_object) else { return Ok(Value::Null) };
                 let mut hidden = [0u32; 4];
                 for (side, mask) in ["top", "bottom", "left", "right"].iter().zip(hidden.iter_mut()) {
                     for range in merged.get(*side).and_then(Value::as_array).into_iter().flatten() {

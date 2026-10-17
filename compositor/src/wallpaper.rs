@@ -137,7 +137,7 @@ fn average(img: &RgbaImage, x: u32, y: u32, w: u32, h: u32) -> [f32; 3] {
     sum.map(|s| (s / n.max(1.0) / 255.0) as f32)
 }
 
-fn buffer(img: &RgbaImage) -> MemoryRenderBuffer {
+pub(crate) fn buffer(img: &RgbaImage) -> MemoryRenderBuffer {
     MemoryRenderBuffer::from_slice(img.as_raw(), Fourcc::Abgr8888, (img.width() as i32, img.height() as i32), 1, Transform::Normal, None)
 }
 

@@ -129,6 +129,36 @@ pub fn title_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) ->
     TitleBlock { rect: rect(left, top, right, bottom), inner: rect(ix0, iy0, ix1, iy1), cells, rules }
 }
 
+/// A parking cell's room in the side margins (issue #46): `cell` counts down the left margin, then the
+/// right (parking.rs), one per zone; between its zone ticks (whose pixels it leaves out), from the screen's
+/// edge to the frame's line. None past the last cell.
+pub fn side_cell(size: (i32, i32), margin: i32, zones: (u32, u32), cell: usize) -> Option<Rectangle<i32, Physical>> {
+    let n = zones.1 as usize;
+    if n == 0 || cell >= 2 * n {
+        return None;
+    }
+    let k = (cell % n) as u32;
+    let y0 = if k == 0 { margin + LINE } else { tick(size.1, margin, zones.1, k).0 + 1 };
+    let y1 = tick(size.1, margin, zones.1, k + 1).0;
+    let x0 = if cell < n { 0 } else { size.0 - margin };
+    Some(Rectangle::new((x0, y0).into(), (margin, (y1 - y0).max(0)).into()))
+}
+
+/// The hatching's step in pixels for lines `spacing_mm` apart (0: none), three pixels at least.
+pub fn hatch_step(spacing_mm: f64, mm: f64) -> i32 {
+    if spacing_mm <= 0.0 {
+        0
+    } else {
+        ((spacing_mm * mm).round() as i32).max(3)
+    }
+}
+
+/// Whether the output's pixel (x, y) lies on the hatching: one-pixel lines at 45°, rising to the right,
+/// every `step` pixels counted from the output's corner, so they run on unbroken from cell to cell.
+pub fn hatched(x: i32, y: i32, step: i32) -> bool {
+    step > 0 && (x + y).rem_euclid(step) == 0
+}
+
 /// The revision block's columns (issue #45), in millimetres of the title block's 130 across: REV,
 /// DESCRIPTION, DATE, BY.
 pub const REV_COLUMNS: [f32; 5] = [0.0, 16.0, 86.0, 110.0, 130.0];
@@ -339,6 +369,40 @@ mod tests {
                 assert!(seen.contains(&p), "{case}: {p:?} neither a rule nor a cell");
             }
         }
+    }
+
+    #[test]
+    fn the_side_cells_fill_the_side_margins() {
+        for ((w, h), phys_mm, scale, margin_mm) in cases() {
+            let mg = margin(margin_mm, phys_mm / scale, scale);
+            let zones = zones((w, h), mg, phys_mm);
+            let case = format!("{w}x{h} {phys_mm} px/mm, scale {scale}, margin {margin_mm} mm");
+            let n = zones.1 as usize;
+            assert!(side_cell((w, h), mg, zones, 2 * n).is_none(), "{case}");
+            for side in 0..2 {
+                // down the margin: the cells and the ticks between them, from the frame's top line to its bottom
+                let mut y = mg + LINE;
+                for k in 0..n {
+                    let c = side_cell((w, h), mg, zones, side * n + k).unwrap();
+                    assert_eq!(c.loc.x, if side == 0 { 0 } else { w - mg }, "{case}");
+                    assert_eq!(c.size.w, mg, "{case}: from the edge to the frame's line");
+                    assert_eq!(c.loc.y, y, "{case}: cell {k} starts after the tick");
+                    y = c.loc.y + c.size.h;
+                    if k + 1 < n {
+                        assert_eq!(tick(h, mg, zones.1, k as u32 + 1), (y, 1), "{case}: a tick ends cell {k}");
+                        y += 1;
+                    }
+                }
+                assert_eq!(y, h - mg - LINE, "{case}: the last cell ends on the frame's line");
+            }
+        }
+        // the hatching: one pixel in `step` along a row, continuous along the diagonal
+        assert_eq!(hatch_step(1.5, 6.4), 10);
+        assert_eq!(hatch_step(0.0, 6.4), 0);
+        assert_eq!(hatch_step(0.2, 3.6), 3);
+        assert_eq!((0..40).filter(|&x| hatched(x, 7, 10)).count(), 4);
+        assert!(hatched(3, 7, 10) && hatched(4, 6, 10) && !hatched(4, 7, 10));
+        assert!(!(0..100).any(|x| hatched(x, 0, 0)), "no step, no lines");
     }
 
     #[test]

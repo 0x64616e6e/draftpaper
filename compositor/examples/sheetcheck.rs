@@ -6,6 +6,8 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient] [windows]
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lens BEFORE.png X Y
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM scale bar|nts|none
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM revisions shown|none
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -41,6 +43,12 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "hatch") {
+        let cell: usize = args.get(6).and_then(|c| c.parse().ok()).expect("hatch CELL SPACING_MM|none");
+        let spacing = args.get(7).and_then(|s| s.parse::<f64>().ok());
+        hatch_check(&img, scale, phys_mm, margin_mm, cell, spacing, &args[1]);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "revisions") {
         revisions_check(&img, scale, phys_mm, margin_mm, args.get(6).map(String::as_str) != Some("none"), &args[1]);
         return;
@@ -203,6 +211,47 @@ fn main() {
 }
 
 /// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+/// A parking cell's hatching (title.rs's side_cell and hatched): with `spacing` (mm), the lines drawn on
+/// their pixels (each standing apart from its right-hand neighbour, which is off the lines) along a quarter
+/// of the cell's lines at least (the rest is where the shell letters it, left clear: in a short cell, more
+/// than half). With none, a tenth at most (the lettering's own strokes), counted at 1.5 mm.
+fn hatch_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, cell: usize, spacing: Option<f64>, name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let r = title::side_cell((w, h), mg, title::zones((w, h), mg, phys_mm), cell).expect("a cell");
+    let step = title::hatch_step(spacing.unwrap_or(1.5), phys_mm);
+    let lum = |x: i32, y: i32| {
+        let p = img.get_pixel(x as u32, y as u32);
+        0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+    };
+    let (mut on, mut lines) = (0, 0);
+    for y in r.loc.y..r.loc.y + r.size.h {
+        for x in r.loc.x..r.loc.x + r.size.w - 1 {
+            if title::hatched(x, y, step) {
+                lines += 1;
+                if (lum(x, y) - lum(x + 1, y)).abs() > 12.0 {
+                    on += 1;
+                }
+            }
+        }
+    }
+    let share = on as f64 / lines.max(1) as f64;
+    let fine = match spacing {
+        Some(_) => share >= 0.25,
+        None => share <= 0.10,
+    };
+    let what = match spacing {
+        Some(s) => format!("hatched every {step} px ({s} mm)"),
+        None => "not hatched".into(),
+    };
+    if fine {
+        println!("{name}: cell {cell} {what}: exact ({on} of the lines' {lines} pixels drawn)");
+    } else {
+        println!("{name}: cell {cell} {what}: {on} of the lines' {lines} pixels drawn");
+        std::process::exit(1);
+    }
+}
+
 /// The revision block (title.rs's revision_block) above the title block: when `shown`, every pixel of its
 /// rules drawn, and the first row's description lettered; else none of its rules drawn. A pixel is drawn
 /// when it stands apart from the paper (the median of the block's inner pixels).

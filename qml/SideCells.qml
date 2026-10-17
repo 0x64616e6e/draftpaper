@@ -20,6 +20,28 @@ Item {
 
     function act(cell, w) { Compositor.action(w ? "unpark " + w.id : "park_at " + cell + " " + space) }
 
+    // where the occupied cells are lettered (the zone letter at the head, the title up the middle, as
+    // drawn below), with a millimetre to spare: the compositor's hatching of them leaves these clear
+    // (issue #46), as a drawing's hatch breaks around its words
+    FontMetrics { id: titleFont; font.family: Fonts.mono; font.pixelSize: cells.edge.fontPx }
+    readonly property var clearSpans: {
+        const mm = edge.mm, frame = edge.margin, zones = edge.zonesDown
+        const zl = (edge.height - 2 * frame) / zones
+        const out = { left: [], right: [] }
+        for (const w of windows) {
+            if (w.cell === undefined || w.cell < 0 || w.cell >= 2 * zones) continue
+            const k = w.cell % zones, start = frame + k * zl
+            const side = w.cell < zones ? out.left : out.right
+            side.push([start, start + 2.5 * mm + 1.25 * 0.8 * edge.fontPx])
+            const length = Math.min(titleFont.advanceWidth(w.title || w.cls || ""), zl - 9 * mm)
+            const centre = start + zl / 2 + 2 * mm
+            side.push([centre - length / 2 - mm, centre + length / 2 + mm])
+        }
+        return out
+    }
+    onClearSpansChanged: Compositor.setClear(edge.screen.name, clearSpans)
+    Component.onCompleted: Compositor.setClear(edge.screen.name, clearSpans)
+
     Repeater {
         model: ["left", "right"]
         Margin {

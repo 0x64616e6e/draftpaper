@@ -57,6 +57,9 @@ pub struct Screen {
     pub measured: bool,
     /// the margins' ticks the shell's merged cells leave out (sheet.rs), top, bottom, left, right
     pub hidden_ticks: [u32; 4],
+    /// where the shell letters the side margins (the zone letters, the parked titles): spans down each,
+    /// left then right, in physical pixels, that the hatching leaves clear (issue #46)
+    pub clear: [Vec<(i32, i32)>; 2],
 }
 
 impl Draftpaper {
@@ -70,7 +73,7 @@ impl Draftpaper {
         let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm, scale, crate::render::mode_size(&output));
         // the lowest number not yet in use
         let number = (1..).find(|n| !self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.number == *n))).unwrap();
-        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, measured, hidden_ticks: [0; 4] });
+        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, measured, hidden_ticks: [0; 4], clear: Default::default() });
         self.screens.sort_by_key(|s| s.grid.area.loc.x);
     }
 
