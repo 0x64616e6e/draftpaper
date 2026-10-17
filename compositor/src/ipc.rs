@@ -266,6 +266,8 @@ impl Draftpaper {
                         "margin_ink": margin_ink(&s.output),
                         // the title block and its cells (title.rs), lettered by the shell: inside their rules
                         "title": title_block(s, s.output.current_scale().fractional_scale()),
+                        // the scale bar (title.rs), drawn by the compositor, its numbers lettered by the shell
+                        "scale_bar": scale_bar(s, s.output.current_scale().fractional_scale(), self.config.scale_bar),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
@@ -423,6 +425,26 @@ fn title_block(s: &crate::screens::Screen, scale: f64) -> Value {
         json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
     };
     json!({ "rect": r(t.rect), "inner": r(t.inner), "cells": t.cells.iter().map(|c| r(*c)).collect::<Vec<_>>() })
+}
+
+/// The scale bar of screen `s` (title.rs), in logical pixels from the output's top-left corner: the zone,
+/// and, on a screen that reports its size, the bar, each centimetre's boundary (its rule's centre) and the
+/// rows the numbers go in; null when there is none (switched off, or no zone to spare).
+fn scale_bar(s: &crate::screens::Screen, scale: f64, on: bool) -> Value {
+    let physical = crate::render::mode_size(&s.output);
+    let Some(bar) = on.then(|| crate::title::scale_bar(physical, crate::title::margin(s.margin_mm, s.mm, scale), s.phys_mm, s.grid.zones, s.measured)).flatten() else {
+        return Value::Null;
+    };
+    let r = |r: smithay::utils::Rectangle<i32, smithay::utils::Physical>| {
+        json!({ "x": r.loc.x as f64 / scale, "y": r.loc.y as f64 / scale, "width": r.size.w as f64 / scale, "height": r.size.h as f64 / scale })
+    };
+    json!({
+        "zone": r(bar.zone),
+        "measured": bar.bar.is_some(),
+        "bar": bar.bar.as_ref().map(|b| r(b.rect)),
+        "marks": bar.bar.as_ref().map(|b| b.marks.iter().map(|&(x, mm)| json!({ "x": (x as f64 + 0.5) / scale, "mm": mm })).collect::<Vec<_>>()).unwrap_or_default(),
+        "text": bar.bar.as_ref().map(|b| json!({ "y": b.text.0 as f64 / scale, "height": (b.text.1 - b.text.0) as f64 / scale })),
+    })
 }
 
 fn margin_ink(output: &smithay::output::Output) -> Value {

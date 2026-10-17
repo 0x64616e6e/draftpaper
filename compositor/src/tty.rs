@@ -466,7 +466,7 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
                     eprintln!("draftpaper: {}: opening on the picture it showed", output.name());
                     crate::opening::start(&output, texture, size);
                 }
-                data.add_screen(output.clone(), mm as f64, theme.margin_mm as f64);
+                data.add_screen(output.clone(), mm as f64, theme.margin_mm as f64, settings.mm.is_some() || phys_w > 0);
                 tty.outputs.insert(crtc, (output, surface, info.handle()));
                 started.push(crtc);
             }
@@ -859,6 +859,7 @@ fn configure_with(
                 }
                 if let Some(screen) = data.screens.iter_mut().find(|s| s.output == output) {
                     screen.phys_mm = mm as f64;
+                    screen.measured = output_settings(&change.name).mm.is_some() || phys_w > 0;
                 }
                 eprintln!("draftpaper: output {} mode {}x{}@{:.3}", change.name, wl.size.w, wl.size.h, wl.refresh as f64 / 1000.0);
             }

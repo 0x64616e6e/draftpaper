@@ -12,8 +12,9 @@ end exactly on the frame line. What a bar would show is lettered onto the sheet:
 - **The top margin** letters the workspaces in its first zone. The focused one is bold black; one shown
   on another screen is bold. Notifications appear there; alerts (temperatures past a threshold, a low
   battery) appear in its last zone in red, and volume and brightness for a few seconds after they change.
-- **The bottom margin** has Bluetooth, a screenshot command and the theme name (click it for the next
-  theme).
+- **The bottom margin** has Bluetooth, a scale bar true to size on the screen (under the title block, as
+  a drawing keeps its scale; a ruler held to the screen reads the same; NTS, not to scale, on a display
+  that reports no size), a screenshot command and the theme name (click it for the next theme).
 - **The side margins** hold parked windows. Super+Escape parks the focused window in the first free
   cell, its title lettered up the margin; clicking an empty cell parks it in that cell. Click a title to
   bring the window back. Park every window of a workspace and the whole sheet shows; Super+Escape there
@@ -128,6 +129,7 @@ wallpaper_dirs = ["~/Pictures/Wallpapers", "/usr/share/backgrounds"]   # where t
 [title]
 project = "WORKSTATION"    # default: the host name
 drawn = "me"               # default: the user name (shown when there is no custom cell)
+scale = true               # the scale bar in the bottom margin
 
 [[cell]]                   # cells of your own: the first in the title block's last row, the others
                            # in the bottom margin's free zones, one per zone

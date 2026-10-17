@@ -5,6 +5,7 @@
 //!
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient] [windows]
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lens BEFORE.png X Y
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM scale bar|nts|none
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -40,6 +41,10 @@ fn main() {
     let (scale, phys_mm, margin_mm): (f64, f64, f64) = (args[2].parse().unwrap(), args[3].parse().unwrap(), args[4].parse().unwrap());
     let ambient = args[5..].iter().any(|a| a == "ambient");
     let windows = args[5..].iter().any(|a| a == "windows");
+    if args.get(5).is_some_and(|a| a == "scale") {
+        scale_check(&img, scale, phys_mm, margin_mm, args.get(6).map(String::as_str).unwrap_or("bar"), &args[1]);
+        return;
+    }
     if args.get(5).is_some_and(|a| a == "lens") {
         let before: RgbaImage = image::open(&args[6]).expect("the screenshot before the lens").to_rgba8();
         let (x, y): (f64, f64) = (args[7].parse().unwrap(), args[8].parse().unwrap());
@@ -88,7 +93,10 @@ fn main() {
             }
         }
     }
-    for x in left..right {
+    // the scale bar's zone left out: its numbers are lettered there (a block crossing the frame would show
+    // along the rest of its width)
+    let scale_zone = title::scale_bar((w, h), mg, phys_mm, title::zones((w, h), mg, phys_mm), true).map(|s| s.zone);
+    for x in (left..right).filter(|&x| !scale_zone.is_some_and(|z| x >= z.loc.x && x < z.loc.x + z.size.w)) {
         for y in [bottom, bottom + 1] {
             if diff(px(x, y), px(x, y + 3)) > 6 && !lone(x, y, 1, 0) && !lone(x, y + 3, 1, 0) {
                 fault(format!("margin at ({x}, {y}) is {:?}, further out {:?}: the block crosses the frame", px(x, y), px(x, y + 3)));
@@ -191,6 +199,76 @@ fn main() {
 }
 
 /// The magnifier's check: `img` with the lens on the pointer at `at` (logical), `before` without it.
+/// The scale bar (title.rs's scale_bar) in the bottom margin, as `expect` says it should be: `bar`, every
+/// pixel of its rules and fills drawn and each centimetre's number lettered above its rule; `nts`, no bar
+/// and the zone lettered (NTS); `none`, no bar. A pixel is drawn when it stands apart from the paper
+/// right under the bar (the median of five, so a dot of the pattern there does not count).
+fn scale_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, expect: &str, name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let zones = title::zones((w, h), mg, phys_mm);
+    let Some(s) = title::scale_bar((w, h), mg, phys_mm, zones, true) else {
+        println!("{name}: no zone for a scale bar ({} zones across)", zones.0);
+        std::process::exit(if expect == "none" { 0 } else { 1 });
+    };
+    let bar = s.bar.expect("measured: a bar");
+    let lum = |p: Rgba<u8>| 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64;
+    let px = |x: i32, y: i32| *img.get_pixel(x as u32, y as u32);
+    let under = bar.rect.loc.y + bar.rect.size.h;
+    let paper = |x: i32| {
+        let mut v: Vec<f64> = (x - 2..=x + 2).map(|x| lum(px(x, under))).collect();
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v[2]
+    };
+    let drawn = |x: i32, y: i32| (lum(px(x, y)) - paper(x)).abs() > 30.0;
+    let mut faults = Vec::new();
+    match expect {
+        "bar" => {
+            for r in &bar.ink {
+                for y in r.loc.y..r.loc.y + r.size.h {
+                    for x in r.loc.x..r.loc.x + r.size.w {
+                        if !drawn(x, y) {
+                            faults.push(format!("({x}, {y}) of the bar not drawn"));
+                        }
+                    }
+                }
+            }
+            let half = (1.5 * phys_mm).round() as i32;
+            for &(x, mm) in &bar.marks {
+                let n = (bar.text.0..bar.text.1).flat_map(|y| (x - half..=x + half).map(move |x| (x, y))).filter(|&(x, y)| drawn(x, y)).count();
+                if n < 4 {
+                    faults.push(format!("{mm} not lettered over its rule at {x}"));
+                }
+            }
+        }
+        _ => {
+            let row = (bar.rect.loc.x..bar.rect.loc.x + bar.rect.size.w).filter(|&x| drawn(x, bar.rect.loc.y)).count();
+            if row * 2 > bar.rect.size.w as usize {
+                faults.push(format!("a bar drawn ({row} of its top row's {} pixels)", bar.rect.size.w));
+            }
+            if expect == "nts" {
+                let n = (s.zone.loc.y..s.zone.loc.y + s.zone.size.h)
+                    .flat_map(|y| (s.zone.loc.x..s.zone.loc.x + s.zone.size.w).map(move |x| (x, y)))
+                    .filter(|&(x, y)| drawn(x, y))
+                    .count();
+                if n < 10 {
+                    faults.push("the zone not lettered NTS".into());
+                }
+            }
+        }
+    }
+    for f in faults.iter().take(10) {
+        eprintln!("  {f}");
+    }
+    if faults.is_empty() {
+        let cm = bar.marks.len() - 1;
+        println!("{name}: scale bar {expect}: exact ({cm} cm of {} px at {},{}, 10 mm = {} px)", bar.rect.size.w, bar.rect.loc.x, bar.rect.loc.y, bar.marks[1].0 - bar.marks[0].0);
+    } else {
+        println!("{name}: scale bar {expect}: {} faults", faults.len());
+        std::process::exit(1);
+    }
+}
+
 fn lens_check(img: &RgbaImage, before: &RgbaImage, scale: f64, phys_mm: f64, at: (f64, f64), name: &str) {
     let (w, h) = (img.width() as i32, img.height() as i32);
     let lens = lens::Lens::default();

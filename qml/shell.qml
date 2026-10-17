@@ -280,6 +280,9 @@ ShellRoot {
             readonly property int zonesAcross: output ? output.zones.across : Math.max(2, Math.round((width - 2 * margin) / (50 * mm)))
             readonly property int zonesDown: output ? output.zones.down : Math.max(2, Math.round((height - 2 * margin) / (50 * mm)))
             readonly property real fontPx: Math.min(margin * 0.5, 3.2 * mm)
+            // the scale bar in the bottom margin (the compositor's; null when off or without room): it takes
+            // the zone next to the last
+            readonly property var scaleBar: output && output.scale_bar ? output.scale_bar : null
             // the margins' lettering: the theme's ink, or with a wallpaper's ambient margins whichever ink
             // the compositor found to read on them (and the focused workspace in it, bold)
             readonly property color ink: output && output.margin_ink ? output.margin_ink : root.ink
@@ -462,7 +465,12 @@ ShellRoot {
                 }
                 ZoneNumbers {   // the columns' numbers, in the zones nothing else takes
                     band: bottomMargin; edge: edge
-                    taken: k => k === 0 || k === bottomMargin.zones - 1 || (extraCells.itemAt(k - 1)?.busy ?? false)
+                    taken: k => k === 0 || k === bottomMargin.zones - 1 || (edge.scaleBar !== null && k === bottomMargin.zones - 2)
+                        || (extraCells.itemAt(k - 1)?.busy ?? false)
+                }
+                ScaleBar {      // the scale bar's numbers (or NTS); the compositor draws the bar
+                    visible: edge.scaleBar !== null
+                    band: bottomMargin; edge: edge; bar: edge.scaleBar || { zone: { x: 0, width: 0 }, measured: false, marks: [] }
                 }
                 Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
                     id: extraCells
@@ -471,7 +479,8 @@ ShellRoot {
                         id: extra
                         required property var modelData
                         required property int index
-                        visible: index + 1 < bottomMargin.zones - 1      // the last zone is taken; the rest are dropped
+                        // the last zone is taken, and the one before by the scale bar; the rest are dropped
+                        visible: index + 1 < bottomMargin.zones - 1 - (edge.scaleBar !== null ? 1 : 0)
                         readonly property bool busy: visible && extraPoll.output !== ""
                         Poll {
                             id: extraPoll

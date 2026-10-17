@@ -56,6 +56,9 @@ struct Border(RefCell<[SolidColorBuffer; 4]>);
 /// The title block's rules (title.rs), kept with the output.
 struct TitleRules(RefCell<Vec<SolidColorBuffer>>);
 
+/// The scale bar's rules and fills (title.rs), kept with the output.
+struct ScaleRules(RefCell<Vec<SolidColorBuffer>>);
+
 /// The output's size in physical pixels: its mode, as it is turned. The sheet is measured from these
 /// edges, not from the logical size scaled, which a scale such as 1.75 rounds past them.
 pub fn mode_size(output: &Output) -> (i32, i32) {
@@ -448,6 +451,24 @@ fn scene_elements(
                 elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, rule.rect.loc, 1.0, 1.0, Kind::Unspecified)));
             }
         }
+        // the scale bar (title.rs), when the shell letters the margins (it letters the numbers): in the
+        // frame's ink at its weight, true to size on screens that report theirs
+        let margins = layer_map_for_output(output).layers().any(|l| l.namespace() == "draftpaper-margin");
+        let bar = (margins && state.config.scale_bar)
+            .then(|| screen.and_then(|s| crate::title::scale_bar(physical, margin, s.phys_mm, zones, s.measured)))
+            .flatten()
+            .and_then(|s| s.bar);
+        let buffers = output.user_data().get_or_insert(|| ScaleRules(RefCell::new(Vec::new())));
+        let mut buffers = buffers.0.borrow_mut();
+        let ink = bar.map(|b| b.ink).unwrap_or_default();
+        buffers.resize_with(ink.len(), SolidColorBuffer::default);
+        let t = &sheet.theme;
+        let a = (0.85 * t.sheet.pattern_strength + 0.1).min(1.0);
+        for (buffer, r) in buffers.iter_mut().zip(&ink) {
+            buffer.update((r.size.w, r.size.h), [t.ink[0] * a, t.ink[1] * a, t.ink[2] * a, a]);
+            elements.push(OutputElements::Border(SolidColorRenderElement::from_buffer(buffer, r.loc, 1.0, 1.0, Kind::Unspecified)));
+        }
+        drop(buffers);
         elements.push(OutputElements::Sheet(sheet.element(renderer, size, scale, physical, margin, zones)));
         if let Some(w) = wallpaper {
             // whole logical pixels, rounded up: the element is cropped to the rectangle's pixels after

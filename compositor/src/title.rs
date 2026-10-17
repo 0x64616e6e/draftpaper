@@ -129,6 +129,76 @@ pub fn title_block(size: (i32, i32), margin: i32, mm: f32, zones: (u32, u32)) ->
     TitleBlock { rect: rect(left, top, right, bottom), inner: rect(ix0, iy0, ix1, iy1), cells, rules }
 }
 
+/// The scale bar (issue #44): in the bottom margin's zone next to the last one (under the title block, where
+/// a drawing keeps its scale), a bar of whole centimetres true to the screen's size: 0 to 50 mm (less in a
+/// short zone), the first centimetre ticked by the millimetre, then alternately filled and open, outlined
+/// in one-pixel rules. The shell letters the numbers over the boundaries (`marks`) in the band `text`.
+#[derive(Debug, Clone)]
+pub struct ScaleBar {
+    /// the zone's room in the margin: between its ticks, the margin's height
+    pub zone: Rectangle<i32, Physical>,
+    /// None: the display reports no size, so nothing on it is to scale (the shell letters NTS)
+    pub bar: Option<Bar>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Bar {
+    /// the bar's outline, outer edges
+    pub rect: Rectangle<i32, Physical>,
+    /// every pixel drawn in ink: rules, ticks and fills, none twice
+    pub ink: Vec<Rectangle<i32, Physical>>,
+    /// each centimetre's boundary: the column of its rule, and its millimetres from 0
+    pub marks: Vec<(i32, u32)>,
+    /// the rows the numbers are lettered in, above the bar: (top, bottom)
+    pub text: (i32, i32),
+}
+
+/// The scale bar of an output of `size` physical pixels, `margin` from margin(), `mm` physical pixels per
+/// millimetre (`measured`: from the display's own size, or config.toml's), cut into `zones`. None without
+/// a zone to spare (fewer than three across) or room for a centimetre.
+pub fn scale_bar(size: (i32, i32), margin: i32, mm: f64, zones: (u32, u32), measured: bool) -> Option<ScaleBar> {
+    let n = zones.0;
+    if n < 3 {
+        return None;
+    }
+    let k = n - 2;
+    let (a, b) = (tick(size.0, margin, n, k).0 + 1, tick(size.0, margin, n, k + 1).0);
+    let (top, bottom) = (size.1 - margin, size.1);
+    let rect = |x: i32, y: i32, w: i32, h: i32| Rectangle::<i32, Physical>::new((x, y).into(), (w, h).into());
+    let zone = rect(a, top, b - a, bottom - top);
+    if !measured {
+        return Some(ScaleBar { zone, bar: None });
+    }
+    // room for half of "0" on the left; for half of the last number and " mm" on the right
+    let (left, right) = ((1.5 * mm).round() as i32, (5.5 * mm).round() as i32);
+    let cm = (((b - a - left - right) as f64 / (10.0 * mm)).floor() as u32).min(5);
+    // a bar a third of the margin's height at most, two rules and a row between them at least
+    let height = ((1.2 * mm).round() as i32).min(margin / 3).max(3);
+    let y = top + (0.58 * margin as f64).round() as i32;
+    if cm == 0 || y + height > bottom - 1 {
+        return None;
+    }
+    let x0 = a + left;
+    let at = |d: u32| x0 + (d as f64 * mm).round() as i32;
+    let end = at(10 * cm);
+    let inner = height - 2;
+    let mut ink = vec![rect(x0, y, end + 1 - x0, 1), rect(x0, y + height - 1, end + 1 - x0, 1)];
+    for c in 0..=cm {
+        ink.push(rect(at(10 * c), y + 1, 1, inner));
+    }
+    // the first centimetre by the millimetre: ticks half the bar's height, hanging from its top
+    for d in 1..10 {
+        ink.push(rect(at(d), y + 1, 1, (inner / 2).max(1)));
+    }
+    // the second and fourth centimetres filled
+    for c in (1..cm).step_by(2) {
+        ink.push(rect(at(10 * c) + 1, y + 1, at(10 * (c + 1)) - at(10 * c) - 1, inner));
+    }
+    let marks = (0..=cm).map(|c| (at(10 * c), 10 * c)).collect();
+    let text = (top + (0.12 * margin as f64).round() as i32, y - (0.06 * margin as f64).round().max(1.0) as i32);
+    Some(ScaleBar { zone, bar: Some(Bar { rect: rect(x0, y, end + 1 - x0, height), ink, marks, text }) })
+}
+
 // the twin of the sheet shader's ticked(), which cannot be called from here: its tests are the shader's; the
 // title block starts on its ticks
 /// The physical pixel of the tick at zone boundary `k` (of `zones`) along a side `len` pixels long: for
@@ -206,6 +276,52 @@ mod tests {
                 assert!(seen.contains(&p), "{case}: {p:?} neither a rule nor a cell");
             }
         }
+    }
+
+    #[test]
+    fn the_scale_bar_is_true_to_size() {
+        for ((w, h), phys_mm, scale, margin_mm) in cases() {
+            let mg = margin(margin_mm, phys_mm / scale, scale);
+            let zones = zones((w, h), mg, phys_mm);
+            let case = format!("{w}x{h} {phys_mm} px/mm, scale {scale}, margin {margin_mm} mm");
+            let Some(s) = scale_bar((w, h), mg, phys_mm, zones, true) else {
+                assert!(zones.0 < 3 || margin_mm < 4.0, "{case}: no scale bar");
+                continue;
+            };
+            let bar = s.bar.expect("measured: a bar");
+            // in its zone: between the ticks, in the margin, under the title block's last zones
+            assert!(s.zone.contains_rect(bar.rect), "{case}: the bar leaves its zone");
+            assert_eq!(s.zone.loc.x, tick(w, mg, zones.0, zones.0 - 2).0 + 1, "{case}");
+            assert!(bar.text.0 >= h - mg && bar.text.0 < bar.text.1 && bar.text.1 <= bar.rect.loc.y, "{case}: the numbers' rows");
+            // true to size: each centimetre within half a pixel of 10 mm from the first boundary
+            assert!(bar.marks.len() >= 2, "{case}: one centimetre at least");
+            for &(x, d) in &bar.marks {
+                let want = bar.marks[0].0 as f64 + d as f64 * phys_mm;
+                assert!((x as f64 - want).abs() <= 0.5, "{case}: {d} mm at {x}, not {want}");
+            }
+            // no pixel twice, every pixel in the outline
+            let mut seen = std::collections::HashSet::new();
+            for r in &bar.ink {
+                assert!(r.size.w > 0 && r.size.h > 0, "{case}: an empty rule");
+                for p in pixels(r) {
+                    assert!(seen.insert(p), "{case}: {p:?} drawn twice");
+                    assert!(bar.rect.contains(p), "{case}: {p:?} off the bar");
+                }
+            }
+            // the outline closed: top and bottom rows whole, a rule at each end
+            for x in bar.rect.loc.x..bar.rect.loc.x + bar.rect.size.w {
+                assert!(seen.contains(&(x, bar.rect.loc.y)) && seen.contains(&(x, bar.rect.loc.y + bar.rect.size.h - 1)), "{case}: gap at {x}");
+            }
+            // not measured: no bar, the zone kept for NTS
+            let nts = scale_bar((w, h), mg, phys_mm, zones, false).expect("a zone");
+            assert!(nts.bar.is_none() && nts.zone == s.zone, "{case}");
+        }
+        // the T14's panel: 1920x1200 at 6.4 px/mm (scale 1.5), margin 6 mm: zones of 48 mm, four centimetres
+        let mg = margin(6.0, 6.4 / 1.5, 1.5);
+        let z = zones((1920, 1200), mg, 6.4);
+        let bar = scale_bar((1920, 1200), mg, 6.4, z, true).unwrap().bar.unwrap();
+        assert_eq!(bar.marks.iter().map(|m| m.1).collect::<Vec<_>>(), [0, 10, 20, 30, 40], "zones {z:?}, zone {:?}", bar.rect);
+        assert_eq!(bar.marks[1].0 - bar.marks[0].0, 64);
     }
 
     #[test]

@@ -55,7 +55,7 @@ pub fn init_winit(
     eprintln!("draftpaper: sheet in theme {}, margin {} mm, {} px/mm", theme.name, theme.margin_mm, nested_mm());
     let margin_mm = theme.margin_mm as f64;
     attach_sheet(&output, theme, nested_mm());
-    state.add_screen(output.clone(), nested_mm() as f64, margin_mm);
+    state.add_screen(output.clone(), nested_mm() as f64, margin_mm, std::env::var_os("DRAFTPAPER_MM").is_some());
 
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 

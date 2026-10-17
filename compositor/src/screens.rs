@@ -52,13 +52,17 @@ pub struct Screen {
     /// physical pixels per millimetre: `mm` again when the scale changes
     pub phys_mm: f64,
     pub margin_mm: f64,
+    /// whether `phys_mm` is the display's own (its reported size, or config.toml's): else a guess, and
+    /// nothing on the sheet is to scale (the scale bar letters NTS)
+    pub measured: bool,
     /// the margins' ticks the shell's merged cells leave out (sheet.rs), top, bottom, left, right
     pub hidden_ticks: [u32; 4],
 }
 
 impl Draftpaper {
-    /// Add a screen for `output`, already mapped in the space; `mm` in physical pixels per millimetre.
-    pub fn add_screen(&mut self, output: Output, mm: f64, margin_mm: f64) {
+    /// Add a screen for `output`, already mapped in the space; `mm` in physical pixels per millimetre,
+    /// `measured` when it comes from the display's size (or config.toml), not the 160 PPI guess.
+    pub fn add_screen(&mut self, output: Output, mm: f64, margin_mm: f64, measured: bool) {
         let scale = output.current_scale().fractional_scale();
         let geometry = self.space.output_geometry(&output).unwrap();
         let phys_mm = mm;
@@ -66,7 +70,7 @@ impl Draftpaper {
         let grid = Grid::new(geometry.loc, geometry.size, mm, margin_mm, scale, crate::render::mode_size(&output));
         // the lowest number not yet in use
         let number = (1..).find(|n| !self.screens.iter().any(|s| s.workspaces.iter().any(|w| w.number == *n))).unwrap();
-        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, hidden_ticks: [0; 4] });
+        self.screens.push(Screen { output, grid, workspaces: vec![Workspace::new(number)], current: 0, mm, phys_mm, margin_mm, measured, hidden_ticks: [0; 4] });
         self.screens.sort_by_key(|s| s.grid.area.loc.x);
     }
 

@@ -7,7 +7,8 @@
 //!     wallpaper = "~/Pictures/x.jpg"  # optional: a picture in the frame (draftpaper wallpaper FILE | none)
 //!     margins = "paper"             # with a wallpaper: "paper", or "ambient" (the picture's colours)
 //!
-//!     [title]                       # the title block's fixed cells: project (the host name), drawn (you)
+//!     [title]                       # the title block's fixed cells: project (the host name), drawn (you);
+//!                                   # scale = false takes the scale bar away (the compositor's)
 //!     [[cell]]                      # cells of your own: label, command, interval, left, right
 //!     [alerts]                      # cpu = 85, nvme = 60 (°C), fan = 5000 (RPM), battery = 15 (%)
 //!     [idle]                        # screens_off = 15, lock_after = 0 (minutes), lock_on_sleep = false

@@ -5,6 +5,10 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **A scale bar** in the bottom margin (#44): 0 to 50 mm (as many whole centimetres as its zone holds),
+  true to size on each screen, the first centimetre ticked by the millimetre, drawn by the compositor
+  on whole pixels and lettered by the shell. A display that reports no size letters NTS (not to scale)
+  instead. `[title] scale = false` takes it away. Checked headless by `make pixels` (tests/scale.sh).
 - **A website**, https://draftpaper.este.systems/, with a theme generator (the settings' scheme builder,
   in the browser) and a wallpaper generator (the sheet of any theme at any screen's size). Linked from the
   README and the man page.

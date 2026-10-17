@@ -19,6 +19,9 @@
 //!     apps = true                      # their own state too (draftpaper apply: cli/src/restore.rs)
 //!     skip = ["org.gnome.Calculator"]  # app ids left out
 //!
+//!     [title]
+//!     scale = true                     # the scale bar in the bottom margin, true to size (title.rs)
+//!
 //!     [[rule]]                         # window rules (rules.rs): app_id/title patterns, pip; float,
 //!     title = "^Picture"               # sticky, place = "centre"|"corner", focus
 //!     float = true
@@ -111,6 +114,8 @@ pub struct Config {
     /// window rules: the built-in ones, then config.toml's [[rule]]s (rules.rs)
     pub rules: Vec<crate::rules::Rule>,
     pub session: Session,
+    /// [title] scale: the scale bar in the bottom margin (title.rs's scale_bar)
+    pub scale_bar: bool,
 }
 
 /// [session] (session.rs): the windows put back at login, but those of the applications in `skip`.
@@ -298,7 +303,9 @@ impl Config {
             restore: session.get("restore").and_then(|v| v.as_bool()).unwrap_or(true),
             skip: session.get("skip").and_then(|v| v.as_array()).into_iter().flatten().filter_map(|v| v.as_str().map(str::to_string)).collect(),
         };
-        Ok(Config { input, bindings, animations, rules, session })
+        // [title]: scale = true|false (the rest of [title] is the shell's: project, drawn)
+        let scale_bar = table.get("title").and_then(|v| v.get("scale")).and_then(|v| v.as_bool()).unwrap_or(true);
+        Ok(Config { input, bindings, animations, rules, session, scale_bar })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

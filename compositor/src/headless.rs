@@ -75,7 +75,9 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
     eprintln!("draftpaper: headless {}x{} at {scale}, sheet in theme {}, margin {} mm, {mm} px/mm", size.0, size.1, theme.name, theme.margin_mm);
     let margin_mm = theme.margin_mm as f64;
     attach_sheet(&output, theme, mm);
-    data.add_screen(output.clone(), mm as f64, margin_mm);
+    // measured when the test names the density (DRAFTPAPER_MM); without it, the guess a display without a
+    // size gets
+    data.add_screen(output.clone(), mm as f64, margin_mm, std::env::var_os("DRAFTPAPER_MM").is_some());
     // DRAFTPAPER_OPENING=FILE.png: the picture a display would have shown before (opening.rs), for tests
     let mut renderer = renderer;
     if let Some(path) = std::env::var_os("DRAFTPAPER_OPENING") {
