@@ -44,6 +44,9 @@ render_elements! {
     Picture=CropRenderElement<MemoryRenderBufferRenderElement<GlesRenderer>>,
 }
 
+/// Below this blur (millimetres) the blurred picture fades out over the sharp scene (output_elements).
+const BLUR_FADE_MM: f64 = 2.0;
+
 /// The sheet of one output, kept with the output.
 pub struct OutputSheet(pub RefCell<SheetRenderer>);
 
@@ -96,8 +99,16 @@ pub fn output_elements(
         let (mut elements, front) = scene_elements(state, renderer, output, pointer);
         let mm = state.screens.iter().find(|s| &s.output == output).map(|s| s.phys_mm).unwrap_or(6.2);
         let back = elements.split_off(front.min(elements.len()));
-        if let Some(blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm) {
+        if let Some(mut blurred) = crate::blur::blur(renderer, output, mode_size(output), &back, blur_mm * mm) {
+            // the blur is drawn at a quarter of the resolution: light, it would still be softer than the
+            // scene, and the step to the sharp scene at the end shows. Under BLUR_FADE_MM it is laid over the
+            // sharp scene, ever fainter, so it goes to nothing without a step
+            let k = (blur_mm / BLUR_FADE_MM).min(1.0) as f32;
+            blurred.alpha = k;
             elements.push(OutputElements::Texture(blurred));
+            if k < 1.0 {
+                elements.extend(back);
+            }
         } else {
             elements.extend(back);
         }
