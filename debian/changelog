@@ -37,6 +37,11 @@ draftpaper (0.3.0) unstable; urgency=medium
     (as root) reads back what each display shows, as the opening does.
   * The login screen's copy of the sheet is written only from the user's
     own home (not by programs run with a home of their own, as the tests).
+  * The black moment after signing in: Smithay commits a first frame on a
+    new output inside initialize_output (to lock in its primary plane),
+    drawn from the elements it is given, and it was given none: black. The
+    picture the display shows is now read back before that, and given as
+    that frame's element; the opening starts from it.
   * A frame refused with a client's buffer on a display plane (Firefox's
     hardware-decoded video on Intel passed the test commit, not the real
     one) no longer blanks or freezes the screen: from then on everything is

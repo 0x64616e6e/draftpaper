@@ -267,3 +267,15 @@ pub fn is_black(renderer: &mut GlesRenderer, texture: &GlesTexture, size: (i32, 
         None => true,
     }
 }
+
+/// The picture as an element over the whole output, opaque: for Smithay's first frame on it (tty.rs).
+pub fn element(texture: &GlesTexture, size: (i32, i32)) -> TextureElement {
+    TextureElement {
+        id: Id::new(),
+        commit: CommitCounter::default(),
+        texture: texture.clone(),
+        src: Rectangle::from_size((size.0 as f64, size.1 as f64).into()),
+        dst: Rectangle::from_size(size.into()),
+        alpha: 1.0,
+    }
+}

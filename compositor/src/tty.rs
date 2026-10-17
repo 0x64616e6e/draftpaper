@@ -232,7 +232,6 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     let Some(mut tty_data) = data.tty_data.take() else { return Ok(()) };
     let started = scan_with(data, &mut tty_data);
     log_screens(tty_data.manager.device(), "outputs set up");
-    take_pictures(&mut tty_data);
     adopt(&tty_data);
     log_screens(tty_data.manager.device(), "the rest switched off");
     data.tty_data = Some(tty_data);
@@ -443,6 +442,15 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         data.space.map_output(&output, position);
         attach_sheet(&output, theme.clone(), mm);
 
+        // the picture the display shows now (the previous owner's last frame: the login screen's, the
+        // session's), read back before Smithay draws its first frame on the output (initialize_output commits
+        // one, with what it is given: black when nothing): that frame is then the picture itself, and the
+        // opening starts from it (opening.rs)
+        let picture = picture_on(tty, crtc, (w, h));
+        let mut first = DrmOutputRenderElements::<GlesRenderer, OutputElements>::default();
+        if let Some((texture, size)) = &picture {
+            first.add_output(&crtc, [0.1, 0.1, 0.1, 1.0].into(), [OutputElements::Texture(crate::opening::element(texture, *size))]);
+        }
         match tty.manager.initialize_output::<_, OutputElements>(
             crtc,
             mode,
@@ -450,10 +458,14 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
             &output,
             None,
             &mut tty.renderer,
-            &DrmOutputRenderElements::default(),
+            &first,
         ) {
             Ok(surface) => {
                 log_screens(tty.manager.device(), &format!("{} set up", output.name()));
+                if let Some((texture, size)) = picture {
+                    eprintln!("draftpaper: {}: opening on the picture it showed", output.name());
+                    crate::opening::start(&output, texture, size);
+                }
                 data.add_screen(output.clone(), mm as f64, theme.margin_mm as f64);
                 tty.outputs.insert(crtc, (output, surface, info.handle()));
                 started.push(crtc);
@@ -926,21 +938,21 @@ fn reset_once(tty: &mut TtyData, why: &str) {
     }
 }
 
-/// What each display shows before Draftpaper draws over it (the login screen's last frame), for the
-/// opening (opening.rs).
-fn take_pictures(tty: &mut TtyData) {
+/// What `crtc` shows now (the previous owner's last frame), read back as a texture, when it is a picture:
+/// of the output's `size`, and not black (opening.rs).
+fn picture_on(tty: &mut TtyData, crtc: crtc::Handle, size: (i32, i32)) -> Option<(smithay::backend::renderer::gles::GlesTexture, (i32, i32))> {
     let device = tty.manager.device();
-    for (crtc, (output, _, _)) in &tty.outputs {
-        let Some(fb) = device.get_crtc(*crtc).ok().and_then(|c| c.framebuffer()) else { continue };
-        if let Some((texture, size)) = crate::opening::from_framebuffer(device, &mut tty.renderer, fb) {
-            if crate::opening::is_black(&mut tty.renderer, &texture, size) {
-                eprintln!("draftpaper: {}: the picture on it is black: no opening", output.name());
-                continue;
-            }
-            eprintln!("draftpaper: {}: opening on the picture it showed ({}x{})", output.name(), size.0, size.1);
-            crate::opening::start(output, texture, size);
-        }
+    let fb = device.get_crtc(crtc).ok()?.framebuffer()?;
+    let (texture, got) = crate::opening::from_framebuffer(device, &mut tty.renderer, fb)?;
+    if got != size {
+        eprintln!("draftpaper: the picture on screen is {}x{}, the output {}x{}: no opening", got.0, got.1, size.0, size.1);
+        return None;
     }
+    if crate::opening::is_black(&mut tty.renderer, &texture, got) {
+        eprintln!("draftpaper: the picture on screen is black: no opening");
+        return None;
+    }
+    Some((texture, got))
 }
 
 /// What each CRTC shows (its primary plane's framebuffer, 0: nothing), with when: following the

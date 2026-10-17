@@ -20,6 +20,9 @@ until grep -aq "Created new socket" "$t/log" || [ $i -gt 100 ]; do sleep 0.1; i=
 wl=$(grep -a "Created new socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 [ -n "$wl" ] || { echo "the headless compositor did not start"; exit 1; }
 sock=$runtime/draftpaper-$wl.sock
+# up: its IPC answers (it opens after the Wayland socket)
+i=0
+until DRAFTPAPER_SOCKET=$sock "$comp" msg version > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
 msg() { DRAFTPAPER_SOCKET=$sock "$comp" msg "$@" > /dev/null; sleep 0.3; }
 # the windows' tiled geometry, one "x y w h floating" line each
 geo() { DRAFTPAPER_SOCKET=$sock "$comp" msg windows | tr -d ' ,"' | awk -F: '/^floating/{f=$2} /^geometry/{g=1} g&&/^x/{x=$2} g&&/^y/{y=$2} g&&/^width/{w=$2} g&&/^height/{h=$2} /^id/{if(g)print x, y, w, h, f; g=0}'; }
