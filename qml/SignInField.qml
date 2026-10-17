@@ -89,7 +89,10 @@ Item {
                     scale: parent.width / 24
                     transformOrigin: Item.TopLeft
                     preferredRendererType: Shape.CurveRenderer
-                    readonly property color colour: field.finger ? field.ink : field.inkA(0.4)
+                    // one colour, the ink: listening or not is the opacity (the curve renderer, Qt 6.8, does not
+                    // repaint a stroke colour changed once drawn: the login screen's glyph stayed faint)
+                    readonly property color colour: field.ink
+                    opacity: field.finger ? 1 : 0.4
                     // the frame line's weight (two physical pixels), in the icon's units
                     readonly property real weight: field.line * 24 / parent.width
                     ShapePath { strokeColor: glyph.colour; strokeWidth: glyph.weight; fillColor: "transparent"; capStyle: ShapePath.RoundCap; joinStyle: ShapePath.RoundJoin; PathSvg { path: "M18.9 7a8 8 0 0 1 1.1 5v1a6 6 0 0 0 .8 3" } }

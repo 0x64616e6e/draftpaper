@@ -3,6 +3,13 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- **The login screen's fingerprint glyph lights up** while the reader listens: it stayed faint (Qt's curve
+  renderer does not repaint a stroke colour changed once drawn; the glyph is now the ink, faint by its
+  opacity).
+- The README's pictures are new, in Soft Glow, with the settings' wallpaper page among them.
+
 ## 0.5.0 (2026-10-17)
 
 The session comes back as it was left, and a lock screen of Draftpaper's own.

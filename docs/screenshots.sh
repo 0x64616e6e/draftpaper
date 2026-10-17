@@ -1,5 +1,8 @@
 #!/bin/sh
 # make screenshots: the README's pictures (docs/*.jpg), drawn headless: nothing is shown on any display.
+# Soft Glow throughout (Blueprint for its own picture): the sheet, the tiles, parking, the launcher, the
+# settings (the colour scheme, the wallpaper page with pictures of the script's own), the lock and login
+# screens with the reader listening.
 # A sheet of 1920x1200 at scale 1.5 (a laptop's panel), the shell of this checkout, terminals (foot)
 # reading the repository's own files. Nothing of the machine's own shows: a home of the script's own,
 # the title block's project and author set, a stand-in nmcli for the network (a made-up Wi-Fi) and
@@ -43,7 +46,7 @@ setup() {
     rm -rf "$home"
     mkdir -p "$home/.config/draftpaper" "$home/.local/share" "$home/Pictures" "$home/run"
     [ -d "$HOME/.local/share/fonts" ] && ln -s "$HOME/.local/share/fonts" "$home/.local/share/fonts"
-    printf 'theme = "%s"\nmargin = 6\n[title]\nproject = "DRAFTPAPER"\ndrawn = "0x64616e6e"\n[apps]\nskip = ["gtk", "qt", "firefox", "x11", "emacs", "tmux", "neovim", "alacritty"]\n' "$1" \
+    printf 'theme = "%s"\nmargin = 6\nwallpaper_dirs = ["~/Pictures/Wallpapers"]\n[title]\nproject = "DRAFTPAPER"\ndrawn = "0x64616e6e"\n[apps]\nskip = ["gtk", "qt", "firefox", "x11", "emacs", "tmux", "neovim", "alacritty"]\n' "$1" \
         > "$home/.config/draftpaper/config.toml"
 }
 as_home() {
@@ -93,6 +96,18 @@ shot() {
     sleep 0.3
     convert "$(ls "$home"/Pictures/*.png | head -1)" -quality 90 "$out/$1.jpg" && echo "  $out/$1.jpg"
 }
+# the sign-in field's glyph pulses while the reader listens: of a few shots, the one where it is darkest
+# (fully lit), to $out/$1.jpg
+shot_lit() {
+    best= least=2
+    for k in 1 2 3 4 5 6; do
+        shot "$1-$k" > /dev/null
+        m=$(convert "$out/$1-$k.jpg" -crop 60x60+662+570 -colorspace gray -format "%[fx:mean]" info:)
+        if awk -v a="$m" -v b="$least" "BEGIN { exit !(a < b) }"; then least=$m best=$k; fi
+        sleep 0.23
+    done
+    mv "$out/$1-$best.jpg" "$out/$1.jpg" && rm -f "$out/$1"-[0-9].jpg && echo "  $out/$1.jpg"
+}
 stop() { kill $pids 2>/dev/null; pids=; sleep 0.5; }
 
 # Soft Glow: the whole sheet; three terminals tiled; one parked; the launcher
@@ -121,6 +136,42 @@ sleep 0.8
 shot launcher
 stop
 
+# the settings, on the Soft Glow sheet: the colour scheme, then the wallpaper page with a picture picked
+# (pictures of the script's own: ImageMagick's gradients and plasma, nothing of the machine's)
+setup softglow
+mkdir -p "$home/Pictures/Wallpapers"
+# each: grey plasma (or a gradient) mapped onto two quiet colours
+n=0
+for p in "11 #efe3d3 #b98a70" "4 #e3ebee #6f8ea3" "gradient #f6eadb #d39f86" "23 #ebe6d8 #8c9c7c" "radial #fbf3e8 #b98c7a" \
+    "8 #f1dccb #85739a" "gradient #dce6ee #5e7f99" "31 #ece0cf #9a7c5f"; do
+    set -- $p
+    n=$((n + 1))
+    case $1 in
+        gradient) src="gradient:white-black" ;;
+        radial) src="radial-gradient:white-black" ;;
+        *) src="-seed $1 plasma:fractal" ;;
+    esac
+    # shellcheck disable=SC2086
+    convert -size 960x600 $src -blur 0x10 -colorspace gray -auto-level -size 1x256 "gradient:$3-$2" -clut \
+        "$home/Pictures/Wallpapers/picture-$n.jpg"
+done
+as_home "$cli" apply > /dev/null
+start --command true
+shell
+three
+settings() { as_home WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" qs ipc -p "$repo/qml/shell.qml" call settings "$@" > /dev/null; }
+settings toggle
+sleep 2
+shot picker
+settings page wallpaper
+sleep 1
+# the wallpaper's first picture picked: the sheet around the board shows it
+settings step 1
+sleep 3
+shot wallpaper
+settings cancel
+stop
+
 # Blueprint: the same three terminals
 setup blueprint
 as_home "$cli" apply > /dev/null
@@ -130,9 +181,9 @@ three
 shot blueprint
 stop
 
-# the lock screen, on the Blueprint sheet: the reader listening (a PAM service of the script's own:
+# the lock screen, on the Soft Glow sheet: the reader listening (a PAM service of the script's own:
 # the reader's prompt, then a minute's wait)
-setup blueprint
+setup softglow
 as_home "$cli" apply > /dev/null
 start --command true
 mkdir -p "$t/pam"
@@ -140,18 +191,18 @@ printf 'auth required pam_echo.so Place your finger on the fingerprint reader\na
 as_home WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" DRAFTPAPER_LOCK_TEST=1 DRAFTPAPER_LOCK_PAM_DIR="$t/pam" \
     "$cli" lock
 sleep 1.5
-shot lock
+shot_lit lock
 # the lock screen is daemonized (qs -d): not among pids
 as_home WAYLAND_DISPLAY="$wl" qs kill -p "$repo/qml/lock.qml" > /dev/null 2>&1
 stop
 
 # the login screen, on the same sheet: the name filled in, the fingerprint reader listening
-setup blueprint
+setup softglow
 as_home "$cli" apply > /dev/null
 "$fake" "$t/greetd.sock" "$t/started" "$t/finger" 60 &
 pids="$pids $!"
 export GREETD_SOCK="$t/greetd.sock" DRAFTPAPER_GREETER_USER=0x64616e6e
 start --greeter
 sleep 4
-shot greeter
+shot_lit greeter
 stop

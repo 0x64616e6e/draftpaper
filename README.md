@@ -317,9 +317,10 @@ the focused workspace and window lit in amber, warnings in red).
 
 *Blueprint, with the terminals in the theme's colours.*
 
-![The settings: the themes as drawings on the board, and the scheme builder below them](docs/picker.jpg)
+![The settings: the colour scheme page, the themes as drawings on the board and the scheme builder below them](docs/picker.jpg)
 
-*The settings (Super+T): the themes along the top, the builder below; the sheet around them previews what is picked.*
+*The settings (Super+T), on the colour scheme page: the themes along the top, the builder below; the
+pages down the left (Tab turns to the wallpaper). The sheet around them previews what is picked.*
 
 Super+T opens the settings on the board: the inside of the frame is cleared (with a wallpaper, the
 picture blurred), and the colour scheme lies on it. Along the top, the themes as drawings, each lettered
@@ -345,6 +346,12 @@ switches; clicking the theme name in the bottom margin moves to the next. A them
 the paper, the ink, the focused workspace's colour (`strong`), the window colours and the applications'
 palette (`[apps]`; see `/usr/share/draftpaper/themes/softglow.toml`); your own go in
 `~/.config/draftpaper/themes/`.
+
+![The settings' wallpaper page: the pictures as drawings, and the wallpaper's settings below them](docs/wallpaper.jpg)
+
+*The wallpaper page: the pictures of `~/Pictures/Wallpapers` as drawings, the one picked already
+showing on the sheet around the board; below, the margins, the title block's tint, how it is mounted,
+its brightness, a wash of paper and blur.*
 
 A theme also colours the applications, from its `[apps]` palette: alacritty, foot, tmux, Neovim,
 Emacs, GTK 3 and 4, Qt (qt5ct, qt6ct), Firefox and X11 programs. Draftpaper writes files of its own
