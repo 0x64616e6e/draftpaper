@@ -115,6 +115,7 @@ pub fn main(p: &Paths) {
             .map(|v| v.trim_matches('"').to_string())
             .unwrap_or_default()
     });
+    let network = std::thread::spawn(network);
     let cfg = crate::config::load(p);
     let (t, hot) = temps(cfg.get("alerts").unwrap_or(&Value::Null));
     let power = power();
@@ -128,5 +129,38 @@ pub fn main(p: &Paths) {
         .filter_map(|l| l.splitn(3, ' ').nth(2).map(|n| json!(n)))
         .collect();
     let profile = profile.join().unwrap_or_default();
-    println!("{}", util::dumps(&json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count()})));
+    let network = network.join().unwrap_or(Value::Null);
+    println!(
+        "{}",
+        util::dumps(&json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count(),
+            "wifi": network["wifi"], "wired": network["wired"], "backlight": backlight()}))
+    );
+}
+
+/// The network, for the title block's NETWORK cell: the Wi-Fi in use (its signal 0..100 and name) and the
+/// address of a connected wired device, from NetworkManager (nmcli, two calls; nothing without it).
+fn network() -> Value {
+    if util::which("nmcli").is_none() {
+        return json!({ "wifi": null, "wired": null });
+    }
+    // "*:SIGNAL:SSID": the line in use (an SSID may hold escaped colons)
+    let wifi = util::run(&["nmcli", "-t", "-f", "IN-USE,SIGNAL,SSID", "dev", "wifi", "list", "--rescan", "no"], 3).unwrap_or_default();
+    let wifi = wifi.lines().find(|l| l.starts_with('*')).and_then(|l| {
+        let mut p = l.splitn(3, ':');
+        let (_, signal, ssid) = (p.next()?, p.next()?.parse::<u32>().ok()?, p.next()?.replace("\\:", ":"));
+        (!ssid.is_empty()).then(|| json!({ "signal": signal, "ssid": ssid }))
+    });
+    let devices = util::run(&["nmcli", "-t", "-f", "DEVICE,TYPE,STATE", "dev"], 3).unwrap_or_default();
+    let wired = devices.lines().map(|l| l.split(':').collect::<Vec<_>>()).find(|f| f.len() >= 3 && f[1] == "ethernet" && f[2] == "connected").and_then(|f| {
+        let ip = util::run(&["nmcli", "-g", "IP4.ADDRESS", "dev", "show", f[0]], 3)?;
+        ip.lines().next().map(|a| a.split('/').next().unwrap_or("").to_string()).filter(|a| !a.is_empty())
+    });
+    json!({ "wifi": wifi, "wired": wired })
+}
+
+/// The first backlight's directory, for the shell to read itself (qml/Watch.qml); None without one.
+fn backlight() -> Option<String> {
+    let mut dirs: Vec<_> = std::fs::read_dir("/sys/class/backlight").ok()?.flatten().map(|e| e.path()).collect();
+    dirs.sort();
+    dirs.first().map(|d| d.display().to_string())
 }

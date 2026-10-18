@@ -91,14 +91,16 @@ ShellRoot {
     // ---- readings ----
     Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 5000 }
     readonly property var readings: { try { return JSON.parse(readingsPoll.output) } catch (e) { return { temps: [], hot: false, power: null, profile: "", bt: [] } } }
-    Poll { id: wifi; command: ["sh", "-c", "command -v nmcli >/dev/null && nmcli -t -f IN-USE,SIGNAL,SSID dev wifi list --rescan no | grep '^\\*' | head -1"]; interval: 5000 }
-    Poll { id: eth; command: ["sh", "-c", "command -v nmcli >/dev/null || exit 0; d=$(nmcli -t -f DEVICE,TYPE,STATE dev | awk -F: '$2==\"ethernet\" && $3==\"connected\"{print $1; exit}'); [ -n \"$d\" ] && ip -4 -o addr show dev \"$d\" | awk '{print $4}' | cut -d/ -f1"]; interval: 5000 }
-    Poll { id: meminfo; command: ["sh", "-c", "grep -E '^(MemTotal|MemAvailable):' /proc/meminfo"]; interval: 5000 }
-    Poll { id: stat; command: ["head", "-1", "/proc/stat"]; interval: 2000 }
-    Poll { id: backlight; command: ["sh", "-c", "d=$(ls -d /sys/class/backlight/* 2>/dev/null | head -1); [ -n \"$d\" ] && cat \"$d/brightness\" \"$d/max_brightness\""]; interval: 1000 }
+    // the memory, the CPU line and the backlight read in place (Watch.qml: no process started); the network
+    // comes with the readings (`draftpaper readings`: wifi, wired)
+    Watch { id: meminfo; path: "/proc/meminfo"; interval: 5000 }
+    Watch { id: stat; path: "/proc/stat"; interval: 2000 }
+    Watch { id: backlightNow; path: root.readings.backlight ? root.readings.backlight + "/brightness" : ""; interval: 1000 }
+    Watch { id: backlightMax; path: root.readings.backlight ? root.readings.backlight + "/max_brightness" : ""; interval: 60000 }
     Poll {
         id: customPoll
         command: theme.cells.length > 0 && theme.cells[0].command ? theme.cells[0].command : ["true"]
+        running: theme.cells.length > 0 && !!theme.cells[0].command
         interval: theme.cells.length > 0 ? (theme.cells[0].interval || 5) * 1000 : 60000
     }
 
@@ -184,14 +186,14 @@ ShellRoot {
     // everything the title block letters is in (the readings, the network, memory and CPU): told to the
     // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing
     // is painted in after it (compositor/src/opening.rs)
-    readonly property bool lettered: readingsPoll.ran && wifi.ran && eth.ran && meminfo.ran && cpuBusy >= 0 && Compositor.outputs.length > 0
+    readonly property bool lettered: readingsPoll.ran && meminfo.ran && cpuBusy >= 0 && Compositor.outputs.length > 0
     property bool readySent: false
     onLetteredChanged: if (lettered && !readySent) { readySent = true; readyTimer.start() }
     Timer { id: readyTimer; interval: 150; onTriggered: Compositor.send({ request: "ready" }) }
 
     readonly property real brightness: {
-        const v = backlight.output.split("\n").map(Number)
-        return v.length === 2 && v[1] > 0 ? v[0] / v[1] : -1
+        const now = Number(backlightNow.output), max = Number(backlightMax.output)
+        return backlightNow.output !== "" && max > 0 ? now / max : -1
     }
     PwObjectTracker { objects: [Pipewire.defaultAudioSink] }
     readonly property var audio: Pipewire.defaultAudioSink ? Pipewire.defaultAudioSink.audio : null
@@ -215,13 +217,10 @@ ShellRoot {
         const cpu = cpuBusy >= 0 ? Math.round(cpuBusy * 100) + "%" : "-", mem = memUsed >= 0 ? Math.round(memUsed * 100) + "%" : "-"
         return glyphs ? g("󰻠") + cpu + "  " + g("󰍛") + mem : cpu + " / " + mem
     }
-    // the Wi-Fi in use: "*:SIGNAL:SSID" (an SSID may hold escaped colons)
-    readonly property var wifiNow: {
-        const p = wifi.output.split(":")
-        return p.length >= 3 && p.slice(2).join(":") !== "" ? { signal: Number(p[1]) / 100, ssid: p.slice(2).join(":").replace(/\\:/g, ":") } : null
-    }
+    // the Wi-Fi in use (`draftpaper readings`: its signal 0..100 and name)
+    readonly property var wifiNow: readings.wifi ? { signal: readings.wifi.signal / 100, ssid: readings.wifi.ssid } : null
     readonly property string networkText: wifiNow ? g(ramp(wifiNow.signal, ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"])) + wifiNow.ssid
-        : eth.output !== "" ? (glyphs ? g("󰈁") : "wired ") + eth.output
+        : readings.wired ? (glyphs ? g("󰈁") : "wired ") + readings.wired
         : (glyphs ? g("󰤮") : "") + "offline"
     readonly property bool tempHot: readings.hot === true
     readonly property string tempText: (readings.temps || []).map(t => tempLabel(t.label) + t.value).join("  ")

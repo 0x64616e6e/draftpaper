@@ -5,6 +5,8 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- The shell reads the memory, the CPU line and the backlight in place, and the network comes with
+  `draftpaper readings`: no `sh`, `nmcli`, `grep`, `awk`, `ip` or `head` started every second or two.
 - A graph or schedule placed where it does not fit on a display (a place dragged to on a larger one)
   shows where it fits instead of not at all: the graph on the panel stayed away.
 
