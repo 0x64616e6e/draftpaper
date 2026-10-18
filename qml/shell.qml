@@ -160,28 +160,9 @@ ShellRoot {
         if (graph === which && graphOn === screenName) graph = ""
         else { graph = which; graphOn = screenName }
     }
-    // a sample every 5 s of what the title block reads, kept ten minutes (and one more): the processor's
-    // load and the memory in use (0..1), the temperatures (°C) and the fan (RPM), the power drawn (W) and
-    // the battery (0..1); -1 where a reading is missing
-    property var loadHistory: []
-    function reading(label) {
-        const t = (readings.temps || []).find(t => t.label === label)
-        const v = t ? parseFloat(t.value) : NaN
-        return isNaN(v) ? -1 : v
-    }
     // `draftpaper config set KEY=VALUE ...`: a note dragged to its place keeps it (Schedule.qml, LoadGraph.qml)
     function setConfig(pairs) { configSet.command = [root.bin, "config", "set"].concat(pairs); configSet.running = true }
     Process { id: configSet }
-    function sampleLoad() {
-        if (cpuBusy < 0) return
-        const power = readings.power !== null && readings.power !== undefined ? Number(readings.power) : -1
-        const h = loadHistory.concat([{
-            cpu: cpuBusy, mem: memUsed, temp: reading("CPU"), nvme: reading("NVME"), fan: reading("FAN"),
-            power: isNaN(power) ? -1 : power, battery: battery.isLaptopBattery ? battery.percentage : -1
-        }])
-        loadHistory = h.length > 121 ? h.slice(h.length - 121) : h
-    }
-    Timer { interval: 5000; repeat: true; running: true; triggeredOnStart: true; onTriggered: root.sampleLoad() }
 
     // everything the title block letters is in (the readings, the network, memory and CPU): told to the
     // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing

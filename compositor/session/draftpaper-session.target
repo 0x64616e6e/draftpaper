@@ -10,3 +10,5 @@ Wants=draftpaper-shell.service
 Wants=draftpaper-idle.service
 # the sound as it was left (logging out mutes it)
 Wants=draftpaper-audio.service
+# the readings over time, for the graph
+Wants=draftpaper-metrics.service

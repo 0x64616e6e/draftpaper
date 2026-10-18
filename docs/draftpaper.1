@@ -131,6 +131,15 @@ Any of picture (a file, or none), margins (paper, ambient), tint, fit (fill, fit
 (centre, top, bottom, left, right), brightness, wash and blur (millimetres), in one write, as the
 settings' wallpaper page sets them.
 .TP
+.B metrics \fR[\fBkeep\fR]
+The readings over time, for the graph on the sheet. \fBkeep\fR samples the processor's load, the memory in
+use, the temperatures, the fan, the power drawn on battery and the battery's charge every 5 s into six
+periods (5 minutes in 5 s slots, an hour in minutes, a day in quarter hours, a week in hours, a month in
+quarter days, a year in days; each slot its count, sum, least and most), written to
+\fI$XDG_RUNTIME_DIR/draftpaper/metrics.json\fR every sample and to
+\fI~/.local/state/draftpaper/metrics.json\fR every 5 minutes (draftpaper-metrics.service runs it in the
+session). Without it, the store as JSON.
+.TP
 .B machine
 The machine schedule's facts as JSON: the machine, processor, graphics, memory, storage, system, the
 desktop's versions and the uptime (the schedule on an empty workspace's sheet).

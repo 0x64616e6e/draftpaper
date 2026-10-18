@@ -6,6 +6,7 @@ mod apps;
 mod config;
 mod greeter;
 mod machine;
+mod metrics;
 mod processes;
 mod programs;
 mod readings;
@@ -81,6 +82,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               storage, system, versions, uptime
   draftpaper processes        the process schedule's rows, as JSON: the busiest programs, each one's share
                               of a processor, memory and processor time
+  draftpaper metrics [keep]   the readings over time (the graph's): keep samples them every 5 s into six periods
+                              (draftpaper-metrics.service); without it, the store as JSON
   draftpaper schedule [next|equipment|processes|revisions|hide]
                               the schedules on the sheet (Mod+i: next): equipment, processes, revisions, none
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
@@ -155,6 +158,8 @@ fn main() {
         ["revisions", ..] => revisions::main(),
         ["machine", ..] => machine::main(),
         ["processes", ..] => processes::main(40),
+        ["metrics", "keep", ..] => metrics::keep(&p),
+        ["metrics", ..] => print!("{}", util::read(&metrics::runtime_file(&p))),
         ["schedule", rest @ ..] => {
             // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
             let which = rest.first().copied().unwrap_or("next");

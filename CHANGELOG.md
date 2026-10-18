@@ -3,6 +3,16 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- A year of readings on the graph, on a logarithmic time scale: now at the right, then the last 5 minutes,
+  the hour, the day, the week, the month and the year, each period ticked and named. `draftpaper metrics
+  keep` (draftpaper-metrics.service, part of the session) samples every 5 s into six periods of fixed slots
+  (5 s, a minute, a quarter hour, an hour, a quarter day, a day): each slot keeps its count, sum, least
+  and most, so the year is some 870 slots a reading. One line through all the periods, the bold reading's
+  least to most a band under it, broken where nothing was kept. The file is in the runtime directory,
+  kept on disk every 5 minutes; `draftpaper metrics` prints it. The shell no longer samples on its own.
+
 ## 0.7.2 (2026-10-18)
 
 The graph within its zone, notes that show where they fit, and a quieter shell.

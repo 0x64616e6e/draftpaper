@@ -48,6 +48,10 @@ run() {
 run "$cli" apply > /dev/null
 run qs -p "$repo/qml/shell.qml" -n > "$t/qs.log" 2>&1 &
 pids="$pids $!"
+# the readings over time (draftpaper-metrics.service), a sample a second; KEPT=FILE starts it from that store
+[ -n "${KEPT:-}" ] && { mkdir -p "$t/run"; cp "$KEPT" "$t/run/metrics.json"; }
+DRAFTPAPER_RUNTIME="$t/run" XDG_STATE_HOME="$t/.local/state" DRAFTPAPER_METRICS_EVERY=1 "$cli" metrics keep &
+pids="$pids $!"
 i=0
 until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 layers() { run "$comp" msg outputs | jq -r ".[0].layers[]" | grep -c "draftpaper-$1"; }
@@ -97,8 +101,9 @@ sched next
 ok "again: the revisions (no repository focused here: nothing to show)" "$(waitlayers schedule 0)/$(sched state)" "0/revisions"
 sched next
 ok "again: none" "$(waitlayers schedule 0)/$(sched state)" "0/"
-# a reading's graph: its cell shows it, again puts it away; the first sample comes 5 s in
-sleep 5
+# a reading's graph: its cell shows it, again puts it away; from the keeper's first samples
+i=0; until [ -s "$t/run/metrics.json" ] || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done; sleep 1
+ok "the readings kept: every period" "$(run "$cli" metrics | jq "[.tiers[] | select(.slots | length > 0)] | length")" "6"
 graph toggle load
 ok "the load's cell: its graph" "$(waitlayers load 1)" "1"
 sched equipment

@@ -164,3 +164,20 @@ fn backlight() -> Option<String> {
     dirs.sort();
     dirs.first().map(|d| d.display().to_string())
 }
+
+/// The sensors as numbers, for the recorder (metrics.rs): the CPU's and the NVMe's temperatures (°C), the
+/// fan (RPM), the power drawn while on battery (W) and the battery's charge (0..1); None where there is none.
+pub fn raw() -> [Option<f64>; 5] {
+    let cpu = hwmon(&["coretemp", "k10temp", "zenpower"]).and_then(|d| labelled(&d, &["Package id 0", "Tctl", "Tdie"])).map(|v| v as f64 / 1000.0);
+    let nvme = hwmon(&["nvme"]).and_then(|d| read_int(&d.join("temp1_input"))).map(|v| v as f64 / 1000.0);
+    let mut fans: Vec<PathBuf> = hwmons().into_iter().map(|d| d.join("fan1_input")).filter(|f| f.exists()).collect();
+    fans.sort_by_key(|f| read_str(&f.with_file_name("name")).as_deref() == Some("acpi_fan"));
+    let fan = fans.iter().find_map(|f| read_int(f)).map(|v| v as f64);
+    let power = power().as_f64();
+    let mut bats: Vec<PathBuf> = std::fs::read_dir("/sys/class/power_supply")
+        .map(|r| r.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("BAT"))).collect())
+        .unwrap_or_default();
+    bats.sort();
+    let battery = bats.first().and_then(|b| read_int(&b.join("capacity"))).map(|v| v as f64 / 100.0);
+    [cpu, nvme, fan, power, battery]
+}

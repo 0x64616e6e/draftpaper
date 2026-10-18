@@ -42,6 +42,7 @@ install: $(COMPOSITOR) $(CLI) $(SHADERS)
 	install -d $(DESTDIR)$(PREFIX)/lib/systemd/user
 	install -m644 compositor/session/draftpaper-session.target compositor/session/draftpaper-shell.service \
 		compositor/session/draftpaper-idle.service compositor/session/draftpaper-audio.service \
+		compositor/session/draftpaper-metrics.service \
 		$(DESTDIR)$(PREFIX)/lib/systemd/user/
 	install -Dm644 compositor/session/draftpaper-portals.conf $(DESTDIR)$(PREFIX)/share/xdg-desktop-portal/draftpaper-portals.conf
 	install -Dm644 compositor/session/xdg-desktop-portal-wlr.conf $(DESTDIR)/etc/xdg/xdg-desktop-portal-wlr/Draftpaper

@@ -1,0 +1,11 @@
+[Unit]
+Description=Draftpaper metrics (the readings over time, for the sheet's graph)
+Documentation=https://github.com/0x64616e6e/draftpaper
+# samples every 5 s into $XDG_RUNTIME_DIR/draftpaper/metrics.json, kept on disk every 5 minutes
+PartOf=draftpaper-session.target
+After=draftpaper-session.target
+
+[Service]
+ExecStart=draftpaper metrics keep
+Restart=on-failure
+Nice=10
