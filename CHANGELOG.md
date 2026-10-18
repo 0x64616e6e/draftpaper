@@ -14,7 +14,9 @@ What changed in each release, newest first. The Debian package's own record, wit
   `make pixels` (tests/rulers.sh): ticks at true millimetres, the pointer on whole millimetres level and
   turned, free once they are away. `msg pointer` says where the pointer is; `pointer_by DX DY` moves it as
   a mouse does.
-  The panel by the zero hides (p, or its ×) when it covers the angles, a tab by the zero bringing it back.
+  The panel by the crossing hides (p, or its ×) when it covers the angles, a tab bringing it back. Each
+  ruler has its own zero, a red line that slides along it (drag it, double-click the ruler, Ctrl+arrows),
+  the graduations counting from it both ways: measured from anywhere, clear of the crossing.
 - **A key plan** with several screens (#47), as a drawing set shows which part of the whole a sheet is: in
   the bottom margin left of the scale bar, every screen's outline in their arrangement, this one filled,
   the focused one twice as heavy; drawn by the compositor on whole pixels. Left of it a north mark, a

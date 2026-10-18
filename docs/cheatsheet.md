@@ -83,13 +83,14 @@ chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d
 | Keys | |
 |---|---|
 | Mod+r | Bring the rulers out, or put them away (Esc) |
-| ← → ↑ ↓ · drag a ruler | Move the zero point 1 mm (Shift: 10 mm) |
+| ← → ↑ ↓ · drag a ruler | Move the crossing 1 mm (Shift: 10 mm) |
+| Ctrl+← → · Ctrl+↑ ↓ · drag a red zero line · double-click a ruler | Slide the horizontal, the vertical ruler's zero 1 mm (Shift: 10 mm); the graduations count from it both ways |
 | [ ] · , . · Ctrl+drag a ruler | Turn the horizontal, the vertical ruler 1° (Shift: 15°) |
 | l | Lock the angle between them, or free them |
 | 0 | Level both |
 | s | Hold the pointer to their millimetres (Shift: ten), or let it go |
 | Type in the panel's H, V, Enter | Turn a ruler to that angle |
-| p · the panel's × · its tab | Hide the panel by the zero (a tab stays), or show it |
+| p · the panel's × · its tab | Hide the panel by the crossing (a tab stays), or show it |
 
 `draftpaper rulers` does what Mod+r does.
 

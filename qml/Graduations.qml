@@ -1,9 +1,9 @@
 // One ruler's graduations (Rulers.qml): along both its long edges a tick every millimetre, longer at five,
-// longest and numbered at ten (read along the ruler), counted out from the zero at its middle both ways;
-// none where the other
-// ruler crosses (`clearance` either side of the zero); and a very thin line down its middle. `along`: the
-// ruler runs across (its length is the width); else down. Drawn once, again when the sizes change: the
-// ruler is moved and turned as a whole.
+// longest and numbered at ten (read along the ruler), counted out both ways from the ruler's own zero
+// (`zero`, whole millimetres from the crossing at its middle); none where the other ruler crosses
+// (`clearance` either side of the crossing); and a very thin line down its middle. `along`: the ruler runs
+// across (its length is the width); else down. Drawn again only when these change: the ruler is moved and
+// turned as a whole.
 import QtQuick
 
 Canvas {
@@ -13,12 +13,14 @@ Canvas {
     property real hair: 1
     property real clearance: 0
     property bool along: true
+    property int zero: 0                // the ruler's zero, whole millimetres from the crossing at its middle
     transformOrigin: Item.Center
     renderStrategy: Canvas.Cooperative
 
     onMmChanged: requestPaint()
     onInkChanged: requestPaint()
     onClearanceChanged: requestPaint()
+    onZeroChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
 
@@ -42,7 +44,8 @@ Canvas {
         for (let d = -most; d <= most; d++) {
             const off = d * mm
             if (Math.abs(off) <= clearance) continue
-            const t = (d % 10 === 0 ? 4 : d % 5 === 0 ? 2.6 : 1.6) * mm
+            const v = d - zero              // counted from the ruler's zero
+            const t = (v % 10 === 0 ? 4 : v % 5 === 0 ? 2.6 : 1.6) * mm
             const p = mid + off
             if (along) {
                 ctx.moveTo(p, 0); ctx.lineTo(p, t)
@@ -58,10 +61,11 @@ Canvas {
         ctx.textAlign = "center"
         ctx.textBaseline = "middle"
         for (let d = -most; d <= most; d++) {
-            if (d === 0 || d % 10 !== 0) continue
+            const v = d - zero
+            if (v === 0 || v % 10 !== 0) continue
             const off = d * mm
             if (Math.abs(off) <= clearance + 2 * mm) continue
-            const p = mid + off, label = String(Math.abs(d))
+            const p = mid + off, label = String(Math.abs(v))
             if (along) {
                 ctx.fillText(label, p, 6.4 * mm)
                 ctx.fillText(label, p, wide - 6.4 * mm)

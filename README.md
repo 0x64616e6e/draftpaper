@@ -204,20 +204,24 @@ position = [0, 0]          # logical pixels
 ## Rulers
 
 Mod+r brings out two rulers, as clear acrylic on the drawing: a horizontal and a vertical one, each
-from the frame's line to the frame's line, crossing at a zero point that slides anywhere on the sheet.
-Where they cross they are one piece. Both long edges of each are graduated in true millimetres (the
-sheet's own, from the display's measured size), counted out from the zero both ways, numbered every 10;
-a very thin line runs down the middle of each. While they are out, the pointer is held to their
-millimetres: it moves a whole millimetre at a time (ten with Shift) from the zero along each ruler, at
-whatever angle they stand, so what you draw lands on them.
+from the frame's line to the frame's line, crossing at a point that slides anywhere on the sheet. Where
+they cross they are one piece. Both long edges of each are graduated in true millimetres (the sheet's
+own, from the display's measured size), numbered every 10, counted out both ways from the ruler's own
+zero: a red line across it that slides along the ruler, so you measure from wherever you set it, on both
+sides of it at once, clear of the crossing. A very thin line runs down the middle of each. While they are
+out, the pointer is held to their millimetres: it moves a whole millimetre at a time (ten with Shift)
+along each ruler, at whatever angle they stand, so what you draw lands on them.
 
-The zero moves 1 mm a step (10 with Shift): the arrows, or drag a ruler. A ruler turns about the zero
-1° a step (15° with Shift): `[` `]` the horizontal one, `,` `.` the vertical one, or Ctrl and drag it.
-An inclined ruler shows its degrees on an arc from its level line. `l` locks the two at the angle between
-them (any angle: turning one turns both), `0` levels them, `s` lets the pointer go or holds it again,
-Escape puts them away. The panel by the zero point says where it is and takes the angles typed, for
-precise alignment; `p` (or its ×) hides it when it is in the way of the angles, leaving a small tab by
-the zero that brings it back. The rulers take clicks only on themselves: the windows around them keep theirs.
+The crossing moves 1 mm a step (10 with Shift): the arrows, or drag a ruler. A ruler's zero slides the
+same way: drag its red line, double-click the ruler where you want it, or Ctrl+arrows (left and right the
+horizontal ruler's, up and down the vertical one's). A ruler turns about the crossing 1° a step (15° with
+Shift): `[` `]` the horizontal one, `,` `.` the vertical one, or Ctrl and drag it. An inclined ruler shows
+its degrees on an arc from its level line. `l` locks the two at the angle between them (any angle:
+turning one turns both), `0` levels them, `s` lets the pointer go or holds it again, Escape puts them
+away. The panel by the crossing says where it and the zeros are and takes the angles typed, for precise
+alignment; `p` (or its ×) hides it when it is in the way of the angles, leaving a small tab by the
+crossing that brings it back. The rulers take clicks only on themselves: the windows around them keep
+theirs.
 
 ## Displays
 

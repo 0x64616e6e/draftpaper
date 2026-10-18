@@ -259,7 +259,7 @@ ShellRoot {
     IpcHandler {
         target: "rulers"
         function toggle(): void { rulers.visible ? rulers.close() : rulers.open() }
-        // for scripts and tests: where the zero is (mm from the frame's corner) and how they stand
+        // for scripts and tests: where they cross (mm from the frame's corner) and how they stand
         function set(zeroX: real, zeroY: real, angleH: real, angleV: real): void {
             if (!rulers.visible) rulers.open()
             rulers.zeroX = Math.round(zeroX); rulers.zeroY = Math.round(zeroY)
@@ -267,9 +267,11 @@ ShellRoot {
         }
         function lock(on: bool): void { rulers.isLocked = on }
         function panel(on: bool): void { rulers.panelShown = on }
+        // each ruler's zero, whole millimetres along it from the crossing
+        function zeros(h: int, v: int): void { rulers.zeroH = h; rulers.zeroV = v }
         function turn(which: string, to: real): void { which === "v" ? rulers.turnV(to) : rulers.turnH(to) }
         function state(): string {
-            return rulers.visible ? JSON.stringify({ zero: [rulers.zeroX, rulers.zeroY], angles: [rulers.angleH, rulers.angleV], locked: rulers.isLocked, snap: rulers.snapOn }) : ""
+            return rulers.visible ? JSON.stringify({ crossing: [rulers.zeroX, rulers.zeroY], zeros: [rulers.zeroH, rulers.zeroV], angles: [rulers.angleH, rulers.angleV], locked: rulers.isLocked, snap: rulers.snapOn }) : ""
         }
     }
     Launcher { id: launcher; shell: root }

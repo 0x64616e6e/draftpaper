@@ -1,20 +1,25 @@
 // The rulers (issue #48; Mod+r, `draftpaper rulers`): a horizontal and a vertical ruler, each from the
-// frame's line to the frame's line, crossing at a zero point that slides anywhere on the sheet, as clear
+// frame's line to the frame's line, crossing at a point that slides anywhere on the sheet, as clear
 // acrylic on the drawing. Where they cross they are one piece: one outline round both. Both long edges of
 // each are graduated in true millimetres (the sheet's own, from the display's measured size), counted out
-// from the zero both ways; a very thin line runs down the middle of each. Each turns about the zero: free,
-// or locked to the other at any angle; an inclined one shows its degrees on an arc from its level line,
-// locked ones the angle between them. A small panel by the zero point says where it is, takes the angles
-// typed, and holds the lock and the pointer's steps.
+// both ways from the ruler's own zero, which slides along it (a red line across it): at the crossing to
+// start with, anywhere along the ruler to measure from (the crossing hides the graduations under it);
+// a very thin line runs down the middle of each. Each turns about the crossing: free, or locked to the
+// other at any angle; an inclined one shows its degrees on an arc from its level line, locked ones the angle
+// between them. A small panel by the crossing says where it and the zeros are, takes the angles typed, and
+// holds the lock and the pointer's steps.
 //
-// The zero moves 1 mm a step (10 with Shift), a ruler turns 1° (15° with Shift): by the keys, or dragging
-// (a ruler moves the zero; with Ctrl, it turns). While they are out the compositor holds the pointer to
-// their millimetres (compositor/src/rulers.rs), so what is drawn lands on them. On the overlay layer, above
-// the windows, taking clicks only on the rulers and the panel; the keyboard once clicked.
+// The crossing and the zeros move 1 mm a step (10 with Shift), a ruler turns 1° (15° with Shift): by the
+// keys, or dragging (a ruler moves the crossing, with Ctrl turns; a red line slides its zero; a double click
+// puts the zero there). The zeros stay on whole millimetres from the crossing, so the compositor, holding
+// the pointer to the rulers' millimetres while they are out (compositor/src/rulers.rs), counts from the
+// crossing. On the overlay layer, above the windows, taking clicks only on the rulers and the panel; the
+// keyboard once clicked.
 //
-// Keys: arrows move the zero; [ ] turn the horizontal ruler, , . the vertical one (with Shift by 15°); l
-// locks and unlocks; s holds the pointer or lets it go; 0 levels both; p hides the panel (a tab by the zero
-// brings it back) or shows it; Escape puts them away.
+// Keys: arrows move the crossing; Ctrl+left, right slide the horizontal ruler's zero, Ctrl+up, down the
+// vertical one's; [ ] turn the horizontal ruler, , . the vertical one (with Shift by 15°); l locks and
+// unlocks; s holds the pointer or lets it go; 0 levels both; p hides the panel (a tab by the crossing brings
+// it back) or shows it; Escape puts them away.
 import QtQuick
 import QtQuick.Shapes
 import Quickshell
@@ -53,6 +58,10 @@ PanelWindow {
     property bool isLocked: false
     property bool snapOn: true            // the pointer held to the millimetres
     property bool panelShown: true        // the panel by the zero, or only its tab (it may hide the angles)
+    // each ruler's own zero, whole millimetres along it from the crossing (right, down when level): its
+    // graduations count from there both ways, so the crossing does not hide what is measured near it
+    property int zeroH: 0
+    property int zeroV: 0
     readonly property real zx: frameX + zeroX * mm
     readonly property real zy: frameY + zeroY * mm
     readonly property real wide: 16 * mm  // a ruler's width
@@ -120,6 +129,10 @@ PanelWindow {
             const step = big ? 10 : 1, turn = big ? 15 : 1
             const k = e.key
             if (k === Qt.Key_Escape) rulers.close()
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Left) rulers.zeroH -= step
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Right) rulers.zeroH += step
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Up) rulers.zeroV -= step
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Down) rulers.zeroV += step
             else if (k === Qt.Key_Left) rulers.moveBy(-step, 0)
             else if (k === Qt.Key_Right) rulers.moveBy(step, 0)
             else if (k === Qt.Key_Up) rulers.moveBy(0, -step)
@@ -176,12 +189,12 @@ PanelWindow {
         Graduations {
             x: sheet.cx - rulers.reach; y: sheet.cy - rulers.wide / 2; width: 2 * rulers.reach; height: rulers.wide
             rotation: -rulers.tiltH
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH
         }
         Graduations {
             x: sheet.cx - rulers.wide / 2; y: sheet.cy - rulers.reach; width: rulers.wide; height: 2 * rulers.reach
             rotation: -rulers.tiltV
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV
         }
 
         // dragging a ruler moves the zero; with Ctrl, turns that ruler about it
@@ -192,6 +205,8 @@ PanelWindow {
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
             onPressed: e => rulers.press(e, hArea)
             onPositionChanged: e => rulers.drag(e, hArea, "h")
+            // a double click: this ruler's zero there
+            onDoubleClicked: e => rulers.zeroH = Math.round((e.x - rulers.reach) / rulers.mm)
             onReleased: rulers.dragging = false
         }
         MouseArea {
@@ -202,6 +217,64 @@ PanelWindow {
             onPressed: e => rulers.press(e, vArea)
             onPositionChanged: e => rulers.drag(e, vArea, "v")
             onReleased: rulers.dragging = false
+            onDoubleClicked: e => rulers.zeroV = Math.round((e.y - rulers.reach) / rulers.mm)
+        }
+
+        // each ruler's zero: a line across it in the alert colour, 0 by both edges; dragged along the ruler
+        // in whole millimetres (ten with Shift)
+        Repeater {
+            model: [
+                { along: true, tilt: rulers.tiltH },
+                { along: false, tilt: rulers.tiltV },
+            ]
+            Item {
+                id: zeroMark
+                required property var modelData
+                readonly property bool along: modelData.along
+                readonly property int at: along ? rulers.zeroH : rulers.zeroV
+                x: along ? sheet.cx - rulers.reach : sheet.cx - rulers.wide / 2
+                y: along ? sheet.cy - rulers.wide / 2 : sheet.cy - rulers.reach
+                width: along ? 2 * rulers.reach : rulers.wide
+                height: along ? rulers.wide : 2 * rulers.reach
+                rotation: -modelData.tilt
+                // the line, and its handle: 4 mm across it to take hold of
+                Rectangle {
+                    x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm - width / 2 : 0
+                    y: zeroMark.along ? 0 : rulers.reach + zeroMark.at * rulers.mm - height / 2
+                    width: zeroMark.along ? 2 * rulers.hair : rulers.wide
+                    height: zeroMark.along ? rulers.wide : 2 * rulers.hair
+                    color: rulers.mark
+                }
+                Repeater {
+                    model: 2
+                    Text {
+                        required property int index
+                        readonly property real edge: index === 0 ? 6.4 * rulers.mm : rulers.wide - 6.4 * rulers.mm
+                        x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm : edge - width / 2
+                        y: zeroMark.along ? edge - height / 2 : rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm
+                        text: "0"
+                        font.family: Fonts.mono; font.pixelSize: 2.4 * rulers.mm; font.weight: Font.Bold
+                        color: rulers.mark
+                    }
+                }
+                MouseArea {
+                    x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm - width / 2 : 0
+                    y: zeroMark.along ? 0 : rulers.reach + zeroMark.at * rulers.mm - height / 2
+                    width: zeroMark.along ? 4 * rulers.mm : rulers.wide
+                    height: zeroMark.along ? rulers.wide : 4 * rulers.mm
+                    cursorShape: zeroMark.along ? Qt.SizeHorCursor : Qt.SizeVerCursor
+                    preventStealing: true
+                    onPressed: keys.forceActiveFocus()
+                    onPositionChanged: e => {
+                        if (!pressed) return
+                        const p = mapToItem(zeroMark, e.x, e.y)
+                        const unit = (e.modifiers & Qt.ShiftModifier) ? 10 : 1
+                        const v = Math.round(((zeroMark.along ? p.x : p.y) - rulers.reach) / rulers.mm / unit) * unit
+                        if (zeroMark.along) rulers.zeroH = v
+                        else rulers.zeroV = v
+                    }
+                }
+            }
         }
 
         // an inclined ruler: its level line dashed, its degrees on an arc from it
@@ -323,8 +396,14 @@ PanelWindow {
             id: column
             x: 2.4 * rulers.mm; y: 2 * rulers.mm; spacing: 1.6 * rulers.mm
             Text {
-                text: "0 at " + rulers.zeroX + ", " + rulers.zeroY + " mm"
+                text: "crossing at " + rulers.zeroX + ", " + rulers.zeroY + " mm"
                 font.family: Fonts.mono; font.pixelSize: 2.6 * rulers.mm; font.weight: Font.Medium; color: "#EDE3D2"
+            }
+            Text {
+                // each ruler's zero from the crossing (right, down when level)
+                function signed(v) { return v > 0 ? "+" + v : v < 0 ? "\u2212" + (-v) : "0" }
+                text: "0 at H " + signed(rulers.zeroH) + ", V " + signed(rulers.zeroV) + " mm"
+                font.family: Fonts.mono; font.pixelSize: 2.4 * rulers.mm; color: "#DAD0C5"
             }
             Row {
                 spacing: 2.4 * rulers.mm
