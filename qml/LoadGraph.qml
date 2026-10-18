@@ -1,7 +1,8 @@
 // The plotted load (issue #49, one per screen): what top's meters tell, blended into the sheet: the
 // processor's load and the memory in use (0 to 100 %) and the processor's temperature (30 to 100 °C, in the
 // alert ink) over the last ten minutes, on millimetre squares (every tenth heavier) that fade out toward
-// their edges: no title, no figures, no frame, no margins (the title block letters the readings now).
+// their edges, to nothing at every edge: no title, no figures, no frame, no margins; each line lettered
+// at its end with its name and its value now.
 // From the readings the title block already has (shell.qml keeps a sample every 5 s): no polling of its
 // own. On the bottom layer, under every window; over a wallpaper, each line on a halo of the paper.
 //
@@ -132,18 +133,21 @@ Item {
                     c.stroke()
                 }
                 // ... fading out toward the edges: no line where they end (the readings are drawn after)
-                // an ellipse as the graph is proportioned: 0.62 of its width across, of its height down
+                // to nothing at every edge: across over a quarter of the width (30 mm at most), down over a
+                // third of the height (20 mm at most), the two multiplied; no edge of its own anywhere
                 const w = right - left, h = bottom - top
-                c.save()
-                c.translate((left + right) / 2, top + h * 0.55)
-                c.scale(1, h / Math.max(1, w))
-                const fade = c.createRadialGradient(0, 0, 0, 0, 0, 0.62 * w)
-                fade.addColorStop(0.45, Qt.rgba(0, 0, 0, 1))
-                fade.addColorStop(1, Qt.rgba(0, 0, 0, 0))
+                const fx = Math.min(30 * g.mm, w * 0.25) / w, fy = Math.min(20 * g.mm, h * 0.35) / h
                 c.globalCompositeOperation = "destination-in"
-                c.fillStyle = fade
-                c.fillRect(-w, -w, 2 * w, 2 * w)
-                c.restore()
+                const across = c.createLinearGradient(left, 0, right, 0)
+                across.addColorStop(0, Qt.rgba(0, 0, 0, 0)); across.addColorStop(fx, Qt.rgba(0, 0, 0, 1))
+                across.addColorStop(1 - fx, Qt.rgba(0, 0, 0, 1)); across.addColorStop(1, Qt.rgba(0, 0, 0, 0))
+                c.fillStyle = across
+                c.fillRect(0, 0, width, height)
+                const down = c.createLinearGradient(0, top, 0, bottom)
+                down.addColorStop(0, Qt.rgba(0, 0, 0, 0)); down.addColorStop(fy, Qt.rgba(0, 0, 0, 1))
+                down.addColorStop(1 - fy, Qt.rgba(0, 0, 0, 1)); down.addColorStop(1, Qt.rgba(0, 0, 0, 0))
+                c.fillStyle = down
+                c.fillRect(0, 0, width, height)
                 c.globalCompositeOperation = "source-over"
                 // the readings: the processor solid, the memory dashed, the temperature in the alert ink; over a
                 // wallpaper each on a halo of the paper first
@@ -179,6 +183,41 @@ Item {
                 function onHMmChanged() { paper.requestPaint() }
             }
             Connections { target: graph.theme; function onDataChanged() { paper.requestPaint() } }
+        }
+
+        // each line's name and its value now, lettered just above its end, inside the graph; kept apart; over a
+        // wallpaper on the paper's halo as the lines are
+        Repeater {
+            model: {
+                const l = graph.samples.length ? graph.samples[graph.samples.length - 1] : null
+                if (!l) return []
+                const out = []
+                if (l.cpu >= 0) out.push({ y: graph.yPct(l.cpu), text: "CPU " + Math.round(l.cpu * 100) + "%", colour: graph.ink, bold: true })
+                if (l.mem >= 0) out.push({ y: graph.yPct(l.mem), text: "MEMORY " + Math.round(l.mem * 100) + "%", colour: graph.ink, bold: false })
+                if (l.temp >= 0) out.push({ y: graph.yTemp(l.temp), text: "TEMPERATURE " + Math.round(l.temp) + "°", colour: graph.alert, bold: false })
+                out.sort((a, b) => a.y - b.y)
+                const gap = 3.2 * graph.mm
+                for (let i = 1; i < out.length; i++) out[i].y = Math.max(out[i].y, out[i - 1].y + gap)
+                return out
+            }
+            // the lines broken where a name is lettered, as a drawing breaks them: the paper behind it
+            Rectangle {
+                id: tag
+                required property var modelData
+                readonly property real pad: 0.6 * graph.mm
+                width: label.implicitWidth + 2 * pad; height: label.implicitHeight
+                x: graph.ix(graph.wMm - 1) - width
+                y: Math.max(graph.iy(0), Math.min(graph.iy(graph.hMm) - height, modelData.y - height - 0.6 * graph.mm))
+                radius: pad
+                color: Qt.rgba(graph.theme.paper.r, graph.theme.paper.g, graph.theme.paper.b, 0.9)
+                Text {
+                    id: label
+                    x: tag.pad
+                    text: tag.modelData.text
+                    font.family: Fonts.mono; font.pixelSize: 2.1 * graph.mm; font.bold: tag.modelData.bold
+                    color: tag.modelData.colour
+                }
+            }
         }
 
         // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release
