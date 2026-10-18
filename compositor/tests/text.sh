@@ -29,10 +29,11 @@ chmod +x "$t/bin/systemctl"
 # gsettings: the system's fonts on get, each set logged
 cat > "$t/bin/gsettings" <<'SH'
 #!/bin/sh
+# what it was last set to, else the system's; each set logged
 case "$1 $3" in
-    "get font-name") echo "'Cantarell 11'" ;;
-    "get monospace-font-name") echo "'DejaVu Sans Mono 10'" ;;
-    set\ *) echo "$3=$4" >> "$HOME/gsettings.log" ;;
+    "get font-name") [ -f "$HOME/gs-font-name" ] && echo "'$(cat "$HOME/gs-font-name")'" || echo "'Cantarell 11'" ;;
+    "get monospace-font-name") [ -f "$HOME/gs-monospace-font-name" ] && echo "'$(cat "$HOME/gs-monospace-font-name")'" || echo "'DejaVu Sans Mono 10'" ;;
+    set\ *) echo "$3=$4" >> "$HOME/gsettings.log"; printf "%s" "$4" > "$HOME/gs-$3" ;;
 esac
 exit 0
 SH
