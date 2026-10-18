@@ -1,11 +1,12 @@
 #!/bin/sh
-# make pixels (and alone): the revision block above the title block (issue #45), headless (nothing on any
-# display), on the T14's panel (1920x1200 at scale 1.5, 6.4 px/mm). A repository of the test's own with
-# five commits; a terminal in it, narrowed to the left half so the corner shows. `draftpaper revisions`
-# names the repository and its last four commits; the shell's block comes up, the compositor draws its
-# rules (examples/sheetcheck.rs checks them pixel by pixel, and the first row lettered); the window parked,
-# nothing focused, the rows stay; a terminal outside any repository takes them away; and so does
-# [title] revisions = false. SHOT=FILE keeps the screenshot of the block.
+# make pixels (and alone): the revisions (issue #45: qml/RevisionSchedule.qml), headless (nothing on any
+# display), on the T14's panel (1920x1200 at scale 1.5, 6.4 px/mm). A repository of the test's own with five
+# commits; a terminal in it. `draftpaper revisions` names the repository and its commits, newest first;
+# with [title] revisions = true the schedule comes by itself, in the title block's column (its heading's
+# rule 13 mm under the frame's top), and nothing above the title block (examples/sheetcheck.rs); Mod+i's
+# equipment and processes take its place, its "none" brings it back; the window parked, nothing focused,
+# the rows stay; a terminal outside any repository takes them away; and so does [title] revisions = false.
+# SHOT=FILE keeps the screenshot.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -51,7 +52,7 @@ act() { run "$comp" msg "$@" > /dev/null; sleep 0.4; }
 # whether the shell's block is up, waited for (N tenths of a second) to be $1
 layer() {
     i=0
-    while s=$(run "$comp" msg outputs | grep -c '"draftpaper-revisions"'); [ "$s" != "$1" ] && [ $i -lt "$2" ]; do sleep 0.1; i=$((i + 1)); done
+    while s=$(run "$comp" msg outputs | grep -c '"draftpaper-schedule"'); [ "$s" != "$1" ] && [ $i -lt "$2" ]; do sleep 0.1; i=$((i + 1)); done
     echo "$s"
 }
 shot() {
@@ -71,15 +72,24 @@ until run "$comp" msg windows | grep -q '"focused": true' || [ $i -gt 100 ]; do 
 for n in 1 2 3; do act resize left; done
 out=$(run "$cli" revisions)
 ok "the repository named" "$(echo "$out" | grep -o '"repo": "drawing"')" '"repo": "drawing"'
-ok "its last four commits, newest first" "$(echo "$out" | grep -o '"description": "Sheet [a-z]*"' | tr '\n' ' ')" \
-    '"description": "Sheet five" "description": "Sheet four" "description": "Sheet three" "description": "Sheet two" '
+ok "its commits, newest first" "$(echo "$out" | grep -o '"description": "Sheet [a-z]*"' | tr '\n' ' ')" \
+    '"description": "Sheet five" "description": "Sheet four" "description": "Sheet three" "description": "Sheet two" "description": "Sheet one" '
 ok "dated and signed" "$(echo "$out" | grep -o '"date": "2026-10-04", "by": "Drafter"' | head -1)" '"date": "2026-10-04", "by": "Drafter"'
-ok "the block up" "$(layer 1 80)" "1"
+ok "the revisions up by themselves" "$(layer 1 80)" "1"
 [ $fail = 0 ] || grep -a -i "error\|warn" "$t/qs.log" | grep -v -i "QFont\|notification" | head -5
 sleep 0.5
 shot "$t/shown.png"
 [ -n "${SHOT:-}" ] && cp "$t/shown.png" "$SHOT"
-"$check" "$t/shown.png" 1.5 6.4 6 revisions shown | sed 's/^/  /' || fail=1
+# in the title block's column: its heading's rule 13 mm under the frame's top; above the title block nothing
+o() { run "$comp" msg outputs | jq -r ".[0] | $1"; }
+hy=$(awk -v f="$(o .frame.y)" -v m="$(o .px_per_mm)" 'BEGIN { printf "%d", int((f + 13 * m) * 1.5 + 0.5) }'); hx=$(awk -v t="$(o .title.rect.x)" 'BEGIN { printf "%d", t * 1.5 + 100 }')
+ok "its heading's rule 13 mm under the frame's top" "$([ "$("$check" "$t/shown.png" 1.5 6.4 6 lum "$hx" "$hy")" -lt 110 ] && echo exact)" "exact"
+"$check" "$t/shown.png" 1.5 6.4 6 revisions none | sed 's/^/  /' || fail=1
+sched() { run qs ipc -p "$repo/qml/shell.qml" call schedules "$@" 2> /dev/null; }
+sched next
+ok "Mod+i: the equipment in its place" "$(layer 1 30)/$(sched state)" "1/equipment"
+sched next; sched next
+ok "and none: the revisions back by themselves" "$(layer 1 50)/$(sched state)" "1/"
 
 # parked: nothing focused, the rows stay
 act park

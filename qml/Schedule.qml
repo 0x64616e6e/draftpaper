@@ -38,9 +38,8 @@ Item {
     readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
     readonly property color rule: Qt.rgba(ink.r, ink.g, ink.b, 0.55)
     readonly property real hair: 1 / dpr
-    // in the title block's column its edges are the title block's rule and the frame's line: the lettering 1.6 mm
-    // in from them, as the title block's is
-    readonly property real pad: column ? 1.6 : 0
+    // no margin of its own: the lettering starts at its edges
+    readonly property real pad: 0
     readonly property real heavy: Math.max(2, Math.round(0.35 * mm * dpr)) / dpr
 
     // shown, and on the sheet while it fades out
@@ -56,8 +55,10 @@ Item {
 
     // ---- where ----
     // without [sheet] schedule_at (and not being dragged): the title block's column, from the top: its left
-    // edge on the title block's left rule, its right on the frame, its heading under the frame's top line;
-    // as long as the rows that fit above the revision block, or the title block, 4 mm clear
+    // edge on the title block's left rule, its top and right `gap` in from the frame's lines (not on them),
+    // as many rows as fit above the revision block, or the title block, `gap` clear: the plotted load's
+    // distance from the title block
+    readonly property int gap: 6
     property var dragged: null
     readonly property bool column: theme.sheet.schedule_at === undefined && dragged === null && titleRect !== null
     readonly property var place: {
@@ -68,26 +69,24 @@ Item {
     // the schedule's left and top edges (the output's logical pixels, on physical pixels), and its width
     // in millimetres (whole away from the title block's column)
     readonly property real x0: column ? Math.round(titleRect.x * dpr) / dpr : frameX + (dragged || place).x * mm
-    readonly property real y0: column ? frameY : frameY + (dragged || place).y * mm
+    readonly property real y0: column ? Math.round((frameY + gap * mm) * dpr) / dpr : frameY + (dragged || place).y * mm
     readonly property real xMm: (x0 - frameX) / mm
     readonly property real yMm: (y0 - frameY) / mm
     readonly property real wMm: {
-        if (column) return (titleRect.x + titleRect.width - x0) / mm
+        if (column) return (Math.round((titleRect.x + titleRect.width - gap * mm) * dpr) / dpr - x0) / mm
         let right = frame.w - 2
         if (titleMm && yMm + 12 > titleMm.y - 2) right = Math.min(right, titleMm.x - 6)
         return Math.max(0, Math.min(112, right - xMm))
     }
-    // how far down it may reach (millimetres from its top): in the column, to the revision block when it is
-    // up, else the title block, 4 mm clear; elsewhere to the frame, 2 mm clear
-    readonly property real roomMm: {
-        if (!column) return frame.h - 2 - yMm
-        const rev = out && out.revisions && out.revisions.rect ? out.revisions.rect.y : titleRect.y
-        return Math.floor((Math.min(rev, titleRect.y) - y0) / mm) - 4
-    }
+    // up to the title block, `gap` clear (the revisions take their turn in this place, never above the
+    // title block); elsewhere to the frame, 2 mm clear
+    readonly property int roomMm: column ? Math.floor((titleRect.y - y0) / mm) - gap : Math.floor(frame.h - 2 - yMm)
 
-    // each row's top and height in whole millimetres: the heading 7, the columns' heads 5, a row 6 (9 with
-    // a note); the rows that fit
-    readonly property var laid: {
+    // each row's top and height in whole millimetres: the heading 7 (more, below), the columns' heads 5, a
+    // row 6 (9 with a note); the rows that fit. One with more rows than fit fills its place: the millimetres
+    // left over go to its heading, so its last row ends `gap` above the title block, as the plotted load
+    // keeps from it
+    readonly property var fit: {
         let y = 12
         const out = []
         for (const row of rows) {
@@ -96,9 +95,11 @@ Item {
             out.push({ row: row, yMm: y, hMm: h })
             y += h
         }
-        return out
+        return { rows: out, end: y, full: out.length < rows.length }
     }
-    readonly property int hMm: laid.length ? laid[laid.length - 1].yMm + laid[laid.length - 1].hMm : 12
+    readonly property int headMm: 7 + (column && fit.full ? Math.max(0, roomMm - fit.end) : 0)
+    readonly property var laid: fit.rows.map(r => ({ row: r.row, yMm: r.yMm + headMm - 7, hMm: r.hMm }))
+    readonly property int hMm: laid.length ? laid[laid.length - 1].yMm + laid[laid.length - 1].hMm : headMm + 5
 
     function clear(x, y) {
         if (x < 2 || y < 2 || x + 70 > frame.w - 2 || y + hMm > frame.h - 2) return false
@@ -146,20 +147,20 @@ Item {
             }
             // the heading: what it is, and of what
             Text {
-                x: sched.ix(sched.pad); y: sched.iy(0); height: sched.iy(7) - y
+                x: sched.ix(sched.pad); y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
                 verticalAlignment: Text.AlignVCenter
                 text: sched.title
                 font.family: Fonts.mono; font.pixelSize: 2.8 * sched.mm; font.bold: true; font.letterSpacing: 0.25 * sched.mm
                 color: sched.ink
             }
             Text {
-                x: sched.ix(sched.wMm - sched.pad) - width; y: sched.iy(0); height: sched.iy(7) - y
+                x: sched.ix(sched.wMm - sched.pad) - width; y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
                 verticalAlignment: Text.AlignVCenter
                 text: sched.meta
                 font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
                 color: sched.faint
             }
-            Rectangle { x: sched.ix(0); y: sched.iy(7); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink }
+            Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink }
             // the columns' heads
             Repeater {
                 model: sched.columns.length
@@ -167,14 +168,14 @@ Item {
                     required property int index
                     readonly property var c: sched.columns[index]
                     x: c.right ? sched.ix(sched.colX[index] + sched.colW(index) - 1.6) - width : sched.ix(sched.colX[index] + (index === 0 ? sched.pad : 1.6))
-                    y: sched.iy(7); height: sched.iy(12) - y
+                    y: sched.iy(sched.headMm); height: sched.iy(sched.headMm + 5) - y
                     verticalAlignment: Text.AlignVCenter
                     text: c.name
                     font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
                     color: sched.faint
                 }
             }
-            Rectangle { x: sched.ix(0); y: sched.iy(12); width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.ink }
+            Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm + 5); width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.ink }
             Repeater {
                 model: sched.laid
                 Item {
@@ -236,7 +237,7 @@ Item {
                 model: Math.max(0, sched.columns.length - 1)
                 Rectangle {
                     required property int index
-                    x: sched.ix(sched.colX[index + 1]); y: sched.iy(7); width: sched.hair; height: sched.iy(sched.hMm) - y; color: sched.rule
+                    x: sched.ix(sched.colX[index + 1]); y: sched.iy(sched.headMm); width: sched.hair; height: sched.iy(sched.hMm) - y; color: sched.rule
                 }
             }
         }

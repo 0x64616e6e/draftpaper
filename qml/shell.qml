@@ -131,6 +131,7 @@ ShellRoot {
         schedule = which
         if (which === "equipment") machinePoll.rerun()
         if (which === "processes") processPoll.rerun()
+        if (which === "revisions") revisionsPoll.rerun()
     }
     // a schedule's cell in the title block (PROJECT, PROCESSES): it on that screen, or away if it is there
     function toggleSchedule(which, screenName) {
@@ -138,7 +139,12 @@ ShellRoot {
         showSchedule(which)
         scheduleOn = screenName
     }
-    function nextSchedule() { showSchedule(schedule === "" ? "equipment" : schedule === "equipment" ? "processes" : "") }
+    // Mod+i: the equipment, the processes, the revisions, none (with [title] revisions = true, "none" shows
+    // the revisions of the focused window's repository by themselves)
+    function nextSchedule() {
+        const order = theme.title.revisions === true ? ["", "equipment", "processes"] : ["", "equipment", "processes", "revisions"]
+        showSchedule(order[(order.indexOf(schedule) + 1) % order.length])
+    }
     Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: root.schedule === "equipment" }
     readonly property var machine: { try { return machinePoll.output ? JSON.parse(machinePoll.output) : null } catch (e) { return null } }
     Poll { id: processPoll; command: [root.bin, "processes"]; interval: 2000; running: root.schedule === "processes" }
@@ -221,13 +227,13 @@ ShellRoot {
     readonly property string tempText: (readings.temps || []).map(t => tempLabel(t.label) + t.value).join("  ")
     readonly property string customText: customPoll.output.split("\n")[0]
 
-    // the revision block's rows (RevisionBlock.qml): the focused window's repository, polled while
+    // the revisions' rows (RevisionSchedule.qml): the focused window's repository, polled while
     // [title] revisions = true, and again at once when the focus moves
     Poll {
         id: revisionsPoll
         command: [root.bin, "revisions"]
         interval: 4000
-        running: theme.title.revisions === true
+        running: theme.title.revisions === true || root.schedule === "revisions"
     }
     // nothing focused (every window parked): the last rows stay, so the bare sheet shows the work just left
     property var revisions: ({})
@@ -316,6 +322,7 @@ ShellRoot {
         function next(): void { root.nextSchedule() }
         function equipment(): void { root.showSchedule("equipment") }
         function processes(): void { root.showSchedule("processes") }
+        function revisions(): void { root.showSchedule("revisions") }
         function hide(): void { root.showSchedule("") }
         function state(): string { return root.schedule }
     }
@@ -420,11 +427,17 @@ ShellRoot {
             Component.onCompleted: Compositor.setMerged(modelData.name, mergedCells)
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
-            RevisionBlock { shell: root; edge: edge }
             // the schedules take turns in one place; the graph keeps clear of whichever is out
             MachineSchedule { id: equip; shell: root; edge: edge; other: load; wanted: root.schedule === "equipment" && root.scheduleOn === edge.screen.name }
             ProcessSchedule { id: procs; shell: root; edge: edge; other: load; wanted: root.schedule === "processes" && root.scheduleOn === edge.screen.name }
-            LoadGraph { id: load; shell: root; edge: edge; other: procs.shown ? procs : equip; domain: root.graphOn === edge.screen.name ? root.graph : "" }
+            // the revisions: chosen, or by themselves (with [title] revisions = true) when nothing is, on the focused
+            // screen
+            RevisionSchedule {
+                id: revs; shell: root; edge: edge; other: load
+                wanted: (root.schedule === "revisions" && root.scheduleOn === edge.screen.name)
+                    || (root.schedule === "" && theme.title.revisions === true && !!edge.output && edge.output.focused)
+            }
+            LoadGraph { id: load; shell: root; edge: edge; other: procs.shown ? procs : revs.shown ? revs : equip; domain: root.graphOn === edge.screen.name ? root.graph : "" }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

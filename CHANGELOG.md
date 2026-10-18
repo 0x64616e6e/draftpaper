@@ -5,6 +5,13 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- **The revisions take their turn in the title block's column** with the schedule of equipment and the
+  process schedule (Mod+i: equipment, processes, revisions, none), drawn as they are, as many commits
+  as fit (up to 30); with `[title] revisions = true` they come by themselves when nothing else is
+  chosen. Nothing is drawn above the title block any more.
+- The schedules sit 6 mm in from the frame's top and right lines (they sat on them), with no margin of
+  their own; one with more rows than fit fills the column, its last row 6 mm above the title block, as
+  the plotted load keeps from it (the millimetres left over go to its heading).
 - `draftpaper apply` reloads an application (tmux, Alacritty, Neovim, Emacs, X, GTK's settings) only when
   its theme file changed, each file written once with [text]'s fonts in it: an apply that changes
   nothing redraws nothing (tmux was re-sourced, and Alacritty reloaded around it, on every one).

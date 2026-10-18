@@ -81,8 +81,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               storage, system, versions, uptime
   draftpaper processes        the process schedule's rows, as JSON: the busiest programs, each one's share
                               of a processor, memory and processor time
-  draftpaper schedule [next|equipment|processes|hide]
-                              the schedules on the sheet (Mod+i: next): equipment, processes, or neither
+  draftpaper schedule [next|equipment|processes|revisions|hide]
+                              the schedules on the sheet (Mod+i: next): equipment, processes, revisions, none
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
@@ -154,12 +154,12 @@ fn main() {
         ["readings", ..] => readings::main(&p),
         ["revisions", ..] => revisions::main(),
         ["machine", ..] => machine::main(),
-        ["processes", ..] => processes::main(12),
+        ["processes", ..] => processes::main(40),
         ["schedule", rest @ ..] => {
             // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
             let which = rest.first().copied().unwrap_or("next");
-            if !["next", "equipment", "processes", "hide"].contains(&which) {
-                util::die("draftpaper schedule next|equipment|processes|hide");
+            if !["next", "equipment", "processes", "revisions", "hide"].contains(&which) {
+                util::die("draftpaper schedule next|equipment|processes|revisions|hide");
             }
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "schedules", which]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);

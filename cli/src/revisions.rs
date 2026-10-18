@@ -24,7 +24,7 @@ use crate::util;
 
 /// The shells a terminal runs (the compositor's session.rs keeps the same list).
 const SHELLS: &[&str] = &["bash", "zsh", "fish", "sh", "dash", "ksh", "mksh", "tcsh", "nu", "elvish", "xonsh"];
-const ROWS: usize = 4;
+const ROWS: usize = 30;
 
 pub fn main() {
     // nothing focused (every window parked, an empty workspace): said so, and the shell keeps showing the

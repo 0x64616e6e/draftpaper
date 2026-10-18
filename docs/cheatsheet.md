@@ -10,7 +10,7 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+Return | Terminal (alacritty) |
 | Mod+d | Launcher: the applications as a register on the sheet (fuzzel stays an alternative) |
 | Mod+r | Rulers: two, crossing at a zero point, true millimetres; the pointer held to them (see Rulers) |
-| Mod+i | The schedules on the sheet in turn: the equipment, the processes, neither (fading) |
+| Mod+i | The title block's column in turn: the equipment, the processes, the revisions, none (fading) |
 | Mod+h j k l · Mod+Up/Down | Move the focus |
 | Mod+Shift+h j k l · Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap; else it stays |
 | Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going): right and down larger, left and up smaller |

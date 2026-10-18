@@ -87,13 +87,15 @@ tcol=$(awk -v t="$tx" -v m="$mmL" 'BEGIN { x0 = int(t * 1.5 + 0.5) / 1.5; printf
 yrow=$(rowAt 30)
 l=$(lum "$tcol" "$yrow"); a=$(lum $((tcol - 1)) "$yrow"); b=$(lum $((tcol + 1)) "$yrow")
 ok "in the title block's column: its first column's rule 9 mm in, on its pixel" "$([ "$l" -lt $((a - 10)) ] && [ "$l" -lt $((b - 10)) ] && echo exact || echo "off: $a $l $b at $tcol")" "exact"
-hy=$(rowAt 7); hx=$(awk -v t="$tx" 'BEGIN { printf "%d", t * 1.5 + 100 }')
-ok "its heading's rule 7 mm under the frame's top" "$([ "$(lum "$hx" "$hy")" -lt 110 ] && [ "$(lum "$hx" $((hy - 2)))" -gt 130 ] && echo exact || echo "off: $(lum "$hx" $((hy - 2))) $(lum "$hx" "$hy")")" "exact"
+hy=$(rowAt 13); hx=$(awk -v t="$tx" 'BEGIN { printf "%d", t * 1.5 + 100 }')
+ok "its heading's rule 13 mm under the frame's top (6 mm in, 7 of heading)" "$([ "$(lum "$hx" "$hy")" -lt 110 ] && [ "$(lum "$hx" $((hy - 2)))" -gt 130 ] && echo exact || echo "off: $(lum "$hx" $((hy - 2))) $(lum "$hx" "$hy")")" "exact"
 sched next
 sleep 0.5
 ok "again: the processes, in its place" "$(waitlayers schedule 1)/$(sched state)" "1/processes"
 sched next
-ok "again: neither (faded away)" "$(waitlayers schedule 0)/$(sched state)" "0/"
+ok "again: the revisions (no repository focused here: nothing to show)" "$(waitlayers schedule 0)/$(sched state)" "0/revisions"
+sched next
+ok "again: none" "$(waitlayers schedule 0)/$(sched state)" "0/"
 # a reading's graph: its cell shows it, again puts it away; the first sample comes 5 s in
 sleep 5
 graph toggle load
