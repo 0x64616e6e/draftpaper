@@ -121,6 +121,24 @@ ShellRoot {
     // a second sample a quarter second in, so the CPU reading is there from the start (not after 2 s)
     Timer { interval: 250; running: true; onTriggered: stat.rerun() }
 
+    // ---- the notes on the sheet (issue #49): the machine schedule's facts, and the load over ten minutes ----
+    Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: theme.sheet.machine !== false }
+    readonly property var machine: { try { return machinePoll.output ? JSON.parse(machinePoll.output) : null } catch (e) { return null } }
+    // a sample every 5 s of what the title block reads: the processor's load and the memory in use (0..1),
+    // the processor's temperature (°C); -1 where a reading is missing. The last ten minutes, and one more.
+    property var loadHistory: []
+    readonly property real cpuTemp: {
+        const t = (readings.temps || []).find(t => t.label === "CPU")
+        const v = t ? parseFloat(t.value) : NaN
+        return isNaN(v) ? -1 : v
+    }
+    function sampleLoad() {
+        if (cpuBusy < 0) return
+        const h = loadHistory.concat([{ cpu: cpuBusy, mem: memUsed, temp: cpuTemp }])
+        loadHistory = h.length > 121 ? h.slice(h.length - 121) : h
+    }
+    Timer { interval: 5000; repeat: true; running: theme.sheet.load !== false; triggeredOnStart: true; onTriggered: root.sampleLoad() }
+
     // everything the title block letters is in (the readings, the network, memory and CPU): told to the
     // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing
     // is painted in after it (compositor/src/opening.rs)
@@ -352,6 +370,8 @@ ShellRoot {
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
             RevisionBlock { shell: root; edge: edge }
+            MachineSchedule { id: schedule; shell: root; edge: edge }
+            LoadGraph { shell: root; edge: edge; above: schedule }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

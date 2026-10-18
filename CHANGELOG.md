@@ -5,6 +5,13 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+The machine schedule and the plotted load (#49): what neofetch and top tell, drawn as the sheet draws.
+On an empty workspace, a ruled schedule of equipment (the machine, processor, graphics, memory, storage,
+system, desktop, each display and the sheet; `draftpaper machine`) and, below it, the processor's load,
+the memory and the temperature over the last ten minutes on millimetre graph paper, from the readings
+the title block already takes. `[sheet] machine = false` and `load = false` (the Sheet page) take them
+away.
+
 A workspace switch to another display brings the pointer along, to the middle of its focused window (or of
 the sheet): with the focus following the mouse, the focus stays where the switch put it.
 

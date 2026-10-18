@@ -251,7 +251,11 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
         "paper": t["paper"], "ink": t["ink"], "inkAlpha": t["sheet"]["pattern_strength"], "alert": t["alert"],
         "strong": t.get("strong").cloned().unwrap_or(json!("#000000")),
         "accent": t["windows"]["focused"],
-        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"), "rulers": get("rulers"), "text": get("text"),
+        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"), "rulers": get("rulers"), "text": get("text"), "sheet": get("sheet"),
+        // with a wallpaper, the notes on the sheet (the machine schedule, the load) sit on paper, tinted as the
+        // title block is
+        "pictured": cfg.get("wallpaper").and_then(Value::as_str).is_some_and(|w| !w.is_empty()),
+        "titleTint": cfg.get("title_tint").and_then(Value::as_f64).unwrap_or(0.7),
         "glyphs": truthy(&get("glyphs")),
         // motion in the shell (the settings) follows the compositor's [animations]
         "animations": animations,

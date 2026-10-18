@@ -19,6 +19,10 @@ Item {
     readonly property var alerts: data.alerts || ({ battery: 15 })
     readonly property var commands: data.commands || ({})
     readonly property var rulers: data.rulers || ({})          // config.toml's [rulers] (qml/Rulers.qml)
+    readonly property var sheet: data.sheet || ({})            // config.toml's [sheet]: machine, load (the notes on the sheet)
+    readonly property bool pictured: data.pictured === true     // a wallpaper in the frame
+    readonly property real titleTint: data.titleTint !== undefined ? data.titleTint : 0.7
+    readonly property color paper: data.paper || "#C9BDAE"
     readonly property bool glyphs: data.glyphs !== false        // config.toml: glyphs = false for words only
     readonly property bool animations: data.animations !== false // [animations] enabled = false: no motion
 

@@ -5,6 +5,7 @@
 mod apps;
 mod config;
 mod greeter;
+mod machine;
 mod programs;
 mod readings;
 mod restore;
@@ -75,6 +76,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               tmux's sessions kept across a reboot ([session] apps: run by tmux itself)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper revisions        the focused window's repository and latest commits, as JSON (the revision block)
+  draftpaper machine          the machine schedule's facts, as JSON: machine, processor, graphics, memory,
+                              storage, system, versions, uptime
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
@@ -145,6 +148,7 @@ fn main() {
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
         ["revisions", ..] => revisions::main(),
+        ["machine", ..] => machine::main(),
         ["config", "json", ..] => config_json(&p),
         ["config", "set", pairs @ ..] if !pairs.is_empty() => {
             config::set_pairs(&p, pairs);

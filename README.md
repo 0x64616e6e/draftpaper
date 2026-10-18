@@ -200,6 +200,10 @@ interface = "IBM Plex Sans" #   GTK (Firefox's interface follows it), Qt; size =
 monospace = "IBM Plex Mono" #   GTK's and Qt's fixed font, Alacritty (its size; alacritty.toml's own family
 mono_size = 11             #   wins), foot, Emacs, the sheet's lettering; taken out: the fonts as they were
 
+[sheet]                    # the notes on an empty workspace's sheet (#49)
+machine = true             #   the machine schedule: the machine, the displays, the system
+load = true                #   the processor, memory and temperature over the last ten minutes
+
 [rulers]                   # see Rulers; the settings' Rulers page
 step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)
 numbers_h = "top"          # the horizontal ruler numbered by its top or "bottom"; numbers_v "right" or "left"

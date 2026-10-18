@@ -72,6 +72,7 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/settings.sh
 	compositor/tests/displays.sh
 	compositor/tests/text.sh
+	compositor/tests/notes.sh
 	compositor/tests/greeter.sh
 	compositor/tests/lock.sh
 	compositor/tests/session.sh
