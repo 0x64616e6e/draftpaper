@@ -212,7 +212,8 @@ Everything drawn on the sheet keeps to these, whoever draws it (the compositor, 
 
 The sheet's own 5 mm dots keep to the same rule: counted from the frame's top-left corner, each on the
 pixel nearest its true place, never a step rounded once and added up. So anything ruled in millimetres
-(the plotted load's squares, every tenth line heavier on the sheet's 10 mm) lands on them.
+(the plotted load's squares, every tenth line heavier on the sheet's 10 mm; a level ruler's ticks,
+counted from its zero, itself whole millimetres from the frame's corner) lands on them.
 
 A zone reference ("B3") places a thing 7 mm into the zone, from the zone's corner rounded up to a whole
 millimetre. A thing dragged to a place keeps that place in whole millimetres.

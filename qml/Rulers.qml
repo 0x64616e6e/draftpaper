@@ -26,6 +26,7 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
+import "sheet.js" as Sheet
 
 PanelWindow {
     id: rulers
@@ -80,10 +81,15 @@ PanelWindow {
     readonly property bool numbersHFar: conf.numbers_h === "bottom"
     readonly property bool numbersVFar: conf.numbers_v !== "left"
     readonly property bool centreLine: conf.centre_line !== false
-    readonly property real zx: frameX + zeroX * mm
-    readonly property real zy: frameY + zeroY * mm
-    readonly property real wide: setting("width", 16, 8, 40) * mm  // a ruler's width
-    readonly property real reach: Math.hypot(frameW, frameH) + wide     // long enough at any angle
+    // the zero, as everything on the sheet: millimetres from the frame's corner (its line's outer edge, where
+    // the sheet's dots are counted from), on the nearest physical pixel (sheet.js)
+    readonly property real zx: out ? Sheet.at(out, dpr, zeroX, true) : frameX + zeroX * mm
+    readonly property real zy: out ? Sheet.at(out, dpr, zeroY, false) : frameY + zeroY * mm
+    // a ruler's width: an even number of physical pixels, so its edges are whole pixels either side of the
+    // crossing; and its length either way of it whole pixels too: the canvases then sit on pixels, and so
+    // do their ticks (Graduations.qml)
+    readonly property real wide: Math.max(2, Math.round(setting("width", 16, 8, 40) * mm * dpr / 2) * 2) / dpr
+    readonly property real reach: Math.ceil((Math.hypot(frameW, frameH) + wide) * dpr) / dpr     // long enough at any angle
     readonly property real tiltH: angleH
     readonly property real tiltV: angleV - 90
     // where the rulers cross, the graduations stop: as far as the other one reaches along this one
@@ -215,11 +221,13 @@ PanelWindow {
             x: sheet.cx - rulers.reach; y: sheet.cy - rulers.wide / 2; width: 2 * rulers.reach; height: rulers.wide
             rotation: -rulers.tiltH
             mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH; far: rulers.numbersHFar; centreLine: rulers.centreLine
+            dpr: rulers.dpr; originPhys: (rulers.zx - rulers.reach) * rulers.dpr
         }
         Graduations {
             x: sheet.cx - rulers.wide / 2; y: sheet.cy - rulers.reach; width: rulers.wide; height: 2 * rulers.reach
             rotation: -rulers.tiltV
             mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV; far: rulers.numbersVFar; centreLine: rulers.centreLine
+            dpr: rulers.dpr; originPhys: (rulers.zy - rulers.reach) * rulers.dpr
         }
 
         // dragging a ruler moves the zero; with Ctrl, turns that ruler about it
@@ -264,10 +272,12 @@ PanelWindow {
                 rotation: -modelData.tilt
                 // the line, and its handle: 4 mm across it to take hold of
                 Rectangle {
-                    x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm - width / 2 : 0
-                    y: zeroMark.along ? 0 : rulers.reach + zeroMark.at * rulers.mm - height / 2
-                    width: zeroMark.along ? 2 * rulers.hair : rulers.wide
-                    height: zeroMark.along ? rulers.wide : 2 * rulers.hair
+                    // three pixels wide, on the zero tick's pixel and either side of it (the ruler starts on a pixel)
+                    readonly property real on: (Math.floor((rulers.reach + zeroMark.at * rulers.mm) * rulers.dpr + 0.5) - 1) / rulers.dpr
+                    x: zeroMark.along ? on : 0
+                    y: zeroMark.along ? 0 : on
+                    width: zeroMark.along ? 3 * rulers.hair : rulers.wide
+                    height: zeroMark.along ? rulers.wide : 3 * rulers.hair
                     color: rulers.mark
                 }
                 Text {          // 0, by the numbered edge

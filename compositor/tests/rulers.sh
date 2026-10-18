@@ -66,19 +66,19 @@ shot() {
     mv "$(ls "$t"/Pictures/*.png | head -n 1)" "$1"
 }
 # its middle: 13 mm right of the zero and 25 more; 13 mm below it and 6 more (physical pixels)
-px=$(awk 'BEGIN { printf "%d", 1001 + 38 * 6.4 }'); py=$(awk 'BEGIN { printf "%d", 617 + 19 * 6.4 }')
+px=$(awk 'BEGIN { printf "%d", 999 + 38 * 6.4 }'); py=$(awk 'BEGIN { printf "%d", 615 + 19 * 6.4 }')
 ok "the panel there" "$([ "$("$check" "$t/rulers.png" 1.5 6.4 6 lum $px $py)" -lt 90 ] && echo dark)" "dark"
 ipc panel false
 sleep 0.5
 shot "$t/hidden.png"
 ok "hidden: not there" "$([ "$("$check" "$t/hidden.png" 1.5 6.4 6 lum $px $py)" -gt 120 ] && echo light)" "light"
 # (a corner of it, clear of its sign)
-tx=$(awk 'BEGIN { printf "%d", 1001 + 13.6 * 6.4 }'); ty=$(awk 'BEGIN { printf "%d", 617 + 18.4 * 6.4 }')
+tx=$(awk 'BEGIN { printf "%d", 999 + 13.6 * 6.4 }'); ty=$(awk 'BEGIN { printf "%d", 615 + 18.4 * 6.4 }')
 ok "and its tab by the zero" "$([ "$("$check" "$t/hidden.png" 1.5 6.4 6 lum $tx $ty)" -lt 90 ] && echo dark)" "dark"
 ipc panel true
 # each ruler's own zero, off the crossing: the horizontal one's 20 mm right of it, a red line across the ruler
 # there (a row clear of the ticks and numbers, 3 mm under the middle)
-zx=$(awk 'BEGIN { printf "%d", 1001 + 20 * 6.4 }'); zr=$(awk 'BEGIN { printf "%d", 617 + 3 * 6.4 }')
+zx=$(awk 'BEGIN { printf "%d", 999 + 20 * 6.4 }'); zr=$(awk 'BEGIN { printf "%d", 615 + 3 * 6.4 }')
 darkest() { for x in $((zx - 2)) $((zx - 1)) $zx $((zx + 1)) $((zx + 2)); do "$check" "$1" 1.5 6.4 6 lum $x $zr; done | sort -n | head -n 1; }
 ok "before: no line 20 mm on" "$([ "$(darkest "$t/rulers.png")" -gt 120 ] && echo clear)" "clear"
 ipc zeros 20 -10
@@ -86,7 +86,7 @@ sleep 0.5
 ok "the zeros set" "$(ipc state | grep -o '"zeros":\[[^]]*\]')" '"zeros":[20,-10]'
 shot "$t/zeros.png"
 ok "the horizontal ruler's zero line 20 mm on" "$([ "$(darkest "$t/zeros.png")" -lt 110 ] && echo drawn)" "drawn"
-"$check" "$t/zeros.png" 1.5 6.4 6 rulers 150 90 | sed 's/^/  /' || fail=1
+"$check" "$t/zeros.png" 1.5 6.4 6 rulers 150 90 20 | sed 's/^/  /' || fail=1
 ipc zeros 0 0
 
 # the pointer, a third of a pixel at a time: each place whole millimetres from the zero along each ruler
@@ -100,7 +100,7 @@ walk() {
     for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
         run "$comp" msg pointer_by 0.33 0.21 > /dev/null
         pointer | awk -v h="$h" -v v="$v" -v s="$s" '{
-            mm = 6.4 / 1.5; zx = 26 + 2 / 1.5 + 150 * mm; zy = 26 + 2 / 1.5 + 90 * mm
+            mm = 6.4 / 1.5; zx = (39 + int(150 * 6.4 + 0.5)) / 1.5; zy = (39 + int(90 * 6.4 + 0.5)) / 1.5
             pi = atan2(0, -1); ux = cos(h * pi / 180); uy = -sin(h * pi / 180); wx = cos(v * pi / 180); wy = -sin(v * pi / 180)
             det = ux * wy - uy * wx; dx = $1 - zx; dy = $2 - zy
             a = (dx * wy - dy * wx) / det / mm / s; b = (ux * dy - uy * dx) / det / mm / s

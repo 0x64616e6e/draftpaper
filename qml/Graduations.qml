@@ -16,6 +16,13 @@ Canvas {
     property int zero: 0                // the ruler's zero, whole millimetres from the crossing at its middle
     property bool centreLine: true      // the very thin line down its middle
     property bool far: false            // the numbers by the far edge (the bottom, the right), else the near one
+    // where this canvas starts on the screen, along the ruler, in physical pixels, and the scale: each tick
+    // on the pixel nearest its true millimetre, as the sheet's dots are (src/sheet.rs), so a level
+    // ruler's ticks land on them
+    property real dpr: 1
+    property real originPhys: 0
+    function onPixel(p) { return (Math.floor(originPhys + p * dpr + 0.5) + 0.5 - originPhys) / dpr }
+    onOriginPhysChanged: requestPaint()
     transformOrigin: Item.Center
     renderStrategy: Canvas.Cooperative
 
@@ -54,7 +61,7 @@ Canvas {
             if (Math.abs(off) <= clearance) continue
             const v = d - zero              // counted from the ruler's zero
             const t = (v % 10 === 0 ? 4 : v % 5 === 0 ? 2.6 : 1.6) * mm
-            const p = mid + off
+            const p = onPixel(mid + off)
             if (along) {
                 ctx.moveTo(p, 0); ctx.lineTo(p, t)
                 ctx.moveTo(p, wide); ctx.lineTo(p, wide - t)
@@ -73,7 +80,7 @@ Canvas {
             if (v === 0 || v % 10 !== 0) continue
             const off = d * mm
             if (Math.abs(off) <= clearance + 2 * mm) continue
-            const p = mid + off, label = String(Math.abs(v))
+            const p = onPixel(mid + off), label = String(Math.abs(v))
             if (along) {
                 ctx.fillText(label, p, far ? wide - numberAt : numberAt)
             } else {

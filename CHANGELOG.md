@@ -8,7 +8,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 The sheet's 5 mm dots are counted from the frame's top-left corner, each on the pixel nearest its true
 place (they were counted from the screen's corner in a step rounded down once: on a display of 5.6 px/mm a
 millimetre off across the sheet). The plotted load's squares fall on them, every tenth line heavier on
-the sheet's own 10 mm; `make pixels` checks every dot on its pixel at every scale.
+the sheet's own 10 mm; `make pixels` checks every dot on its pixel at every scale. The rulers' zero is counted from the
+frame's corner too (it was from inside the frame's line, 2 pixels off), and each of their ticks is on
+the pixel nearest its true millimetre: a level ruler's ticks fall on the dots.
 
 A display's settings follow it: `[outputs."ASUS MB166C"]`, by its model, before `[outputs.DP-3]`, by its
 port; the Displays page writes them by model (by connector for a panel's code, or two displays of one

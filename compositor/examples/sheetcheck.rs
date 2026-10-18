@@ -9,7 +9,7 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM revisions shown|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM keyplan THIS FOCUSED X,Y,W,H X,Y,W,H...
-//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM [ZERO_H_MM]
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM dots           (the 5 mm dots, on their pixels)
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lum X Y        (a pixel's lightness)
 //!
@@ -55,8 +55,10 @@ fn main() {
         return;
     }
     if args.get(5).is_some_and(|a| a == "rulers") {
-        let v = |i: usize| args.get(i).and_then(|v| v.parse::<f64>().ok()).expect("rulers ZERO_X_MM ZERO_Y_MM");
-        rulers_check(&img, scale, phys_mm, margin_mm, (v(6), v(7)), &args[1]);
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<f64>().ok()).expect("rulers ZERO_X_MM ZERO_Y_MM [ZERO_H_MM]");
+        // the horizontal ruler's own zero, millimetres from the crossing: its red line there, no tick to find
+        let own = args.get(8).and_then(|v| v.parse::<i32>().ok());
+        rulers_check(&img, scale, phys_mm, margin_mm, (v(6), v(7)), own, &args[1]);
         return;
     }
     if args.get(5).is_some_and(|a| a == "keyplan") {
@@ -247,10 +249,12 @@ fn main() {
 /// horizontal ruler's top edge, a tick at every whole millimetre from the zero (10 to 60 mm either way),
 /// darker than the acrylic half a millimetre off; true to size, the sheet's millimetres. The ticks are
 /// drawn smooth (the rulers turn), so each is looked for within a pixel of where it falls.
-fn rulers_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, zero: (f64, f64), name: &str) {
+fn rulers_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, zero: (f64, f64), own: Option<i32>, name: &str) {
     let mg = title::margin(margin_mm, phys_mm / scale, scale);
-    let inside = (mg + title::LINE) as f64;
-    let (zx, zy) = (inside + zero.0 * phys_mm, inside + zero.1 * phys_mm);
+    // counted from the frame's corner (its line's outer edge), as the sheet's dots are: each tick on the
+    // pixel nearest its true millimetre, mg + round(mm), and on no other
+    let at_mm = |k: f64| mg as f64 + (k * phys_mm + 0.5).floor();
+    let (zx, zy) = (at_mm(zero.0), at_mm(zero.1));
     // the top edge, and a row across the ticks under it (the shortest, 1.6 mm, reach it)
     let row = (zy - 8.0 * phys_mm + 0.8 * phys_mm).round() as u32;
     let lum = |x: f64| {
@@ -258,12 +262,11 @@ fn rulers_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, zero:
         0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
     };
     let mut faults = Vec::new();
-    for d in (10..=60).chain(-60..=-10) {
-        let at = zx + d as f64 * phys_mm;
-        let tick = [-1.0, 0.0, 1.0].iter().map(|o| lum(at + o)).fold(f64::MAX, f64::min);
-        let between = lum(at + 0.5 * phys_mm).max(lum(at - 0.5 * phys_mm));
-        if tick > between - 18.0 {
-            faults.push(format!("{d} mm: no tick at x {at:.1} (darkest {tick:.0}, between {between:.0})"));
+    for d in (10..=60).chain(-60..=-10).filter(|d| Some(*d) != own) {
+        let at = at_mm(zero.0 + d as f64);
+        let (tick, left, right) = (lum(at), lum(at - 1.0), lum(at + 1.0));
+        if tick > left.min(right) - 12.0 {
+            faults.push(format!("{d} mm: no tick on pixel {at:.0} (it {tick:.0}, either side {left:.0} {right:.0})"));
         }
     }
     for f in faults.iter().take(10) {
