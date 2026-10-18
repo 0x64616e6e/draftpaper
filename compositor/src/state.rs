@@ -467,6 +467,23 @@ impl Draftpaper {
         );
     }
 
+    /// The output a window is on: its workspace's screen's; else (not on a workspace) the one its window
+    /// geometry overlaps most, its shadow not counted.
+    pub fn home_output(&self, window: &Window) -> Option<smithay::output::Output> {
+        if let Some((i, _)) = self.workspace_of(window) {
+            return self.screens.get(i).map(|s| s.output.clone());
+        }
+        let g = self.space.element_geometry(window)?;
+        self.space
+            .outputs()
+            .filter_map(|o| {
+                let r = self.space.output_geometry(o)?.intersection(g)?;
+                Some((r.size.w as i64 * r.size.h as i64, o))
+            })
+            .max_by_key(|(area, _)| *area)
+            .map(|(_, o)| o.clone())
+    }
+
     /// The output a new surface will most likely be on: the active screen's.
     pub fn active_output(&self) -> Option<smithay::output::Output> {
         self.screens.get(self.active).map(|s| s.output.clone()).or_else(|| self.space.outputs().next().cloned())
@@ -480,6 +497,12 @@ impl Draftpaper {
         let throttle = Some(std::time::Duration::ZERO);
         self.space.elements().for_each(|w| w.send_frame(output, now, throttle, |_, _| Some(output.clone())));
         for w in self.space.elements_for_output(output) {
+            // only the scale of the window's own output: one whose shadow reaches over onto a display of
+            // another scale (Firefox's, at the left margin of a 4K display beside the panel) was told each
+            // scale in turn, frame by frame, and drew at each in turn: it flickered
+            if self.home_output(w).as_ref() != Some(output) {
+                continue;
+            }
             if let Some(surface) = smithay::wayland::seat::WaylandFocus::wl_surface(w) {
                 Self::send_scale(&surface, output);
             }

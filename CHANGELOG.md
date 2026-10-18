@@ -5,6 +5,10 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+A window whose shadow reaches over onto a display of another scale (Firefox at the left margin of a 4K
+display at scale 2 beside the panel at 1.5) is told only its own display's scale: it was told each in
+turn, frame by frame, and flickered.
+
 One settings tool for the whole desktop (#36), begun: the settings (Mod+t) gain Displays, Text, Sheet, Rulers, Session,
 Input and Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
 Enter keeps it, Escape puts config.toml back as it was. `draftpaper config set table.key=value ...`
