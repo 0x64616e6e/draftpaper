@@ -60,7 +60,10 @@ Item {
     // distance from the title block
     readonly property int gap: 6
     property var dragged: null
-    readonly property bool column: theme.sheet.schedule_at === undefined && dragged === null && titleRect !== null
+    // the title block's column, unless config.toml puts it elsewhere and that place has room on this display
+    // (70 mm across, its heading and a row down): a place set on one display may not fit another
+    readonly property bool placedFits: place.x >= 2 && place.y >= 2 && place.x + 70 <= frame.w - 2 && place.y + 18 <= frame.h - 2
+    readonly property bool column: dragged === null && titleRect !== null && (theme.sheet.schedule_at === undefined || !placedFits)
     readonly property var place: {
         const at = theme.sheet.schedule_at
         if (Array.isArray(at) && at.length === 2) return { x: Math.round(at[0]), y: Math.round(at[1]) }

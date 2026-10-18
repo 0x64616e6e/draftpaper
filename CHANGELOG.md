@@ -3,6 +3,11 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- A graph or schedule placed where it does not fit on a display (a place dragged to on a larger one)
+  shows where it fits instead of not at all: the graph on the panel stayed away.
+
 ## 0.7.1 (2026-10-18)
 
 The revisions in the title block's column, the schedules off the frame, and `draftpaper apply` quiet when

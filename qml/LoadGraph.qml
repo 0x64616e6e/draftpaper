@@ -38,11 +38,12 @@ Item {
 
     // ---- where and how large: whole millimetres from the frame's corner ----
     readonly property var place: {
+        // where config.toml puts it (a zone, or millimetres a drag left: on every display), where it fits on
+        // this one: a place that fits on the 4K display may leave too little on the panel
         const at = theme.sheet.load_at
-        if (Array.isArray(at) && at.length === 2) return { x: Math.round(at[0]), y: Math.round(at[1]) }
-        const z = Sheet.zoneCorner(out, at, 7)
-        if (z) return z
-        // without one: the first clear of the bottom left, beside the schedule, under it, the top left
+        const set = Array.isArray(at) && at.length === 2 ? { x: Math.round(at[0]), y: Math.round(at[1]) } : Sheet.zoneCorner(out, at, 7)
+        if (set && clear(set.x, set.y)) return set
+        // else the first clear of the bottom left, beside the schedule, under it, the top left
         const low = frame.h - 7 - maxH
         const tries = [{ x: 7, y: low }]
         if (scheduleUp) tries.push({ x: other.xMm + other.wMm + 8, y: low }, { x: 7, y: other.yMm + other.hMm + 8 })

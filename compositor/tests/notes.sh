@@ -5,7 +5,8 @@
 # equipment, in the title block's column from the top, its rules on their pixels; the
 # processes; neither. A reading's graph comes and goes with its cell (load, temperature, power), its heavy
 # line on the sheet's 50 mm. Zone B2 and a drag move the schedule, a whole millimetre at a time, kept in
-# config.toml. Over a wallpaper still there. SHOT=FILE keeps a screenshot of the equipment and the load.
+# config.toml; a place that leaves the graph no room (as one dragged on a larger display) gives way to its
+# own. Over a wallpaper still there. SHOT=FILE keeps a screenshot of the equipment and the load.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -138,6 +139,10 @@ sleep 1.5
 shot "$t/notes.png"
 ok "and drawn there, on its millimetre" "$(rule $((zx + 19)) $((zy + 25)))" "exact"
 ok "the graph still up, out of its way" "$(layers load)" "1"
+# a place for the graph that leaves it too little height here (40 mm at least): it shows where it fits
+run "$cli" config set 'sheet.load_at=[10, '"$((fh - 7 - 30))"']' > /dev/null
+sleep 2.5
+ok "a place with no room for it here: the graph shown where it fits" "$(layers load)" "1"
 # over a wallpaper: both still there (on the paper's halo)
 magick -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png" 2> /dev/null || convert -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png"
 run "$cli" config set "wallpaper=$t/pic.png" > /dev/null
