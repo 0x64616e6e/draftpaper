@@ -4,7 +4,8 @@
 # it, both at 1.5. The second's scale picked at 1.75 reaches config.toml with every display's position, and
 # the compositor takes it up (2195 x 1235 logical, rounded up as the compositor does, right of the panel's 1280); put left of the panel, the
 # panel moves right of it. Escape puts config.toml back as it was and both displays as plugged in (the
-# compositor puts a display back when its keys go). SHOT=FILE keeps a screenshot of the page.
+# compositor puts a display back when its keys go). A workspace switch to the other display brings the
+# pointer to the middle of its sheet; one on the pointer's display leaves it. SHOT=FILE keeps a screenshot.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -86,6 +87,22 @@ until cmp -s "$cfg" "$t/before.toml" || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)
 ok "escape: config.toml as it was" "$(cmp -s "$cfg" "$t/before.toml" && echo same)" "same"
 ok "escape: the panel as plugged in" "$(waitgeom headless "0 0 1280 800 1.5")" "0 0 1280 800 1.5"
 ok "escape: the 4K display as plugged in" "$(waitgeom headless-2 "1280 0 2560 1440 1.5")" "1280 0 2560 1440 1.5"
+# a workspace switch to the other screen brings the pointer: to the middle of its sheet (nothing open);
+# back, likewise; a new workspace on the screen the pointer is on leaves it where it is
+where() { run "$comp" msg pointer | jq -r '"\(.x|floor) \(.y|floor)"'; }
+middle() { run "$comp" msg outputs | jq -r --arg n "$1" '.[] | select(.name == $n) | .frame as $f | "\(($f.x + $f.width / 2)|floor) \(($f.y + $f.height / 2)|floor)"'; }
+ws() { run "$comp" msg outputs | jq -r --arg n "$1" '.[] | select(.name == $n) | .workspace'; }
+run "$comp" msg pointer 400 300 > /dev/null
+run "$comp" msg workspace "$(ws headless-2)" > /dev/null
+sleep 0.3
+ok "switched to the 4K display's workspace: the pointer there, mid-sheet" "$(where)" "$(middle headless-2)"
+run "$comp" msg workspace "$(ws headless)" > /dev/null
+sleep 0.3
+ok "and back: mid-sheet on the panel" "$(where)" "$(middle headless)"
+run "$comp" msg pointer 300 200 > /dev/null
+run "$comp" msg workspace 7 > /dev/null
+sleep 0.3
+ok "a new workspace on the panel: the pointer stays" "$(where)" "300 200"
 ok "no QML warning from the settings" "$(grep -c 'Settings.qml' "$t/qs.log")" "0"
 [ "$fail" = 0 ] && echo "displays: ok" || { grep -a 'Settings.qml' "$t/qs.log" | head -5; echo "displays: FAILED"; }
 exit $fail

@@ -5,6 +5,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+A workspace switch to another display brings the pointer along, to the middle of its focused window (or of
+the sheet): with the focus following the mouse, the focus stays where the switch put it.
+
 A window whose shadow reaches over onto a display of another scale (Firefox at the left margin of a 4K
 display at scale 2 beside the panel at 1.5) is told only its own display's scale: it was told each in
 turn, frame by frame, and flickered.

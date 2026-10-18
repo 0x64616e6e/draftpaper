@@ -169,7 +169,18 @@ impl Draftpaper {
             self.animate_slide(i, outgoing, if number > from { 1 } else { -1 });
         }
         let w = self.screens[i].layout().focused();
-        self.focus(w);
+        self.focus(w.clone());
+        // the pointer comes along when the workspace is on another screen than the one it is on: to the
+        // middle of the focused window, else of the sheet (with the focus following the mouse, the focus
+        // stays where the switch put it)
+        let output = self.screens[i].output.clone();
+        let here = self.seat.get_pointer().map(|p| p.current_location()).unwrap_or_default();
+        let on = self.space.output_geometry(&output).is_some_and(|g| g.to_f64().contains(here));
+        if !on {
+            let target = w.as_ref().and_then(|w| Some(smithay::utils::Rectangle::new(self.space.element_location(w)?, w.geometry().size))).unwrap_or(self.screens[i].grid.area);
+            let middle = target.to_f64().loc + Point::from((target.size.w as f64 / 2.0, target.size.h as f64 / 2.0));
+            self.warp_pointer(middle);
+        }
     }
 
     /// Send the focused window of the active screen to workspace `number` (created where it does not exist).

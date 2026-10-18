@@ -296,6 +296,18 @@ impl Draftpaper {
             .ok();
     }
 
+    /// The pointer put at `pos` (layout, logical): the `pointer` action, and a workspace switch to another
+    /// screen (screens.rs). What is under it learns of it as of any motion.
+    pub fn warp_pointer(&mut self, pos: smithay::utils::Point<f64, smithay::utils::Logical>) {
+        let pointer = self.seat.get_pointer().unwrap();
+        let under = self.surface_under(pos);
+        let serial = SERIAL_COUNTER.next_serial();
+        pointer.motion(self, under, &MotionEvent { location: pos, serial, time: self.start_time.elapsed().as_millis() as u32 });
+        pointer.frame(self);
+        // the rulers' steps count again from here
+        self.pointer_raw = None;
+    }
+
     /// The pointer moved by `delta` (mice, touchpads, the TrackPoint; `pointer_by` for scripts and tests):
     /// kept on the outputs, and while the rulers are out held to their steps (rulers.rs), from where the
     /// motion itself took it, so that small movements add up.
@@ -387,14 +399,7 @@ impl Draftpaper {
             Action::SessionSave => self.session_save(true),
             Action::Screenshot => crate::tty::screenshot(self),
             Action::PointerBy(dx, dy) => self.pointer_by(smithay::utils::Point::from((dx, dy)), self.start_time.elapsed().as_millis() as u32),
-            Action::Pointer(x, y) => {
-                let pos = smithay::utils::Point::<f64, smithay::utils::Logical>::from((x, y));
-                let pointer = self.seat.get_pointer().unwrap();
-                let under = self.surface_under(pos);
-                let serial = SERIAL_COUNTER.next_serial();
-                pointer.motion(self, under, &MotionEvent { location: pos, serial, time: self.start_time.elapsed().as_millis() as u32 });
-                pointer.frame(self);
-            }
+            Action::Pointer(x, y) => self.warp_pointer(smithay::utils::Point::from((x, y))),
             Action::Zoom => {
                 self.lens = match self.lens.take() {
                     Some(_) => None,
