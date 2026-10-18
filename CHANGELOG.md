@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+The sheet's 5 mm dots are counted from the frame's top-left corner, each on the pixel nearest its true
+place (they were counted from the screen's corner in a step rounded down once: on a display of 5.6 px/mm a
+millimetre off across the sheet). The plotted load's squares fall on them, every tenth line heavier on
+the sheet's own 10 mm; `make pixels` checks every dot on its pixel at every scale.
+
 A display's settings follow it: `[outputs."ASUS MB166C"]`, by its model, before `[outputs.DP-3]`, by its
 port; the Displays page writes them by model (by connector for a panel's code, or two displays of one
 model). `config set` takes quoted names (`outputs."ASUS MB166C".scale=1`) and writes them quoted.

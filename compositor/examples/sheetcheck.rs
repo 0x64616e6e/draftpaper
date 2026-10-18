@@ -10,6 +10,7 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM hatch CELL SPACING_MM|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM keyplan THIS FOCUSED X,Y,W,H X,Y,W,H...
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM dots           (the 5 mm dots, on their pixels)
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lum X Y        (a pixel's lightness)
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
@@ -82,6 +83,10 @@ fn main() {
     }
     if args.get(5).is_some_and(|a| a == "scale") {
         scale_check(&img, scale, phys_mm, margin_mm, args.get(6).map(String::as_str).unwrap_or("bar"), &args[1]);
+        return;
+    }
+    if args.get(5).is_some_and(|a| a == "dots") {
+        dots_check(&img, scale, phys_mm, margin_mm, &args[1]);
         return;
     }
     if args.get(5).is_some_and(|a| a == "lens") {
@@ -578,4 +583,47 @@ fn lens_check(img: &RgbaImage, before: &RgbaImage, scale: f64, phys_mm: f64, at:
         println!("{name}: {faults} faults");
         std::process::exit(1);
     }
+}
+
+/// The 5 mm dots (src/sheet.rs), in an empty stretch of the sheet (right of the middle, above the title
+/// block): each counted from the frame's top-left corner and on the pixel nearest its true place, so a
+/// dot is darker than its four neighbours exactly at frame + round(5 k mm), and nowhere a pixel either side.
+fn dots_check(img: &RgbaImage, scale: f64, phys_mm: f64, margin_mm: f64, name: &str) {
+    let (w, h) = (img.width() as i32, img.height() as i32);
+    let mg = title::margin(margin_mm, phys_mm / scale, scale);
+    let lum = |x: i32, y: i32| {
+        let p = img.get_pixel(x as u32, y as u32);
+        0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+    };
+    let dot = |x: i32, y: i32| [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().all(|(dx, dy)| lum(x + dx, y + dy) - lum(x, y) >= 3.0);
+    let at = |k: i32| mg + (k as f64 * 5.0 * phys_mm + 0.5).floor() as i32;
+    let (inner_w, inner_h) = (w - 2 * mg, h - 2 * mg);
+    let (mut checked, mut bad) = (0, Vec::new());
+    for kx in 0.. {
+        let x = at(kx);
+        if x > mg + inner_w * 88 / 100 {
+            break;
+        }
+        if x < mg + inner_w * 55 / 100 {
+            continue;
+        }
+        for ky in 0.. {
+            let y = at(ky);
+            if y > mg + inner_h * 45 / 100 {
+                break;
+            }
+            if y < mg + inner_h * 10 / 100 {
+                continue;
+            }
+            checked += 1;
+            if !dot(x, y) || dot(x + 1, y) || dot(x - 1, y) || dot(x, y + 1) || dot(x, y - 1) {
+                bad.push((x, y));
+            }
+        }
+    }
+    if checked < 20 || !bad.is_empty() {
+        println!("{name}: dots: {} of {checked} not on their pixel (frame corner {mg}, 5 mm = {:.2} px): {:?}", bad.len(), 5.0 * phys_mm, &bad[..bad.len().min(5)]);
+        std::process::exit(1);
+    }
+    println!("{name}: dots: {checked} on their pixels, 5 mm apart from the frame's corner");
 }

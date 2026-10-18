@@ -184,7 +184,8 @@ The bottom margin stays, as part of the drafting-sheet layout (Bluetooth, screen
 Rendered by a fragment shader into the output's background, once per frame only when something changed
 (theme, scale, output size). Inputs: paper colours and shading (the 0.1 theme `sheet` table), ink, pattern
 strength, margin in millimetres, px/mm and scale for the output. Output: the gradient with blooms, the
-5 mm dots, the frame (2 physical px), zone ticks, crop marks, the 8-bit dither. The same maths as
+5 mm dots (counted from the frame's corner, see the invariants below), the frame (2 physical px), zone
+ticks, crop marks, the 8-bit dither. The same maths as
 `render.py`, so a theme looks the same on 0.1 and on the compositor.
 
 Physical size comes from the output's EDID (as wl_output reports it); a configuration override per output
@@ -208,6 +209,10 @@ Everything drawn on the sheet keeps to these, whoever draws it (the compositor, 
    top.
 5. **Checked.** `make pixels` checks the sheet pixel by pixel, headless. A new check is proven by
    breaking the thing it checks by a pixel and seeing it fail.
+
+The sheet's own 5 mm dots keep to the same rule: counted from the frame's top-left corner, each on the
+pixel nearest its true place, never a step rounded once and added up. So anything ruled in millimetres
+(the plotted load's squares, every tenth line heavier on the sheet's 10 mm) lands on them.
 
 A zone reference ("B3") places a thing 7 mm into the zone, from the zone's corner rounded up to a whole
 millimetre. A thing dragged to a place keeps that place in whole millimetres.

@@ -117,18 +117,20 @@ Item {
                 const mid = v => v + hair / 2                       // a 1-pixel line on its pixel
                 const ink = (a) => Qt.rgba(g.ink.r, g.ink.g, g.ink.b, a)
                 const left = g.ix(0), right = g.ix(g.wMm), top = g.iy(0), bottom = g.iy(g.hMm)
-                // the squares: a millimetre each, every tenth heavier, counted from the bottom left
+                // the squares: a millimetre each, every tenth heavier, on the sheet's own millimetres: counted from
+                // the frame's corner, as its 5 mm dots are (every fifth line on them, the heavy ones on every
+                // second dot)
                 c.lineWidth = hair
                 for (const heavy of [false, true]) {
                     c.strokeStyle = ink(heavy ? 0.32 : 0.13)
                     c.beginPath()
                     for (let i = 0; i <= g.wMm; i++) {
-                        if ((i % 10 === 0) !== heavy) continue
+                        if (((g.xMm + i) % 10 === 0) !== heavy) continue
                         const x = mid(g.ix(i)); c.moveTo(x, top); c.lineTo(x, bottom)
                     }
                     for (let i = 0; i <= g.hMm; i++) {
-                        if ((i % 10 === 0) !== heavy) continue
-                        const y = mid(g.iy(g.hMm - i)); c.moveTo(left, y); c.lineTo(right, y)
+                        if (((g.yMm + i) % 10 === 0) !== heavy) continue
+                        const y = mid(g.iy(i)); c.moveTo(left, y); c.lineTo(right, y)
                     }
                     c.stroke()
                 }

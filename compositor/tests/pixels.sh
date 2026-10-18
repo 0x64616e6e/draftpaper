@@ -95,6 +95,11 @@ for round in ${ROUNDS:-paper ambient windows lens}; do
         # (the check's own status: through a pipe it would be sed's)
         out=$("$check" "$t/sheet.png" $scale $mm 6 $flag) || fail=1
         echo "$out" | sed "s|$t/sheet.png|$round, scale $scale|"
+        # the 5 mm dots, each on its pixel from the frame's corner (on the bare paper)
+        if [ "$round" = paper ]; then
+            out=$("$check" "$t/sheet.png" $scale $mm 6 dots) || fail=1
+            echo "$out" | sed "s|$t/sheet.png|$round, scale $scale|"
+        fi
     done
 done
 exit $fail

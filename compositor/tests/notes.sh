@@ -84,6 +84,12 @@ exact() {   # $1 mm across, $2 mm down: the 2-pixel outline on that pixel and th
     [ "$(lum "$x" "$y")" -lt 110 ] && [ "$(lum $((x + 1)) "$y")" -lt 110 ] && [ "$(lum $((x - 1)) "$y")" -gt 130 ] && echo exact || echo "off: $(lum $((x - 1)) "$y") $(lum "$x" "$y") $(lum $((x + 1)) "$y") at $x"
 }
 ok "the outline on its millimetre: 7 mm from the frame's corner" "$(exact 7 7)" "exact"
+# the load's heavy lines on the sheet's own 10 mm: 50 mm from the frame's corner (a column of the dots too),
+# halfway up the graph (the bottom left, 72 mm tall, 7 mm off the frame's bottom): darker than the 49, 51 mm lines
+fh=$(awk -v h="$(o .frame.height)" -v m="$mmL" 'BEGIN { print int(h / m + 1e-6) }')
+x50=$(colAt 50); ymid=$(rowAt $((fh - 7 - 36)))
+l50=$(lum "$x50" "$ymid"); l49=$(lum "$(colAt 49)" "$ymid"); l51=$(lum "$(colAt 51)" "$ymid")
+ok "the load's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
 zx=$(awk -v w="$(o .zones.width)" -v m="$mmL" 'BEGIN { v = w / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
 zy=$(awk -v h="$(o .zones.height)" -v m="$mmL" 'BEGIN { v = h / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
 run "$cli" config set 'sheet.machine_at=B2' > /dev/null

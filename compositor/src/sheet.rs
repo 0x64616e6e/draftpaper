@@ -83,11 +83,16 @@ void main() {
     c += (glow - c) * bloom(uv, vec2(0.80, 0.30), 0.40, 0.26);
     c += (glow - c) * bloom(uv, vec2(0.42, 0.88), 0.48, 0.30);
 
-    // the pattern, as an alpha mask: dots every 5 mm (counted from the bottom-left corner), the frame
-    // two pixels wide, a tick at every zone boundary across the margins
+    // the pattern, as an alpha mask: dots every 5 mm, the frame two pixels wide, a tick at every zone
+    // boundary across the margins. The dots are counted from the frame's top-left corner, each on the
+    // pixel nearest its true place (no step rounded once and the error added up): whole millimetres from
+    // the frame's corner, as everything on the sheet is (docs/wayland-design.md), so the notes' grids
+    // (qml/sheet.js, the same arithmetic) land on them
     float m = 0.0;
-    float stp = floor(5.0 * mm);
-    if (mod(px.x, stp) < 1.0 && mod(h - 1.0 - px.y, stp) < 1.0) m = max(m, 0.6);
+    vec2 rel = px - vec2(mg);
+    vec2 k = floor(rel / (5.0 * mm) + 0.5);
+    vec2 dot_at = floor(k * 5.0 * mm + 0.5);
+    if (rel.x == dot_at.x && rel.y == dot_at.y) m = max(m, 0.6);
     bool inX = px.x >= mg && px.x < w - mg, inY = px.y >= mg && px.y < h - mg;
     if (inY && ((px.x >= mg && px.x < mg + 2.0) || (px.x >= w - mg - 2.0 && px.x < w - mg))) m = max(m, 0.85);
     if (inX && ((px.y >= mg && px.y < mg + 2.0) || (px.y >= h - mg - 2.0 && px.y < h - mg))) m = max(m, 0.85);

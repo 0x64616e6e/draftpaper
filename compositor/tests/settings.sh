@@ -81,6 +81,8 @@ ipc row 2
 ipc step 1
 ok "the revision block on, in a [title] of its own" "$(waitfor '^revisions = true')" "1"
 ok "[title] added once" "$(grep -c '^\[title\]' "$cfg")" "1"
+# the compositor reads config.toml every 2 s: the margin in before the picture
+i=0; until run "$comp" msg outputs | jq -e ".[0].margin > 30" > /dev/null || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
 sleep 1
 shot "$t/sheet.png"
 [ -n "${SHOT:-}" ] && cp "$t/sheet.png" "$SHOT"
