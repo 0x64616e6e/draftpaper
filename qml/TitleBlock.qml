@@ -33,7 +33,7 @@ Item {
     readonly property real oy: geo ? geo.rect.y - (edge.height - marginR - surfH) : 0
 
     // per cell, in the compositor's order: [x, y, w, h] in mm (only without its geometry), label, value
-    // (the readings' cells: a click shows their last ten minutes on the sheet, LoadGraph.qml, or puts it away;
+    // (the readings' cells, NETWORK too: a click shows their year on the sheet, LoadGraph.qml, or puts it away;
     // PROJECT the schedule of equipment and PROCESSES the process schedule, Schedule.qml)
     // (StyledText), click (left), click (right), alert
     readonly property var cells: [
@@ -45,7 +45,7 @@ Item {
         [58, 12, 22, 12, "BATTERY", shell.batteryText, () => shell.toggleGraph("battery", block.edge.screen.name), null, shell.batteryLow],
         [80, 12, 22, 12, "PROFILE", shell.profileText || "-", () => shell.profileNext(), null, false],
         [102, 12, 28, 12, "CPU / MEMORY", shell.loadText, () => shell.toggleGraph("load", block.edge.screen.name), null, false],
-        [0, 24, 34, 12, "NETWORK", shell.networkText, null, null, false],
+        [0, 24, 34, 12, "NETWORK", shell.networkText, () => shell.toggleGraph("network", block.edge.screen.name), null, false],
         [34, 24, 52, 12, "TEMPERATURE · FAN", shell.tempText || "-", () => shell.toggleGraph("temperature", block.edge.screen.name), null, shell.tempHot],
         [86, 24, 16, 12, "PROCESSES", shell.readings.processes !== undefined ? String(shell.readings.processes) : "-", () => shell.toggleSchedule("processes", block.edge.screen.name), null, false],
         custom ? [102, 24, 28, 12, custom.label || "", shell.customText || "-", custom.left ? () => shell.run(custom.left) : null,

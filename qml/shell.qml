@@ -152,8 +152,9 @@ ShellRoot {
     Poll { id: processPoll; command: [root.bin, "processes"]; interval: 2000; running: root.schedule === "processes" }
     readonly property var processes: { try { return processPoll.output ? JSON.parse(processPoll.output) : null } catch (e) { return null } }
 
-    // the graph: which readings ("", "load", "temperature", "power", "battery") on which screen; a click on
-    // their cell in the title block shows them, again puts them away, another's switches
+    // the graph: which readings ("", "load", "temperature", "power", "battery", "network", "disk") on which
+    // screen; a click on their cell in the title block (the disks: the STORAGE row of the equipment schedule)
+    // shows them, again puts them away, another's switches
     property string graph: ""
     property string graphOn: ""
     function toggleGraph(which, screenName) {

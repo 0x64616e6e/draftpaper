@@ -1,7 +1,8 @@
 // The equipment schedule (issue #49): what neofetch tells, as a drawing's schedule of equipment: REF,
 // ITEM, DESCRIPTION rows for the machine, processor, graphics, memory, storage, system and desktop
 // (`draftpaper machine`, polled by shell.qml), each display (live, from the compositor) and the sheet.
-// Drawn by Schedule.qml, on the sheet; Mod+i brings it, then the processes, then neither.
+// Drawn by Schedule.qml, on the sheet; Mod+i brings it, then the processes, then neither. A click on
+// STORAGE shows the disks' graph (LoadGraph.qml).
 import QtQuick
 
 Schedule {
@@ -19,14 +20,15 @@ Schedule {
     rows: {
         if (!m) return []
         const r = []
-        const add = (ref, item, text, note) => { if (text) r.push({ cells: [ref, item, text], note: note || "" }) }
+        const add = (ref, item, text, note, action) => { if (text) r.push({ cells: [ref, item, text], note: note || "", action: action || null }) }
         add("M1", "MACHINE", m.machine)
         if (m.cpu) add("M2", "PROCESSOR", m.cpu.model, m.cpu.cores + " cores, " + m.cpu.threads + " threads")
         ;(m.gpus || []).forEach((g, i) => add("M" + (3 + i), "GRAPHICS", g))
         const n = 3 + Math.max(1, (m.gpus || []).length)
         if (m.memory_gib) add("M" + n, "MEMORY", Math.round(m.memory_gib) + " GiB")
         if (m.storage) add("M" + (n + 1), "STORAGE", m.storage.disk,
-            [m.storage.fs, m.storage.used_gb !== undefined ? Math.round(m.storage.used_gb) + " of " + Math.round(m.storage.size_gb) + " GB used" : ""].filter(x => x).join(" · "))
+            [m.storage.fs, m.storage.used_gb !== undefined ? Math.round(m.storage.used_gb) + " of " + Math.round(m.storage.size_gb) + " GB used" : ""].filter(x => x).join(" · "),
+            () => shell.toggleGraph("disk", edge.screen.name))
         add("S1", "SYSTEM", [m.system, m.kernel].filter(x => x).join(" · "), m.uptime_s ? uptime(m.uptime_s) : "")
         add("S2", "DESKTOP", "Draftpaper " + m.draftpaper + (m.quickshell ? " · Quickshell " + m.quickshell : ""))
         Compositor.outputs.forEach((o, i) => {

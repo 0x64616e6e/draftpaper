@@ -130,7 +130,7 @@ between them, ← → along, each change shown at once.
 | BT (bottom left) | blueman-manager |
 | SHOT (bottom right) | A region into swappy (`[commands] screenshot`) |
 | The theme name (bottom right) | Left: the settings; right: the next theme |
-| CPU / MEMORY, TEMPERATURE · FAN, POWER, BATTERY (the title block) | Their year as a graph on the sheet (a log time scale: 5 min, 1 h, 24 h, 7 d, 30 d, 1 y); again: away; another: switched |
+| CPU / MEMORY, TEMPERATURE · FAN, POWER, BATTERY, NETWORK (the title block); STORAGE (the equipment schedule) | Their year as a graph on the sheet (a log time scale: 5 min, 1 h, 24 h, 7 d, 30 d, 1 y); again: away; another: switched |
 | PROJECT, PROCESSES (the title block) | The schedule of equipment, the process schedule, in the title block's column; again: away |
 | PROFILE (title block) | Cycle power-saver, balanced, performance |
 | A cell of your own | Its `left` / `right` commands |

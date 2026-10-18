@@ -3,6 +3,14 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- The network's and the disks' throughput on the graph, over the same year: a click on NETWORK in the
+  title block shows received and sent, a click on STORAGE in the equipment schedule read and written, on a
+  logarithmic scale from 1 kB/s (bytes to gigabytes a second). Counted on the machine's own interfaces and
+  disks only (not lo, bridges, VPN tunnels, containers, partitions or zvols). A store kept by 0.7.3 goes on.
+- A schedule's row can do something: tinted under the pointer, clicked without dragging the schedule.
+
 ## 0.7.3 (2026-10-19)
 
 A year of readings on the graph.

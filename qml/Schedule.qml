@@ -25,7 +25,7 @@ Item {
     property var columns: []              // [{ name, mm, right }]
     // the rows: their cells, a note under one of them, a heavier rule above where a group starts, and a
     // share to rule as a bar (0..1) in the column `barCol`, in the alert ink from `alertAt`
-    property var rows: []                 // [{ cells: [...], note, heavyAbove, share }]
+    property var rows: []                 // [{ cells: [...], note, heavyAbove, share, action }]
     property int noteCol: -1
     property int barCol: -1
     property real alertAt: 0.8
@@ -102,6 +102,12 @@ Item {
     }
     readonly property int headMm: 7 + (column && fit.full ? Math.max(0, roomMm - fit.end) : 0)
     readonly property var laid: fit.rows.map(r => ({ row: r.row, yMm: r.yMm + headMm - 7, hMm: r.hMm }))
+    // the row with an action under the pointer (a local y, in pixels), or null
+    property var hoverRow: null
+    function rowAt(y) {
+        const l = laid.find(l => !!l.row.action && y >= iy(l.yMm) && y < iy(l.yMm + l.hMm))
+        return l ? l.row : null
+    }
     readonly property int hMm: laid.length ? laid[laid.length - 1].yMm + laid[laid.length - 1].hMm : headMm + 5
 
     function clear(x, y) {
@@ -185,6 +191,12 @@ Item {
                     id: line
                     required property var modelData
                     readonly property var row: modelData.row
+                    // a row that does something (its `action`): a faint tint under the pointer, as the title block's cells
+                    Rectangle {
+                        visible: !!line.row.action && sched.hoverRow === line.row
+                        x: sched.ix(0); y: sched.iy(line.modelData.yMm); width: sched.ix(sched.wMm) - x; height: sched.iy(line.modelData.yMm + line.modelData.hMm) - y
+                        color: Qt.rgba(sched.ink.r, sched.ink.g, sched.ink.b, 0.07)
+                    }
                     // the rule under it (none under the last: no outline); a heavier one above a group
                     Rectangle {
                         visible: line.modelData !== sched.laid[sched.laid.length - 1]
@@ -245,17 +257,22 @@ Item {
             }
         }
 
-        // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release
+        // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release; a row with an
+        // action clicked (pressed and let go without moving it) does that
         MouseArea {
             anchors.fill: parent
             enabled: sched.shown
-            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+            hoverEnabled: true
+            cursorShape: pressed ? Qt.ClosedHandCursor : sched.hoverRow ? Qt.PointingHandCursor : Qt.OpenHandCursor
+            onExited: sched.hoverRow = null
             property point from
             property var start: null
-            onPressed: e => { from = mapToGlobal(e.x, e.y); start = { x: Math.round(sched.xMm), y: Math.round(sched.yMm) }; keep.stop(); sched.dragged = start }
+            property bool moved: false
+            onPressed: e => { from = mapToGlobal(e.x, e.y); moved = false; start = { x: Math.round(sched.xMm), y: Math.round(sched.yMm) }; keep.stop(); sched.dragged = start }
             onPositionChanged: e => {
-                if (!pressed || !start) return
+                if (!pressed || !start) { sched.hoverRow = sched.rowAt(e.y); return }
                 const p = mapToGlobal(e.x, e.y)
+                if (Math.abs(p.x - from.x) + Math.abs(p.y - from.y) > 0.5 * sched.mm) moved = true
                 const x = start.x + Math.round((p.x - from.x) / sched.mm), y = start.y + Math.round((p.y - from.y) / sched.mm)
                 if (sched.clear(x, y)) sched.dragged = { x: x, y: y }
             }
@@ -264,6 +281,7 @@ Item {
                 if (d && start && (d.x !== start.x || d.y !== start.y)) sched.shell.setConfig(["sheet.schedule_at=[" + d.x + ", " + d.y + "]"])
                 keep.restart()
             }
+            onClicked: e => { const r = sched.rowAt(e.y); if (r && !moved) r.action() }
         }
         Timer { id: keep; interval: 1500; onTriggered: sched.dragged = null }
     }

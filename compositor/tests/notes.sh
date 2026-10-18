@@ -2,11 +2,13 @@
 # make pixels (and alone): the notes on the sheet (issue #49: qml/Schedule.qml, qml/MachineSchedule.qml,
 # qml/ProcessSchedule.qml, qml/LoadGraph.qml), headless (nothing on any display), on the T14's panel
 # (1920x1200 at 1.5, 6.4 px/mm). Nothing until asked. The schedules take turns (Mod+i: next): the
-# equipment, in the title block's column from the top, its rules on their pixels; the
-# processes; neither. A reading's graph comes and goes with its cell (load, temperature, power), its heavy
-# line on the sheet's 50 mm. Zone B2 and a drag move the schedule, a whole millimetre at a time, kept in
-# config.toml; a place that leaves the graph no room (as one dragged on a larger display) gives way to its
-# own. Over a wallpaper still there. SHOT=FILE keeps a screenshot of the equipment and the load.
+# equipment, in the title block's column from the top, its rules on their pixels; the processes; neither.
+# A reading's graph comes and goes with its cell (load, temperature, power, network; the disks from the
+# equipment's STORAGE row), its heavy line on the sheet's 50 mm. Zone B2 and a drag move
+# the schedule, a whole millimetre at a time, kept in config.toml; a place that leaves the graph no room (as
+# one dragged on a larger display) gives way to its own. Over a wallpaper still there. SHOT=FILE keeps a
+# screenshot of the equipment and the load (SHOT_PROC, SHOT_NET, SHOT_DISK: of those graphs; KEPT=FILE: from
+# that store).
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -123,6 +125,28 @@ graph toggle temperature
 ok "the temperature's cell: its graph" "$(waitlayers load 1)/$(graph state)" "1/temperature"
 graph toggle power
 ok "the power's: switched to it (on mains here)" "$(waitlayers load 1)/$(graph state)" "1/power"
+graph toggle network
+ok "the network: its graph (down and up)" "$(waitlayers load 1)/$(graph state)" "1/network"
+graph toggle disk
+ok "the disks: their graph (read and written)" "$(waitlayers load 1)/$(graph state)" "1/disk"
+# a click on the title block's NETWORK cell: the network's graph; again: away
+click() { run "$comp" msg pointer "$1" "$2" > /dev/null; sleep 0.15; run "$comp" msg button left down > /dev/null; sleep 0.1; run "$comp" msg button left up > /dev/null; sleep 0.3; }
+cx=$(awk -v x="$(o .title.rect.x)" -v m="$mmL" 'BEGIN { print x + 17 * m }'); cy=$(awk -v y="$(o .title.rect.y)" -v m="$mmL" 'BEGIN { print y + 30 * m }')
+click "$cx" "$cy"
+ok "a click on NETWORK: its graph" "$(graph state)" "network"
+click "$cx" "$cy"
+ok "again: away" "$(graph state)" ""
+# a click on the equipment schedule's STORAGE row (wherever this machine's rows put it): the disks' graph
+sched equipment > /dev/null
+sx=$(awk -v x="$(o .title.rect.x)" -v m="$mmL" 'BEGIN { print x + 60 * m }')
+k=20; top=$(awk -v y="$(o .title.rect.y)" -v f="$fyL" -v m="$mmL" 'BEGIN { print int((y - f) / m) - 2 }')
+while [ "$(graph state)" != "disk" ] && [ $k -lt "$top" ]; do click "$sx" "$(awk -v f="$fyL" -v m="$mmL" -v k="$k" 'BEGIN { print f + k * m }')"; k=$((k + 3)); done
+ok "a click on STORAGE: the disks' graph" "$(graph state)" "disk"
+graph toggle power > /dev/null
+# SHOT_NET=FILE, SHOT_DISK=FILE: the network's graph, the disks'
+snap() { [ -n "$2" ] || return 0; graph toggle "$1"; sleep "${SHOT_AFTER:-3}"; shot "$t/$1.png"; cp "$t/$1.png" "$2"; graph toggle power > /dev/null; sleep 0.5; }
+snap network "${SHOT_NET:-}"
+snap disk "${SHOT_DISK:-}"
 # SHOT_PROC=FILE: the processes and the temperature's graph
 if [ -n "${SHOT_PROC:-}" ]; then
     sched processes; graph toggle temperature; sleep "${SHOT_AFTER:-3}"; shot "$t/proc.png"; cp "$t/proc.png" "$SHOT_PROC"

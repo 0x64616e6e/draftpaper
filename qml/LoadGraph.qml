@@ -133,8 +133,8 @@ Item {
         return r.w >= 100 && r.h >= 40
     }
 
-    // which readings: "load", "temperature", "power", "battery" (a click on their cell in the title block),
-    // or none
+    // which readings: "load", "temperature", "power", "battery", "network" (a click on their cell in the title
+    // block), "disk" (the equipment schedule's STORAGE row), or none
     property string domain: ""
     readonly property bool shown: domain !== "" && !!out && wMm >= 100 && hMm >= 40
     property real fade: shown ? 1 : 0
@@ -143,6 +143,15 @@ Item {
     onDomainChanged: if (domain !== "") drawn = domain
     // the highest of a reading kept, for a scale that fits it
     function most(key) { return points(key).reduce((m, p) => Math.max(m, p.max), -1) }
+    // the power of ten at or over the most of either reading (1 MB/s at least): the top of a throughput's scale
+    function decade(a, b) { return Math.pow(10, Math.max(6, Math.ceil(Math.log10(Math.max(most(a), most(b), 1)) - 1e-9))) }
+    // bytes a second, lettered as a meter does: B/s, kB/s, MB/s, GB/s, three figures at most
+    function rate(v) {
+        const u = ["B/s", "kB/s", "MB/s", "GB/s"]
+        let i = 0
+        while (v >= 1000 && i < u.length - 1) { v /= 1000; i++ }
+        return (v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)) + " " + u[i]
+    }
     // each line of the domain: the sample's key, its scale (min, max), its ink, weight (mm) and dash, and how
     // its name and value are lettered at its end
     readonly property var series: {
@@ -158,6 +167,13 @@ Item {
             { key: "power", name: "POWER", min: 0, max: Math.max(20, Math.ceil(most("power") / 10) * 10), colour: ink, w: 0.4, dash: [], bold: true, text: v => "POWER " + v.toFixed(1) + " W" }]
         if (drawn === "battery") return [
             { key: "battery", name: "BATTERY", min: 0, max: 1, colour: ink, w: 0.4, dash: [], bold: true, text: v => "BATTERY " + Math.round(v * 100) + "%" }]
+        // throughput, bytes to gigabytes a second: on a logarithmic scale from 1 kB/s to the decade over the most kept
+        if (drawn === "network") return [
+            { key: "net_down", name: "DOWN", min: 1e3, max: decade("net_down", "net_up"), log: true, colour: ink, w: 0.4, dash: [], bold: true, text: v => "DOWN " + rate(v) },
+            { key: "net_up", name: "UP", min: 1e3, max: decade("net_down", "net_up"), log: true, colour: ink, w: 0.3, dash: dash, text: v => "UP " + rate(v) }]
+        if (drawn === "disk") return [
+            { key: "disk_read", name: "READ", min: 1e3, max: decade("disk_read", "disk_write"), log: true, colour: ink, w: 0.4, dash: [], bold: true, text: v => "READ " + rate(v) },
+            { key: "disk_write", name: "WRITE", min: 1e3, max: decade("disk_read", "disk_write"), log: true, colour: ink, w: 0.3, dash: dash, text: v => "WRITE " + rate(v) }]
         return []
     }
     // nothing to plot, said where the line would be: no keeper (draftpaper-metrics.service), or nothing of the
@@ -180,7 +196,10 @@ Item {
     // a period's end, ticked on the sheet's millimetres: the whole one nearest (in from the edges)
     function tickMm(age) { return Math.max(1, Math.min(wMm - 1, Math.round(wMm * (1 - share(age))))) }
     function yPct(v) { return iy(hMm - 2) - Math.max(0, Math.min(1, v)) * (iy(hMm - 2) - iy(2)) }
-    function yOf(v, s) { return yPct((v - s.min) / (s.max - s.min)) }
+    function yOf(v, s) {
+        if (s.log) return yPct((Math.log(Math.max(v, s.min)) - Math.log(s.min)) / (Math.log(s.max) - Math.log(s.min)))
+        return yPct((v - s.min) / (s.max - s.min))
+    }
 
     PanelWindow {
         screen: graph.edge.screen
