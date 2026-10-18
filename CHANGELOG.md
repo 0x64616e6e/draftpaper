@@ -3,7 +3,9 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.3 (2026-10-19)
+
+A year of readings on the graph.
 
 - A year of readings on the graph, on a logarithmic time scale: now at the right, then the last 5 minutes,
   the hour, the day, the week, the month and the year, each period ticked and named. `draftpaper metrics

@@ -1,3 +1,18 @@
+draftpaper (0.7.3) unstable; urgency=medium
+
+  * A year of readings on the graph, on a logarithmic time scale: now at
+    the right, then 5 minutes, an hour, a day, a week, a month and a year,
+    each period ticked and named on the sheet's millimetres.
+  * draftpaper metrics keep (draftpaper-metrics.service, part of the
+    session) samples every 5 s into six periods of fixed slots, each its
+    count, sum, least and most: some 870 slots a reading for a year. Kept
+    in the runtime directory, on disk every 5 minutes.
+  * One line through all the periods, the bold reading's least to most a
+    band under it, broken where nothing was kept. The shell's own sampler
+    goes.
+
+ -- 0x64616e6e <daniel@este.systems>  Mon, 19 Oct 2026 00:06:44 +0300
+
 draftpaper (0.7.2) unstable; urgency=medium
 
   * The graph is no taller than a zone of the sheet and by default fills
