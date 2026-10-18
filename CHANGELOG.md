@@ -11,6 +11,10 @@ a processor ruled as a bar), then neither, fading in and out in one place, the t
 part of the sheet, no outline or panel. A click on a reading's cell in the title block (CPU / memory,
 temperature and fan, power, battery) shows its last ten minutes as the graph, again puts it away.
 `draftpaper schedule next|equipment|processes|hide`.
+The schedules sit in the title block's column, its three zones, from the top of the frame down; the title
+block has a PROCESSES cell (how many are running), which brings the process schedule, and PROJECT brings
+the schedule of equipment. A cell that does something takes the click over the whole of it, to the middle
+of its rules, and shows a faint tint under the pointer.
 
 The sheet's 5 mm dots are counted from the frame's top-left corner, each on the pixel nearest its true
 place (they were counted from the screen's corner in a step rounded down once: on a display of 5.6 px/mm a

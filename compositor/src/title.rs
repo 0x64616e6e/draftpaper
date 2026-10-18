@@ -17,7 +17,7 @@ pub const SIZE_MM: (f32, f32) = (130.0, 36.0);
 
 /// The title block's cells, [x, y, width, height] in millimetres from its top-left corner; they tile it.
 /// The shell letters them in this order (TitleBlock.qml).
-pub const CELLS: [[f32; 4]; 11] = [
+pub const CELLS: [[f32; 4]; 12] = [
     [0.0, 0.0, 34.0, 24.0],    // time
     [34.0, 0.0, 32.0, 12.0],   // date
     [66.0, 0.0, 22.0, 12.0],   // sheet
@@ -28,7 +28,8 @@ pub const CELLS: [[f32; 4]; 11] = [
     [102.0, 12.0, 28.0, 12.0], // cpu / memory
     [0.0, 24.0, 34.0, 12.0],   // network
     [34.0, 24.0, 52.0, 12.0],  // temperature
-    [86.0, 24.0, 44.0, 12.0],  // the custom cell, or drawn
+    [86.0, 24.0, 16.0, 12.0],  // processes (its rule under cpu / memory's)
+    [102.0, 24.0, 28.0, 12.0], // the custom cell, or drawn
 ];
 
 /// The margin in physical pixels: `margin_mm` in whole logical pixels (as the layout takes it), scaled.

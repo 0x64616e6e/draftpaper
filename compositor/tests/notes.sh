@@ -2,7 +2,7 @@
 # make pixels (and alone): the notes on the sheet (issue #49: qml/Schedule.qml, qml/MachineSchedule.qml,
 # qml/ProcessSchedule.qml, qml/LoadGraph.qml), headless (nothing on any display), on the T14's panel
 # (1920x1200 at 1.5, 6.4 px/mm). Nothing until asked. The schedules take turns (Mod+i: next): the
-# equipment, its first column's rule on its pixel 19 mm from the frame's corner (10 mm in, 9 mm on); the
+# equipment, in the title block's column from the top, its rules on their pixels; the
 # processes; neither. A reading's graph comes and goes with its cell (load, temperature, power), its heavy
 # line on the sheet's 50 mm. Zone B2 and a drag move the schedule, a whole millimetre at a time, kept in
 # config.toml. Over a wallpaper still there. SHOT=FILE keeps a screenshot of the equipment and the load.
@@ -80,7 +80,15 @@ sched next
 ok "Mod+i: the equipment" "$(waitlayers schedule 1)/$(sched state)" "1/equipment"
 sleep 1
 shot "$t/notes.png"
-ok "its first column's rule on its pixel: 10 + 9 mm from the frame's corner" "$(rule 19 30)" "exact"
+# in the title block's column, from the top: its first column's rule 9 mm from the title block's left rule,
+# the heading's heavy rule 7 mm under the frame's top line, each on its pixel
+tx=$(o .title.rect.x)
+tcol=$(awk -v t="$tx" -v m="$mmL" 'BEGIN { x0 = int(t * 1.5 + 0.5) / 1.5; printf "%d", int((x0 + 9 * m) * 1.5 + 0.5) }')
+yrow=$(rowAt 30)
+l=$(lum "$tcol" "$yrow"); a=$(lum $((tcol - 1)) "$yrow"); b=$(lum $((tcol + 1)) "$yrow")
+ok "in the title block's column: its first column's rule 9 mm in, on its pixel" "$([ "$l" -lt $((a - 10)) ] && [ "$l" -lt $((b - 10)) ] && echo exact || echo "off: $a $l $b at $tcol")" "exact"
+hy=$(rowAt 7); hx=$(awk -v t="$tx" 'BEGIN { printf "%d", t * 1.5 + 100 }')
+ok "its heading's rule 7 mm under the frame's top" "$([ "$(lum "$hx" "$hy")" -lt 110 ] && [ "$(lum "$hx" $((hy - 2)))" -gt 130 ] && echo exact || echo "off: $(lum "$hx" $((hy - 2))) $(lum "$hx" "$hy")")" "exact"
 sched next
 sleep 0.5
 ok "again: the processes, in its place" "$(waitlayers schedule 1)/$(sched state)" "1/processes"

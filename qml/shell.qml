@@ -132,6 +132,12 @@ ShellRoot {
         if (which === "equipment") machinePoll.rerun()
         if (which === "processes") processPoll.rerun()
     }
+    // a schedule's cell in the title block (PROJECT, PROCESSES): it on that screen, or away if it is there
+    function toggleSchedule(which, screenName) {
+        if (schedule === which && scheduleOn === screenName) { schedule = ""; return }
+        showSchedule(which)
+        scheduleOn = screenName
+    }
     function nextSchedule() { showSchedule(schedule === "" ? "equipment" : schedule === "equipment" ? "processes" : "") }
     Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: root.schedule === "equipment" }
     readonly property var machine: { try { return machinePoll.output ? JSON.parse(machinePoll.output) : null } catch (e) { return null } }

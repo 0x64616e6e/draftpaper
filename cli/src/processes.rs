@@ -117,3 +117,15 @@ mod tests {
         assert_eq!(memory(4_100_000_000), "4.1 GB");
     }
 }
+
+/// How many processes there are, as the schedule counts them (kernel threads left out): the title block's
+/// PROCESSES cell (`draftpaper readings`).
+pub fn count() -> usize {
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| e.file_name().to_str().is_some_and(|s| s.bytes().all(|b| b.is_ascii_digit())))
+        .filter(|e| std::fs::read(e.path().join("cmdline")).is_ok_and(|c| !c.is_empty()))
+        .count()
+}

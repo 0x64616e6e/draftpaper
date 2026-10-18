@@ -33,22 +33,24 @@ Item {
     readonly property real oy: geo ? geo.rect.y - (edge.height - marginR - surfH) : 0
 
     // per cell, in the compositor's order: [x, y, w, h] in mm (only without its geometry), label, value
-    // (the readings' cells: a click shows their last ten minutes on the sheet, LoadGraph.qml, or puts it away)
+    // (the readings' cells: a click shows their last ten minutes on the sheet, LoadGraph.qml, or puts it away;
+    // PROJECT the schedule of equipment and PROCESSES the process schedule, Schedule.qml)
     // (StyledText), click (left), click (right), alert
     readonly property var cells: [
         [0, 0, 34, 24, "TIME", Qt.formatDateTime(shell.now, "HH:mm"), null, null, false],
         [34, 0, 32, 12, "DATE", Qt.formatDateTime(shell.now, "ddd dd MMM yyyy"), null, null, false],
         [66, 0, 22, 12, "SHEET", spaceName || "-", null, null, false],
-        [88, 0, 42, 12, "PROJECT", theme.title.project || "", null, null, false],
+        [88, 0, 42, 12, "PROJECT", theme.title.project || "", () => shell.toggleSchedule("equipment", block.edge.screen.name), null, false],
         [34, 12, 24, 12, "POWER", shell.powerText, () => shell.toggleGraph("power", block.edge.screen.name), null, false],
         [58, 12, 22, 12, "BATTERY", shell.batteryText, () => shell.toggleGraph("battery", block.edge.screen.name), null, shell.batteryLow],
         [80, 12, 22, 12, "PROFILE", shell.profileText || "-", () => shell.profileNext(), null, false],
         [102, 12, 28, 12, "CPU / MEMORY", shell.loadText, () => shell.toggleGraph("load", block.edge.screen.name), null, false],
         [0, 24, 34, 12, "NETWORK", shell.networkText, null, null, false],
         [34, 24, 52, 12, "TEMPERATURE · FAN", shell.tempText || "-", () => shell.toggleGraph("temperature", block.edge.screen.name), null, shell.tempHot],
-        custom ? [86, 24, 44, 12, custom.label || "", shell.customText || "-", custom.left ? () => shell.run(custom.left) : null,
+        [86, 24, 16, 12, "PROCESSES", shell.readings.processes !== undefined ? String(shell.readings.processes) : "-", () => shell.toggleSchedule("processes", block.edge.screen.name), null, false],
+        custom ? [102, 24, 28, 12, custom.label || "", shell.customText || "-", custom.left ? () => shell.run(custom.left) : null,
                   custom.right ? () => shell.run(custom.right) : null, false]
-               : [86, 24, 44, 12, "DRAWN", theme.title.drawn || "", null, null, false],
+               : [102, 24, 28, 12, "DRAWN", theme.title.drawn || "", null, null, false],
     ]
 
     PanelWindow {
@@ -82,7 +84,8 @@ Item {
             height: block.geo ? block.geo.rect.height : parent.height - Math.max(1, Math.round(2 / block.edge.dpr))
             clip: true
         Repeater {
-            model: block.cells
+            // a compositor from before the PROCESSES cell (until the next login) has eleven: that cell left out
+            model: block.geo && block.geo.cells.length < block.cells.length ? block.cells.filter(c => c[4] !== "PROCESSES") : block.cells
             Item {
                 id: cell
                 required property var modelData
@@ -117,12 +120,22 @@ Item {
                     font.pixelSize: (modelData[3] > 12 ? 9 : 3.6) * block.mm
                     color: modelData[8] ? block.theme.alert : block.ink
                 }
+                // a cell that does something: the whole of it, to the middle of its rules (no dead pixel
+                // between two), takes the click, and shows it under the pointer with a faint tint
                 MouseArea {
+                    id: hit
                     anchors.fill: parent
+                    anchors.margins: -1.5 / block.edge.dpr
                     enabled: modelData[6] !== null || modelData[7] !== null
+                    hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
                     onClicked: e => { const f = e.button === Qt.RightButton ? modelData[7] : modelData[6]; if (f) f() }
+                }
+                Rectangle {
+                    anchors.fill: parent
+                    visible: hit.enabled && hit.containsMouse
+                    color: Qt.rgba(block.ink.r, block.ink.g, block.ink.b, 0.07)
                 }
             }
         }

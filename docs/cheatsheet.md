@@ -131,6 +131,7 @@ between them, ← → along, each change shown at once.
 | SHOT (bottom right) | A region into swappy (`[commands] screenshot`) |
 | The theme name (bottom right) | Left: the settings; right: the next theme |
 | CPU / MEMORY, TEMPERATURE · FAN, POWER, BATTERY (the title block) | Their last ten minutes as a graph on the sheet; again: away; another: switched |
+| PROJECT, PROCESSES (the title block) | The schedule of equipment, the process schedule, in the title block's column; again: away |
 | PROFILE (title block) | Cycle power-saver, balanced, performance |
 | A cell of your own | Its `left` / `right` commands |
 

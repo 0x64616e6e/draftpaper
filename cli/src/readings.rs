@@ -128,5 +128,5 @@ pub fn main(p: &Paths) {
         .filter_map(|l| l.splitn(3, ' ').nth(2).map(|n| json!(n)))
         .collect();
     let profile = profile.join().unwrap_or_default();
-    println!("{}", util::dumps(&json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt})));
+    println!("{}", util::dumps(&json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count()})));
 }

@@ -38,44 +38,68 @@ Item {
     readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
     readonly property color rule: Qt.rgba(ink.r, ink.g, ink.b, 0.55)
     readonly property real hair: 1 / dpr
+    // in the title block's column its edges are the title block's rule and the frame's line: the lettering 1.6 mm
+    // in from them, as the title block's is
+    readonly property real pad: column ? 1.6 : 0
     readonly property real heavy: Math.max(2, Math.round(0.35 * mm * dpr)) / dpr
 
     // shown, and on the sheet while it fades out
-    readonly property bool shown: wanted && !!out && rows.length > 0 && wMm >= 70
+    readonly property bool shown: wanted && !!out && laid.length > 0 && wMm >= 70
     property real fade: shown ? 1 : 0
     Behavior on fade { enabled: sched.theme.animations; NumberAnimation { duration: 240; easing.type: Easing.InOutQuad } }
 
-    // each row's top and height in whole millimetres: the heading 7, the columns' heads 5, a row 6 (9 with
-    // a note)
-    readonly property var laid: {
-        let y = 12
-        return rows.map(row => {
-            const h = row.note ? 9 : 6
-            const o = { row: row, yMm: y, hMm: h }
-            y += h
-            return o
-        })
-    }
-    readonly property int hMm: laid.length ? laid[laid.length - 1].yMm + laid[laid.length - 1].hMm : 12
     readonly property var frame: Sheet.frameMm(out)
+    readonly property real frameX: out ? out.frame.x - out.x : 0
+    readonly property real frameY: out ? out.frame.y - out.y : 0
+    readonly property var titleRect: out && out.title && out.title.rect ? out.title.rect : null
+    readonly property var titleMm: titleRect ? { x: Math.floor((titleRect.x - frameX) / mm), y: Math.floor((titleRect.y - frameY) / mm) } : null
 
-    // ---- where: whole millimetres from the frame's corner ----
+    // ---- where ----
+    // without [sheet] schedule_at (and not being dragged): the title block's column, from the top: its left
+    // edge on the title block's left rule, its right on the frame, its heading under the frame's top line;
+    // as long as the rows that fit above the revision block, or the title block, 4 mm clear
+    property var dragged: null
+    readonly property bool column: theme.sheet.schedule_at === undefined && dragged === null && titleRect !== null
     readonly property var place: {
-        const at = theme.sheet.schedule_at !== undefined ? theme.sheet.schedule_at : theme.sheet.machine_at
+        const at = theme.sheet.schedule_at
         if (Array.isArray(at) && at.length === 2) return { x: Math.round(at[0]), y: Math.round(at[1]) }
         return Sheet.zoneCorner(out, at, 7) || { x: 10, y: 10 }
     }
-    property var dragged: null
-    readonly property int xMm: (dragged || place).x
-    readonly property int yMm: (dragged || place).y
-    readonly property var titleMm: out && out.title && out.title.rect
-        ? { x: Math.floor((out.title.rect.x - (out.frame.x - out.x)) / mm), y: Math.floor((out.title.rect.y - (out.frame.y - out.y)) / mm) } : null
-    // 112 mm wide; narrower where the frame, or the title block beside it (6 mm clear), ends sooner
-    readonly property int wMm: {
+    // the schedule's left and top edges (the output's logical pixels, on physical pixels), and its width
+    // in millimetres (whole away from the title block's column)
+    readonly property real x0: column ? Math.round(titleRect.x * dpr) / dpr : frameX + (dragged || place).x * mm
+    readonly property real y0: column ? frameY : frameY + (dragged || place).y * mm
+    readonly property real xMm: (x0 - frameX) / mm
+    readonly property real yMm: (y0 - frameY) / mm
+    readonly property real wMm: {
+        if (column) return (titleRect.x + titleRect.width - x0) / mm
         let right = frame.w - 2
-        if (titleMm && yMm + hMm > titleMm.y - 2) right = Math.min(right, titleMm.x - 6)
+        if (titleMm && yMm + 12 > titleMm.y - 2) right = Math.min(right, titleMm.x - 6)
         return Math.max(0, Math.min(112, right - xMm))
     }
+    // how far down it may reach (millimetres from its top): in the column, to the revision block when it is
+    // up, else the title block, 4 mm clear; elsewhere to the frame, 2 mm clear
+    readonly property real roomMm: {
+        if (!column) return frame.h - 2 - yMm
+        const rev = out && out.revisions && out.revisions.rect ? out.revisions.rect.y : titleRect.y
+        return Math.floor((Math.min(rev, titleRect.y) - y0) / mm) - 4
+    }
+
+    // each row's top and height in whole millimetres: the heading 7, the columns' heads 5, a row 6 (9 with
+    // a note); the rows that fit
+    readonly property var laid: {
+        let y = 12
+        const out = []
+        for (const row of rows) {
+            const h = row.note ? 9 : 6
+            if (y + h > roomMm) break
+            out.push({ row: row, yMm: y, hMm: h })
+            y += h
+        }
+        return out
+    }
+    readonly property int hMm: laid.length ? laid[laid.length - 1].yMm + laid[laid.length - 1].hMm : 12
+
     function clear(x, y) {
         if (x < 2 || y < 2 || x + 70 > frame.w - 2 || y + hMm > frame.h - 2) return false
         if (titleMm && x + 70 > titleMm.x - 6 && y + hMm > titleMm.y - 2) return false
@@ -91,10 +115,12 @@ Item {
     }
     function colW(i) { return (i + 1 < colX.length ? colX[i + 1] : wMm) - colX[i] }
 
-    readonly property int sx: out ? Sheet.surfaceAt(Sheet.at(out, dpr, xMm, true), dpr) : 0
-    readonly property int sy: out ? Sheet.surfaceAt(Sheet.at(out, dpr, yMm, false), dpr) : 0
-    function ix(u) { return out ? Sheet.at(out, dpr, xMm + u, true) - sx : 0 }
-    function iy(v) { return out ? Sheet.at(out, dpr, yMm + v, false) - sy : 0 }
+    readonly property int sx: Sheet.surfaceAt(x0, dpr)
+    readonly property int sy: Sheet.surfaceAt(y0, dpr)
+    // u, v millimetres into it, on the nearest physical pixel (from its edges: whole millimetres from the
+    // frame's corner where they are)
+    function ix(u) { return Math.round((x0 + u * mm) * dpr) / dpr - sx }
+    function iy(v) { return Math.round((y0 + v * mm) * dpr) / dpr - sy }
 
     PanelWindow {
         screen: sched.edge.screen
@@ -120,14 +146,14 @@ Item {
             }
             // the heading: what it is, and of what
             Text {
-                x: sched.ix(0); y: sched.iy(0); height: sched.iy(7) - y
+                x: sched.ix(sched.pad); y: sched.iy(0); height: sched.iy(7) - y
                 verticalAlignment: Text.AlignVCenter
                 text: sched.title
                 font.family: Fonts.mono; font.pixelSize: 2.8 * sched.mm; font.bold: true; font.letterSpacing: 0.25 * sched.mm
                 color: sched.ink
             }
             Text {
-                x: sched.ix(sched.wMm) - width; y: sched.iy(0); height: sched.iy(7) - y
+                x: sched.ix(sched.wMm - sched.pad) - width; y: sched.iy(0); height: sched.iy(7) - y
                 verticalAlignment: Text.AlignVCenter
                 text: sched.meta
                 font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
@@ -140,7 +166,7 @@ Item {
                 Text {
                     required property int index
                     readonly property var c: sched.columns[index]
-                    x: c.right ? sched.ix(sched.colX[index] + sched.colW(index) - 1.6) - width : sched.ix(sched.colX[index] + (index === 0 ? 0 : 1.6))
+                    x: c.right ? sched.ix(sched.colX[index] + sched.colW(index) - 1.6) - width : sched.ix(sched.colX[index] + (index === 0 ? sched.pad : 1.6))
                     y: sched.iy(7); height: sched.iy(12) - y
                     verticalAlignment: Text.AlignVCenter
                     text: c.name
@@ -171,7 +197,7 @@ Item {
                             id: cell
                             required property int index
                             readonly property var c: sched.columns[index]
-                            readonly property real fromMm: sched.colX[index] + (index === 0 ? 0 : 1.6)
+                            readonly property real fromMm: sched.colX[index] + (index === 0 ? sched.pad : 1.6)
                             readonly property real toMm: sched.colX[index] + sched.colW(index) - 1.6
                             readonly property bool bar: index === sched.barCol && line.row.share !== undefined
                             Text {
@@ -222,7 +248,7 @@ Item {
             cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
             property point from
             property var start: null
-            onPressed: e => { from = mapToGlobal(e.x, e.y); start = { x: sched.xMm, y: sched.yMm }; keep.stop(); sched.dragged = start }
+            onPressed: e => { from = mapToGlobal(e.x, e.y); start = { x: Math.round(sched.xMm), y: Math.round(sched.yMm) }; keep.stop(); sched.dragged = start }
             onPositionChanged: e => {
                 if (!pressed || !start) return
                 const p = mapToGlobal(e.x, e.y)
