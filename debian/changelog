@@ -1,3 +1,19 @@
+draftpaper (0.7.1) unstable; urgency=medium
+
+  * The revisions take their turn in the title block's column with the
+    schedule of equipment and the process schedule (Mod+i: equipment,
+    processes, revisions, none), as many commits as fit; with [title]
+    revisions = true by themselves when nothing else is chosen. Nothing is
+    drawn above the title block any more.
+  * The schedules sit 6 mm in from the frame's top and right lines, with no
+    margin of their own; one with more rows than fit fills the column to
+    6 mm above the title block.
+  * `draftpaper apply` reloads an application (tmux, Alacritty, Neovim,
+    Emacs, X, GTK's settings) only when its theme file changed: an apply
+    that changes nothing redraws nothing.
+
+ -- 0x64616e6e <daniel@este.systems>  Sun, 18 Oct 2026 21:35:55 +0300
+
 draftpaper (0.7.0) unstable; urgency=medium
 
   * Settings (#36): Displays, Text, Sheet, Rulers, Session, Input and

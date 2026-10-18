@@ -3,7 +3,10 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.1 (2026-10-18)
+
+The revisions in the title block's column, the schedules off the frame, and `draftpaper apply` quiet when
+nothing changed.
 
 - **The revisions take their turn in the title block's column** with the schedule of equipment and the
   process schedule (Mod+i: equipment, processes, revisions, none), drawn as they are, as many commits
