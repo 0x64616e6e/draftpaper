@@ -3,7 +3,11 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.6.0 (2026-10-18)
+
+The sheet keeps a drawing's conventions: a scale bar true to size, a revision block, hatching, a key
+plan; rulers to measure and draw by in true millimetres; and a website with theme and wallpaper
+generators.
 
 - **Rulers** (#48, Mod+r): a horizontal and a vertical ruler, frame line to frame line, crossing at a zero
   point that slides anywhere on the sheet, one piece where they cross, both edges graduated in true

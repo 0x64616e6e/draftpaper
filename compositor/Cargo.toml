@@ -1,6 +1,6 @@
 [package]
 name = "draftpaper-compositor"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 license = "MIT"
 description = "Draftpaper as a Wayland compositor (milestone M0: nested prototype)"
