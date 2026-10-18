@@ -206,7 +206,7 @@ position = [0, 0]          # logical pixels
 Mod+r brings out two rulers, as clear acrylic on the drawing: a horizontal and a vertical one, each
 from the frame's line to the frame's line, crossing at a point that slides anywhere on the sheet. Where
 they cross they are one piece. Both long edges of each are graduated in true millimetres (the sheet's
-own, from the display's measured size), numbered every 10 by one edge only (the top, the left), counted
+own, from the display's measured size), numbered every 10 by one edge only (the top, the right), counted
 out both ways from the ruler's own zero: a red line across it that slides along the ruler, so you measure
 from wherever you set it, on both sides of it at once, clear of the crossing. A very thin line runs down
 the middle of each. While they are out, the pointer is held to their millimetres: it moves a whole

@@ -1,9 +1,9 @@
 // One ruler's graduations (Rulers.qml): along both its long edges a tick every millimetre, longer at five,
-// longest at ten and numbered there by one edge only (the top, the left; read along the ruler), counted
-// out both ways from the ruler's own zero (`zero`, whole millimetres from the crossing at its middle);
-// none where the other ruler crosses (`clearance` either side of the crossing); and a very thin line down
-// its middle. `along`: the ruler runs across (its length is the width); else down. Drawn again only when
-// these change: the ruler is moved and turned as a whole.
+// longest at ten and numbered there by one edge only (`far`: the bottom, the right; else the top, the left;
+// read along the ruler), counted out both ways from the ruler's own zero (`zero`, whole millimetres from the
+// crossing at its middle); none where the other ruler crosses (`clearance` either side of the crossing);
+// and a very thin line down its middle. `along`: the ruler runs across (its length is the width); else
+// down. Drawn again only when these change: the ruler is moved and turned as a whole.
 import QtQuick
 
 Canvas {
@@ -14,6 +14,7 @@ Canvas {
     property real clearance: 0
     property bool along: true
     property int zero: 0                // the ruler's zero, whole millimetres from the crossing at its middle
+    property bool far: false            // the numbers by the far edge (the bottom, the right), else the near one
     transformOrigin: Item.Center
     renderStrategy: Canvas.Cooperative
 
@@ -21,6 +22,7 @@ Canvas {
     onInkChanged: requestPaint()
     onClearanceChanged: requestPaint()
     onZeroChanged: requestPaint()
+    onFarChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
 
@@ -67,11 +69,11 @@ Canvas {
             if (Math.abs(off) <= clearance + 2 * mm) continue
             const p = mid + off, label = String(Math.abs(v))
             if (along) {
-                ctx.fillText(label, p, 6.4 * mm)
+                ctx.fillText(label, p, far ? wide - 6.4 * mm : 6.4 * mm)
             } else {
                 // read along the ruler, as on a ruler laid down the sheet
                 ctx.save()
-                ctx.translate(6.4 * mm, p)
+                ctx.translate(far ? wide - 6.4 * mm : 6.4 * mm, p)
                 ctx.rotate(-Math.PI / 2)
                 ctx.fillText(label, 0, 0)
                 ctx.restore()

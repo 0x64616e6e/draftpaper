@@ -17,7 +17,7 @@ What changed in each release, newest first. The Debian package's own record, wit
   The panel by the crossing hides (p, or its ×) when it covers the angles, a tab bringing it back. Each
   ruler has its own zero, a red line that slides along it (drag it, double-click the ruler, Ctrl+arrows),
   the graduations counting from it both ways: measured from anywhere, clear of the crossing. Ticks on
-  both edges, numbers by one only (the top, the left).
+  both edges, numbers by one only: the top, the right, as measuring is done in the top right quadrant.
 - **A key plan** with several screens (#47), as a drawing set shows which part of the whole a sheet is: in
   the bottom margin left of the scale bar, every screen's outline in their arrangement, this one filled,
   the focused one twice as heavy; drawn by the compositor on whole pixels. Left of it a north mark, a

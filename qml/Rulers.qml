@@ -62,6 +62,10 @@ PanelWindow {
     // graduations count from there both ways, so the crossing does not hide what is measured near it
     property int zeroH: 0
     property int zeroV: 0
+    // the edge each ruler is numbered by: the measuring is done in the top right quadrant, so the
+    // horizontal ruler's top and the vertical one's right (to be the settings', #36)
+    property bool numbersHFar: false
+    property bool numbersVFar: true
     readonly property real zx: frameX + zeroX * mm
     readonly property real zy: frameY + zeroY * mm
     readonly property real wide: 16 * mm  // a ruler's width
@@ -189,12 +193,12 @@ PanelWindow {
         Graduations {
             x: sheet.cx - rulers.reach; y: sheet.cy - rulers.wide / 2; width: 2 * rulers.reach; height: rulers.wide
             rotation: -rulers.tiltH
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH; far: rulers.numbersHFar
         }
         Graduations {
             x: sheet.cx - rulers.wide / 2; y: sheet.cy - rulers.reach; width: rulers.wide; height: 2 * rulers.reach
             rotation: -rulers.tiltV
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV; far: rulers.numbersVFar
         }
 
         // dragging a ruler moves the zero; with Ctrl, turns that ruler about it
@@ -245,8 +249,9 @@ PanelWindow {
                     height: zeroMark.along ? rulers.wide : 2 * rulers.hair
                     color: rulers.mark
                 }
-                Text {          // 0, by the numbered edge (the top, the left)
-                    readonly property real edge: 6.4 * rulers.mm
+                Text {          // 0, by the numbered edge
+                    readonly property bool far: zeroMark.along ? rulers.numbersHFar : rulers.numbersVFar
+                    readonly property real edge: far ? rulers.wide - 6.4 * rulers.mm : 6.4 * rulers.mm
                     x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm : edge - width / 2
                     y: zeroMark.along ? edge - height / 2 : rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm
                     text: "0"
