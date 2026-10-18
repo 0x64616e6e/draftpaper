@@ -3,6 +3,12 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- `draftpaper apply` reloads an application (tmux, Alacritty, Neovim, Emacs, X, GTK's settings) only when
+  its theme file changed, each file written once with [text]'s fonts in it: an apply that changes
+  nothing redraws nothing (tmux was re-sourced, and Alacritty reloaded around it, on every one).
+
 ## 0.7.0 (2026-10-18)
 
 One settings tool for the whole desktop, the machine and its load drawn on the sheet, colour correction,

@@ -92,22 +92,58 @@ pub fn shown(p: &Paths, cfg: &Map<String, Value>) -> Map<String, Value> {
     t
 }
 
-/// Replace (or, with None, remove) the block between `{c} draftpaper text begin` and `{c} draftpaper text
-/// end` at the end of the file at `path`, `c` being the file's comment; a file that is not there is left so.
-fn block(path: &Path, c: &str, text: Option<&str>) {
-    if !path.exists() {
-        return;
-    }
-    let old = util::read(path);
+/// `old` with its block between `{c} draftpaper text begin` and `{c} draftpaper text end` (at its end)
+/// replaced by `text`, or taken out with None.
+pub fn with_block(old: &str, c: &str, text: Option<&str>) -> String {
     let (begin, end) = (format!("{c} draftpaper text begin: [text] in config.toml"), format!("{c} draftpaper text end"));
     let re = Regex::new(&format!(r"(?s)\n*{}.*?{}\n?", regex::escape(&begin), regex::escape(&end))).unwrap();
-    let rest = re.replace_all(&old, "").trim_end_matches('\n').to_string() + "\n";
-    let new = match text {
+    let rest = re.replace_all(old, "").trim_end_matches('\n').to_string() + "\n";
+    match text {
         Some(t) => format!("{rest}\n{begin}\n{}\n{end}\n", t.trim_end_matches('\n')),
         None => rest,
-    };
-    if new != old {
-        util::write(path, &new);
+    }
+}
+
+/// The file at `path` with its block as `text`; a file that is not there is left so. Whether it changed.
+fn block(path: &Path, c: &str, text: Option<&str>) -> bool {
+    if !path.exists() {
+        return false;
+    }
+    let old = util::read(path);
+    let new = with_block(&old, c, text);
+    new != old && util::write(path, &new)
+}
+
+/// What [text] puts at the end of the files Draftpaper writes for the terminals and Emacs (apps.rs writes
+/// them with it, so a full apply changes them once, and only when something did).
+#[derive(Default)]
+pub struct Blocks {
+    pub alacritty: Option<String>,
+    pub foot: Option<String>,
+    pub emacs: Option<String>,
+}
+
+pub fn blocks(p: &Paths, cfg: &Map<String, Value>) -> Blocks {
+    let (iface, mono) = faces(cfg);
+    if iface == Face::default() && mono == Face::default() {
+        return Blocks::default();
+    }
+    let b = before(p);
+    let was = b["monospace-font-name"].as_str().and_then(parse_gtk).unwrap_or(("Monospace".into(), 11.0));
+    let m = (mono.family.clone().unwrap_or(was.0), mono.size.unwrap_or(was.1));
+    let mut alacritty = String::from("[font]\n");
+    if let Some(s) = mono.size {
+        alacritty += &format!("size = {:.1}\n", s);
+    }
+    if let Some(f) = &mono.family {
+        alacritty += &format!("normal = {{ family = \"{f}\" }}\n");
+    }
+    let face = mono.family.clone().or(mono.size.map(|_| m.0.clone()));
+    Blocks {
+        alacritty: (alacritty.lines().count() > 1).then_some(alacritty),
+        foot: face.map(|f| format!("[main]\nfont={f}:size={}", pt(m.1))),
+        emacs: (mono.family.is_some() || mono.size.is_some())
+            .then(|| format!("(set-face-attribute 'default nil :family \"{}\" :height {})", m.0, (m.1 * 10.0).round() as i64)),
     }
 }
 
@@ -147,7 +183,11 @@ pub fn apply(p: &Paths, cfg: &Map<String, Value>) {
         for (k, v) in [("font-name", &i), ("monospace-font-name", &m)] {
             let value = if none { b[k].as_str().unwrap_or("").to_string() } else { format!("{} {}", v.0, pt(v.1)) };
             if !value.is_empty() {
-                util::run(&["gsettings", "set", IFACE, k, &value], 10);
+                // only when different: set again, every application restyles
+                let now = util::run(&["gsettings", "get", IFACE, k], 10).unwrap_or_default();
+                if now.trim().trim_matches('\'') != value {
+                    util::run(&["gsettings", "set", IFACE, k, &value], 10);
+                }
             }
         }
     }
@@ -166,33 +206,19 @@ pub fn apply(p: &Paths, cfg: &Map<String, Value>) {
             }
         }
     }
-    let face = |f: &Face| f.family.clone().or(f.size.map(|_| m.0.clone()));
-    if on("alacritty") {
-        let text = (!none).then(|| {
-            let mut t = String::from("[font]\n");
-            if let Some(s) = mono.size {
-                t += &format!("size = {:.1}\n", s);
-            }
-            if let Some(f) = &mono.family {
-                t += &format!("normal = {{ family = \"{f}\" }}\n");
-            }
-            t
-        });
-        block(&conf.join("alacritty/draftpaper.toml"), "#", text.as_deref().filter(|t| t.lines().count() > 1));
+    // the terminals and Emacs: their blocks, and a reload only where one changed
+    let bl = blocks(p, cfg);
+    if on("alacritty") && block(&conf.join("alacritty/draftpaper.toml"), "#", bl.alacritty.as_deref()) {
         let main = conf.join("alacritty/alacritty.toml");
         if main.exists() {
             let _ = std::fs::File::options().append(true).open(&main).and_then(|f| f.set_modified(std::time::SystemTime::now()));
         }
     }
     if on("foot") {
-        let text = face(&mono).map(|f| format!("[main]\nfont={f}:size={}", pt(m.1)));
-        block(&conf.join("foot/draftpaper.ini"), "#", if none { None } else { text.as_deref() });
+        block(&conf.join("foot/draftpaper.ini"), "#", bl.foot.as_deref());
     }
-    if on("emacs") {
-        let set = (!none && (mono.family.is_some() || mono.size.is_some()))
-            .then(|| format!("(set-face-attribute 'default nil :family \"{}\" :height {})", m.0, (m.1 * 10.0).round() as i64));
-        block(&conf.join("draftpaper/emacs/draftpaper-theme.el"), ";;", set.as_deref());
-        if let Some(s) = &set {
+    if on("emacs") && block(&conf.join("draftpaper/emacs/draftpaper-theme.el"), ";;", bl.emacs.as_deref()) {
+        if let Some(s) = &bl.emacs {
             util::run(&["emacsclient", "-q", "-e", s], 10);
         }
     }

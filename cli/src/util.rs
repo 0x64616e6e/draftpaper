@@ -92,16 +92,18 @@ pub fn run(cmd: &[&str], secs: u64) -> Option<String> {
 }
 
 /// Write a file (its directory made), only when it changes.
-pub fn write(path: &Path, text: &str) {
+pub fn write(path: &Path, text: &str) -> bool {
     if std::fs::read_to_string(path).is_ok_and(|old| old == text) {
-        return;
+        return false;
     }
     if let Some(d) = path.parent() {
         let _ = std::fs::create_dir_all(d);
     }
     if let Err(e) = std::fs::write(path, text) {
         eprintln!("draftpaper: {}: {e}", path.display());
+        return false;
     }
+    true
 }
 
 /// Write a file whole by renaming a sibling into place, so a reader never sees half of it.

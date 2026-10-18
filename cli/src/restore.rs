@@ -109,11 +109,12 @@ pub fn apply(p: &Paths, cfg: &Map<String, Value>) {
     // tmux
     let tconf = conf.join("tmux/draftpaper-session.conf");
     if on("tmux") && util::which("tmux").is_some() {
-        util::write(&tconf, &util::read(&p.root.join("apps/tmux-session.conf")));
+        let changed = util::write(&tconf, &util::read(&p.root.join("apps/tmux-session.conf")));
         let main = if conf.join("tmux/tmux.conf").exists() || !home.join(".tmux.conf").exists() { conf.join("tmux/tmux.conf") } else { home.join(".tmux.conf") };
         ensure_line(&main, "source-file -q ~/.config/tmux/draftpaper-session.conf   # sessions kept across a reboot (draftpaper apply)", "draftpaper-session.conf", false);
-        // a server running already keeps its sessions from now on
-        if std::env::var_os("TMUX").is_some() || util::run(&["tmux", "has-session"], 5).is_some() {
+        // a server running already keeps its sessions from now on (when the file is new or changed: else
+        // the server read it as it started)
+        if changed && (std::env::var_os("TMUX").is_some() || util::run(&["tmux", "has-session"], 5).is_some()) {
             util::run(&["tmux", "source-file", &tconf.display().to_string()], 10);
         }
     } else {
