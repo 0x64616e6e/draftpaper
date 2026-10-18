@@ -5,6 +5,10 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+A display's settings follow it: `[outputs."ASUS MB166C"]`, by its model, before `[outputs.DP-3]`, by its
+port; the Displays page writes them by model (by connector for a panel's code, or two displays of one
+model). `config set` takes quoted names (`outputs."ASUS MB166C".scale=1`) and writes them quoted.
+
 The machine schedule and the plotted load (#49): what neofetch and top tell, drawn as the sheet draws.
 On an empty workspace, a ruled schedule of equipment (the machine, processor, graphics, memory, storage,
 system, desktop, each display and the sheet; `draftpaper machine`) and, below it, the processor's load,

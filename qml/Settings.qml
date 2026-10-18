@@ -312,6 +312,7 @@ PanelWindow {
     // ---- the Displays page: built when the settings open, from the displays as they are then ----
     property var dispOutputs: []        // the outputs then: the built-in panel first, then left to right
     property var dispPlace: ({})        // each further display: { side: right|left|above|below, align: start|centre|end }
+    property var dispKeys: ({})         // each display's table in config.toml: { table, path, label }
     property var dispRows: []
     readonly property var scales: [[1, "1"], [1.25, "1.25"], [1.5, "1.5"], [1.75, "1.75"], [2, "2"]]
     function buildDisplays() {
@@ -329,11 +330,23 @@ PanelWindow {
             const align = Math.abs(a0 - b0) <= 1 ? "start" : Math.abs(a1 - b1) <= 1 ? "end" : "centre"
             place[o.name] = { side: side, align: align }
         }
+        // each display's table: by its model, so its settings follow it from port to port, where the model
+        // reads as a name and no other display here has it; else by its connector
+        const readable = m => !!m && m !== "Unknown" && !/^0x/.test(m)
+        const keys = {}
+        for (const o of outs) {
+            const unique = outs.filter(p => p.model === o.model).length === 1
+            const byModel = readable(o.model) && unique
+            keys[o.name] = { table: "outputs." + (byModel ? "\"" + o.model.replace(/"/g, "\\\"") + "\"" : o.name),
+                             path: ["outputs", byModel ? o.model : o.name], label: byModel ? o.model : o.name }
+        }
+        dispKeys = keys
         dispOutputs = outs
         dispPlace = place
         const rows = []
         outs.forEach((o, i) => {
-            rows.push({ key: "outputs." + o.name + ".scale", name: o.name + " · SCALE", def: o.scale, noteOf: "scale", output: o.name,
+            const k = keys[o.name]
+            rows.push({ key: k.table + ".scale", path: k.path.concat(["scale"]), name: k.label + " · SCALE", def: o.scale, noteOf: "scale", output: o.name,
                         options: scales })
             if (i === 0) return
             const p = outs[i - 1].name
@@ -380,7 +393,7 @@ PanelWindow {
     function dispWrite() {
         if (dispOutputs.length < 2) return
         const v = Object.assign({}, cfgVals)
-        for (const d of dispLayout()) v["outputs." + d.name + ".position"] = [d.x, d.y]
+        for (const d of dispLayout()) v[dispKeys[d.name].table + ".position"] = [d.x, d.y]
         cfgVals = v
     }
     function rowNote(row) {
@@ -415,7 +428,7 @@ PanelWindow {
     function cfgRaw(row) {
         if (row.key in cfgVals) return cfgVals[row.key] === "" ? row.def : cfgVals[row.key]
         let v = cfg
-        for (const part of row.key.split(".")) v = (v && typeof v === "object") ? v[part] : undefined
+        for (const part of (row.path || row.key.split("."))) v = (v && typeof v === "object") ? v[part] : undefined
         return v === undefined || v === null ? row.def : v
     }
     // ---- a note's place on the sheet: a zone ("B2"), "auto", or millimetres where it was dragged ----

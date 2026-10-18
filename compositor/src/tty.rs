@@ -412,7 +412,7 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         let (phys_w, phys_h) = info.size().unwrap_or((0, 0));
         let name = connector_name(&info);
         let edid = Edid::read(device, info.handle());
-        let settings = output_settings(&name);
+        let settings = output_settings(&name, &edid.model);
         let mm = settings.mm.unwrap_or(if phys_w > 0 { w as f32 / phys_w as f32 } else { FALLBACK_MM });
         let scale = settings.scale.unwrap_or(1.0);
         let auto = {
@@ -857,13 +857,13 @@ fn configure_with(
                 output.change_current_state(Some(wl), None, None, None);
                 // millimetres in the new mode's pixels (unless config.toml fixes them)
                 let (phys_w, _) = info.size().unwrap_or((0, 0));
-                let mm = output_settings(&change.name).mm.unwrap_or(if phys_w > 0 { wl.size.w as f32 / phys_w as f32 } else { FALLBACK_MM });
+                let mm = output_settings(&change.name, &output.physical_properties().model).mm.unwrap_or(if phys_w > 0 { wl.size.w as f32 / phys_w as f32 } else { FALLBACK_MM });
                 if let Some(sheet) = output.user_data().get::<crate::render::OutputSheet>() {
                     sheet.0.borrow_mut().mm = mm;
                 }
                 if let Some(screen) = data.screens.iter_mut().find(|s| s.output == output) {
                     screen.phys_mm = mm as f64;
-                    screen.measured = output_settings(&change.name).mm.is_some() || phys_w > 0;
+                    screen.measured = output_settings(&change.name, &output.physical_properties().model).mm.is_some() || phys_w > 0;
                 }
                 eprintln!("draftpaper: output {} mode {}x{}@{:.3}", change.name, wl.size.w, wl.size.h, wl.refresh as f64 / 1000.0);
             }

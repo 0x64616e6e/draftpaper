@@ -248,8 +248,11 @@ millimetres), `turn` and `turn_shift` (degrees), `numbers_h` (`"top"` or `"botto
 and `width` (mm, 16 by default).
 ## Displays
 
-A display gets its preferred mode when it is plugged in, right of the others, unless
-`[outputs.<name>]` in config.toml gives its scale and position (`wlr-randr` lists the names).
+A display gets its preferred mode when it is plugged in, right of the others, unless config.toml gives
+its scale and position: by its model, `[outputs."ASUS MB166C"]`, so the settings follow the display from
+port to port, or by its connector, `[outputs.DP-3]` (`wlr-randr` lists both), for whatever is plugged into
+that port without a table of its own. A panel whose model is a code (`0x1488`) goes by its connector, and
+so do two displays of one model.
 The settings' Displays page (Mod+t, then Tab) draws them as arranged, to scale, and sets each one's scale
 and which side of the one before it it sits on, aligned by its start, its centre or its end; it writes
 every display's position at once. Escape puts them back as they were.

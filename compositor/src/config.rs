@@ -404,7 +404,7 @@ impl crate::state::Draftpaper {
         }
         // output scale and position
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
-            let settings = crate::theme::output_settings(&output.name());
+            let settings = crate::theme::output_settings(&output.name(), &output.physical_properties().model);
             // a key taken out since the last read (the settings' Escape): the output as it would be without
             // config.toml; one never set leaves the output as it is (wlr-randr's arrangement, say)
             let plug = output.user_data().get::<crate::theme::PlugDefaults>().copied();

@@ -59,6 +59,8 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
     data.dmabuf_global = Some(global);
 
     let densities: Vec<f32> = std::env::var("DRAFTPAPER_MM").ok().map(|v| v.split(',').filter_map(|m| m.parse().ok()).collect()).unwrap_or_default();
+    // DRAFTPAPER_MODELS="0x1488,ASUS MB166C": the displays' models (their settings follow them, theme.rs)
+    let models: Vec<String> = std::env::var("DRAFTPAPER_MODELS").ok().map(|v| v.split(',').map(String::from).collect()).unwrap_or_default();
     let mut renderer = renderer;
     let mut outputs = Vec::new();
     let mut x = 0;
@@ -71,7 +73,7 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
                 size: ((size.0 as f32 / mm).round() as i32, (size.1 as f32 / mm).round() as i32).into(),
                 subpixel: Subpixel::Unknown,
                 make: "Draftpaper".into(),
-                model: "Headless".into(),
+                model: models.get(i).cloned().unwrap_or_else(|| "Headless".into()),
             },
         );
         let _global = output.create_global::<Draftpaper>(&data.display_handle);

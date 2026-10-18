@@ -199,9 +199,23 @@ pub struct OutputSettings {
     pub mm: Option<f32>,
 }
 
-pub fn output_settings(name: &str) -> OutputSettings {
+/// Per-output settings from config.toml, by the display's model (`[outputs."ASUS MB166C"]`: they follow the
+/// display from port to port) or else by its connector (`[outputs.DP-3]`).
+pub fn output_settings(name: &str, model: &str) -> OutputSettings {
     let config = read(&home().join(".config/draftpaper/config.toml")).unwrap_or_default();
-    let Some(o) = config.get("outputs").and_then(|v| v.get(name)).and_then(|v| v.as_table()) else {
+    settings_in(&config, name, model)
+}
+
+/// A model name to key settings by: an EDID's display name, not a panel's code ("0x1488") or nothing.
+pub fn readable_model(model: &str) -> bool {
+    let m = model.trim();
+    !m.is_empty() && m != "Unknown" && !m.starts_with("0x")
+}
+
+fn settings_in(config: &toml::Table, name: &str, model: &str) -> OutputSettings {
+    let outputs = config.get("outputs").and_then(|v| v.as_table());
+    let by_model = outputs.filter(|_| readable_model(model)).and_then(|t| t.get(model.trim()));
+    let Some(o) = by_model.or_else(|| outputs.and_then(|t| t.get(name))).and_then(|v| v.as_table()) else {
         return OutputSettings::default();
     };
     let num = |v: &toml::Value| v.as_float().or_else(|| v.as_integer().map(|i| i as f64));
@@ -211,5 +225,27 @@ pub fn output_settings(name: &str) -> OutputSettings {
             Some((a.first().and_then(num)? as i32, a.get(1).and_then(num)? as i32))
         }),
         mm: o.get("mm").and_then(num).map(|m| m as f32),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CONFIG: &str = "[outputs.eDP-1]\nscale = 1.5\n[outputs.DP-3]\nscale = 2\nposition = [1280, 0]\n[outputs.\"ASUS MB166C\"]\nscale = 1\n";
+
+    #[test]
+    fn settings_follow_the_display() {
+        let c: toml::Table = CONFIG.parse().unwrap();
+        // the Asus on DP-3: its own table, wherever it is plugged in
+        assert_eq!(settings_in(&c, "DP-3", "ASUS MB166C").scale, Some(1.0));
+        assert_eq!(settings_in(&c, "HDMI-A-1", "ASUS MB166C").scale, Some(1.0));
+        // another display on DP-3, with no table of its own: the port's
+        assert_eq!(settings_in(&c, "DP-3", "LEN L28u-30").scale, Some(2.0));
+        assert_eq!(settings_in(&c, "DP-3", "LEN L28u-30").position, Some((1280, 0)));
+        // a panel's code is no name: by its connector
+        assert_eq!(settings_in(&c, "eDP-1", "0x1488").scale, Some(1.5));
+        assert_eq!(settings_in(&c, "HDMI-A-1", "Unknown").scale, None);
+        assert!(!readable_model("0x1488") && !readable_model("") && readable_model("ASUS MB166C"));
     }
 }

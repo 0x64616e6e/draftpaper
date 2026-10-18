@@ -204,10 +204,61 @@ fn bare_key(key: &str) -> String {
     }
 }
 
-/// Is `line` the header of table `name` (`[name]`, a comment after it allowed; not `[[name]]`)?
+/// A dotted key's parts: `outputs."ASUS MB166C".scale` → outputs, ASUS MB166C, scale (a quoted part may
+/// hold dots and spaces); None when a quote is not closed.
+pub fn key_parts(s: &str) -> Option<Vec<String>> {
+    let mut parts = Vec::new();
+    let mut chars = s.trim().chars().peekable();
+    loop {
+        while chars.peek().is_some_and(|c| c.is_whitespace()) {
+            chars.next();
+        }
+        let mut part = String::new();
+        if chars.peek() == Some(&'"') {
+            chars.next();
+            loop {
+                match chars.next()? {
+                    '\\' => part.push(chars.next()?),
+                    '"' => break,
+                    c => part.push(c),
+                }
+            }
+            while chars.peek().is_some_and(|c| c.is_whitespace()) {
+                chars.next();
+            }
+        } else {
+            while let Some(&c) = chars.peek() {
+                if c == '.' {
+                    break;
+                }
+                part.push(c);
+                chars.next();
+            }
+            part = part.trim().to_string();
+        }
+        parts.push(part);
+        match chars.next() {
+            Some('.') => continue,
+            None => return Some(parts),
+            Some(_) => return None,
+        }
+    }
+}
+
+/// Is `line` the header of table `name` (`[name]`, a comment after it allowed; not `[[name]]`)? Compared
+/// part by part, so spaces and quotes as written do not matter.
 fn is_header(line: &str, name: &str) -> bool {
     let t = line.trim();
-    !t.starts_with("[[") && t.split('#').next().is_some_and(|h| h.trim() == format!("[{name}]"))
+    if t.starts_with("[[") || !t.starts_with('[') {
+        return false;
+    }
+    let Some(end) = t.find(']') else { return false };
+    key_parts(&t[1..end]).is_some_and(|h| Some(h) == key_parts(name))
+}
+
+/// A table's name as a header writes it: each part bare when it can be, quoted otherwise.
+fn table_name(parts: &[String]) -> String {
+    parts.iter().map(|p| bare_key(p)).collect::<Vec<_>>().join(".")
 }
 
 /// `key = raw` set inside table [table] (or removed, with None), the rest of the file as it was: the key's
@@ -310,7 +361,11 @@ pub fn set_pairs(p: &Paths, pairs: &[&str]) {
     let mut text = util::read(&p.config);
     for pair in pairs {
         let Some((key, v)) = pair.split_once('=') else { util::die(format!("draftpaper: config set KEY=VALUE ..., not {pair}")) };
-        let (table, key) = key.rsplit_once('.').unwrap_or(("", key));
+        // the table: the parts before the last (quoted where they must be: outputs."ASUS MB166C")
+        let Some(mut parts) = key_parts(key) else { util::die(format!("draftpaper: config set: an unclosed quote in {key}")) };
+        let key = parts.pop().unwrap_or_default();
+        let table = table_name(&parts);
+        let (table, key) = (table.as_str(), key.as_str());
         if key.is_empty() {
             util::die(format!("draftpaper: config set: no key in {pair}"));
         }
@@ -410,6 +465,25 @@ mod tests {
         let f = "# [idle]\n# lock_after = 0\nwallpaper = \"a\"\n[apps]\n";
         let t = set_in(f, "idle", "lock_after", Some("5"));
         assert!(t.starts_with("# [idle]\n") && t.ends_with("[idle]\nlock_after = 5\n"), "{t}");
+    }
+
+    #[test]
+    fn quoted_names() {
+        assert_eq!(key_parts("outputs.\"ASUS MB166C\".scale"), Some(vec!["outputs".into(), "ASUS MB166C".into(), "scale".into()]));
+        assert_eq!(key_parts("margin"), Some(vec!["margin".into()]));
+        assert_eq!(key_parts("outputs.\"unclosed"), None);
+        let parts = vec!["outputs".to_string(), "ASUS MB166C".to_string()];
+        assert_eq!(table_name(&parts), "outputs.\"ASUS MB166C\"");
+        // a new table, quoted; set again in its place
+        let t = set_in(FILE, &table_name(&parts), "scale", Some("1"));
+        assert!(t.ends_with("[outputs.\"ASUS MB166C\"]\nscale = 1\n"), "{t}");
+        let t = set_in(&t, &table_name(&parts), "scale", Some("1.25"));
+        assert_eq!(t.matches("ASUS MB166C").count(), 1);
+        assert!(t.contains("[outputs.\"ASUS MB166C\"]\nscale = 1.25\n"), "{t}");
+        assert!(t.parse::<toml::Table>().is_ok());
+        // a header written with spaces is the same table
+        assert!(is_header("[ outputs . \"ASUS MB166C\" ]   # the Asus", "outputs.\"ASUS MB166C\""));
+        assert!(!is_header("[[outputs]]", "outputs"));
     }
 
     #[test]
