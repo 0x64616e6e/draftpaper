@@ -1,9 +1,9 @@
 // One ruler's graduations (Rulers.qml): along both its long edges a tick every millimetre, longer at five,
-// longest and numbered at ten (read along the ruler), counted out both ways from the ruler's own zero
-// (`zero`, whole millimetres from the crossing at its middle); none where the other ruler crosses
-// (`clearance` either side of the crossing); and a very thin line down its middle. `along`: the ruler runs
-// across (its length is the width); else down. Drawn again only when these change: the ruler is moved and
-// turned as a whole.
+// longest at ten and numbered there by one edge only (the top, the left; read along the ruler), counted
+// out both ways from the ruler's own zero (`zero`, whole millimetres from the crossing at its middle);
+// none where the other ruler crosses (`clearance` either side of the crossing); and a very thin line down
+// its middle. `along`: the ruler runs across (its length is the width); else down. Drawn again only when
+// these change: the ruler is moved and turned as a whole.
 import QtQuick
 
 Canvas {
@@ -68,16 +68,13 @@ Canvas {
             const p = mid + off, label = String(Math.abs(v))
             if (along) {
                 ctx.fillText(label, p, 6.4 * mm)
-                ctx.fillText(label, p, wide - 6.4 * mm)
             } else {
-                // read along the ruler, as on a ruler laid down the sheet: two upright columns would not fit
-                for (const at of [6.4 * mm, wide - 6.4 * mm]) {
-                    ctx.save()
-                    ctx.translate(at, p)
-                    ctx.rotate(-Math.PI / 2)
-                    ctx.fillText(label, 0, 0)
-                    ctx.restore()
-                }
+                // read along the ruler, as on a ruler laid down the sheet
+                ctx.save()
+                ctx.translate(6.4 * mm, p)
+                ctx.rotate(-Math.PI / 2)
+                ctx.fillText(label, 0, 0)
+                ctx.restore()
             }
         }
     }

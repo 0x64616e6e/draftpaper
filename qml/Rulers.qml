@@ -220,7 +220,7 @@ PanelWindow {
             onDoubleClicked: e => rulers.zeroV = Math.round((e.y - rulers.reach) / rulers.mm)
         }
 
-        // each ruler's zero: a line across it in the alert colour, 0 by both edges; dragged along the ruler
+        // each ruler's zero: a line across it in the alert colour, 0 by its numbered edge; dragged along it
         // in whole millimetres (ten with Shift)
         Repeater {
             model: [
@@ -245,17 +245,13 @@ PanelWindow {
                     height: zeroMark.along ? rulers.wide : 2 * rulers.hair
                     color: rulers.mark
                 }
-                Repeater {
-                    model: 2
-                    Text {
-                        required property int index
-                        readonly property real edge: index === 0 ? 6.4 * rulers.mm : rulers.wide - 6.4 * rulers.mm
-                        x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm : edge - width / 2
-                        y: zeroMark.along ? edge - height / 2 : rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm
-                        text: "0"
-                        font.family: Fonts.mono; font.pixelSize: 2.4 * rulers.mm; font.weight: Font.Bold
-                        color: rulers.mark
-                    }
+                Text {          // 0, by the numbered edge (the top, the left)
+                    readonly property real edge: 6.4 * rulers.mm
+                    x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm : edge - width / 2
+                    y: zeroMark.along ? edge - height / 2 : rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm
+                    text: "0"
+                    font.family: Fonts.mono; font.pixelSize: 2.4 * rulers.mm; font.weight: Font.Bold
+                    color: rulers.mark
                 }
                 MouseArea {
                     x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm - width / 2 : 0
