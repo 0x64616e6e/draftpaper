@@ -5,7 +5,8 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
-- The graph is no taller than a zone of the sheet (it could reach 72 mm and looked stretched).
+- The graph is no taller than a zone of the sheet (it could reach 72 mm and looked stretched), and by
+  default fills the bottom row of zones, from its top line to the frame's: within its zone.
 - The shell reads the memory, the CPU line and the backlight in place, and the network comes with
   `draftpaper readings`: no `sh`, `nmcli`, `grep`, `awk`, `ip` or `head` started every second or two.
 - A graph or schedule placed where it does not fit on a display (a place dragged to on a larger one)

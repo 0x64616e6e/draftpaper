@@ -46,8 +46,9 @@ Item {
         const at = theme.sheet.load_at
         const set = Array.isArray(at) && at.length === 2 ? { x: Math.round(at[0]), y: Math.round(at[1]) } : Sheet.zoneCorner(out, at, 7)
         if (set && clear(set.x, set.y)) return set
-        // else the first clear of the bottom left, beside the schedule, under it, the top left
-        const low = frame.h - 7 - maxH
+        // else the first clear of the bottom left (the bottom row of zones, from the first whole millimetre under
+        // its top line down to the frame's: within its zone), beside the schedule, under it, the top left
+        const low = out && out.zones ? Math.ceil(out.zones.height * (out.zones.down - 1) / mm - 1e-6) : frame.h - maxH
         const tries = [{ x: 7, y: low }]
         if (scheduleUp) tries.push({ x: other.xMm + other.wMm + 8, y: low }, { x: 7, y: other.yMm + other.hMm + 8 })
         tries.push({ x: 7, y: 7 })
@@ -60,7 +61,8 @@ Item {
     // to the title block (6 mm clear beside it, 2 above it) and the schedule (4 mm clear), along whichever
     // edge keeps more of it
     function room(x, y) {
-        let right = frame.w - 2, bottom = frame.h - 7
+        // down to the frame's line: its squares fade to nothing before it
+        let right = frame.w - 2, bottom = frame.h
         const obstacles = []
         if (titleMm) obstacles.push({ x: titleMm.x - 6, y: titleMm.y - 2, r: frame.w, b: frame.h })
         if (scheduleUp) obstacles.push({ x: other.xMm - 4, y: other.yMm - 4, r: other.xMm + other.wMm + 4, b: other.yMm + other.hMm + 4 })

@@ -106,9 +106,12 @@ sleep 1.5
 shot "$t/notes.png"
 [ -n "${SHOT:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/notes.png"; cp "$t/notes.png" "$SHOT"; }
 fh=$(awk -v h="$(o .frame.height)" -v m="$mmL" 'BEGIN { print int(h / m + 1e-6) }')
-ymid=$(rowAt $((fh - 7 - 22))); x50=$(colAt 50)
+zt=$(awk -v z="$(o .zones.height)" -v n="$(o .zones.down)" -v m="$mmL" 'BEGIN { v = z * (n - 1) / m; c = int(v); if (c < v - 1e-6) c++; print c }')
+ymid=$(rowAt $(( (zt + fh) / 2 ))); x50=$(colAt 50)
 l50=$(lum "$x50" "$ymid"); l49=$(lum "$(colAt 49)" "$ymid"); l51=$(lum "$(colAt 51)" "$ymid")
 ok "the graph's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
+yabove=$(rowAt $((zt - 1))); a50=$(lum "$x50" "$yabove"); a49=$(lum "$(colAt 49)" "$yabove")
+ok "and nothing of it above its zone" "$([ "$a50" -ge $((a49 - 3)) ] && echo within || echo "a line: $a49 $a50")" "within"
 graph toggle load
 ok "again: away" "$(waitlayers load 0)" "0"
 graph toggle temperature
