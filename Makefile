@@ -34,7 +34,7 @@ install: $(COMPOSITOR) $(CLI) $(SHADERS)
 	install -Dm755 compositor/session/draftpaper-greeter $(DESTDIR)$(PREFIX)/bin/draftpaper-greeter
 	install -d $(SHARE)/qml $(SHARE)/themes $(SHARE)/apps
 	# the shell, the themes and the applications' templates
-	install -m644 qml/*.qml $(SHADERS) $(SHARE)/qml/
+	install -m644 qml/*.qml qml/*.js $(SHADERS) $(SHARE)/qml/
 	install -m644 themes/*.toml $(SHARE)/themes/
 	install -m644 apps/* $(SHARE)/apps/
 	# the session: the display manager's entry, the user units, the portals
