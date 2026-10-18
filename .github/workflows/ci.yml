@@ -1,0 +1,62 @@
+# Every push and pull request built and checked on Debian 13, the system Draftpaper is made for: the
+# programs and the shell's shaders (make), the unit tests and the shipped themes against the contrast rules
+# (make check), and the Debian package, kept as an artifact. Rust is rustup's stable, as the README asks
+# ("a recent Rust"): trixie's own is older.
+#
+# Not here: make pixels. Its tests run the compositor headless on a GPU render node (/dev/dri), and the
+# hosted runners have none; they stay a local check before a release.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: debian:trixie
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: The build dependencies (debian/control) and tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential dpkg-dev \
+            debhelper qt6-shader-baker pkg-config libseat-dev libudev-dev libinput-dev libgbm-dev \
+            libdrm-dev libxkbcommon-dev libegl-dev libgles-dev
+      - uses: actions/checkout@v7
+      - name: Rust (rustup, stable)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: The crates and the builds, kept between runs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            cli/target
+            compositor/target
+          key: cargo-${{ hashFiles('cli/Cargo.lock', 'compositor/Cargo.lock') }}
+          restore-keys: cargo-
+      - name: Build (make)
+        run: make
+      - name: Check (make check)
+        run: make check
+      - name: The package (dpkg-buildpackage)
+        run: |
+          dpkg-buildpackage -us -uc -b
+          mkdir -p dist && cp ../draftpaper_*_amd64.deb dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: draftpaper-deb
+          path: dist/*.deb
+          retention-days: 14
