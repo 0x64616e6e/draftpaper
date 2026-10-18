@@ -76,7 +76,7 @@ PanelWindow {
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
-    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["sheet", "SHEET"],
+    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["sheet", "SHEET"], ["rulers", "RULERS"],
                                      ["session", "SESSION"], ["input", "INPUT"], ["idle", "IDLE · LOCK"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
     // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
@@ -98,6 +98,26 @@ PanelWindow {
               options: [[true, "on"], [false, "words only"]] },
             { key: "animations.enabled", name: "MOTION", def: true, note: "parking, workspaces, the settings",
               options: [[true, "on"], [false, "reduced"]] }
+        ],
+        rulers: [
+            { key: "rulers.step", name: "MOVE STEP", def: 1, note: "the crossing, by key or drag; the pointer held to it",
+              options: [[0.5, "0.5 mm"], [1, "1 mm"], [2, "2 mm"]] },
+            { key: "rulers.step_shift", name: "WITH SHIFT", def: 10, note: "",
+              options: [[5, "5 mm"], [10, "10 mm"], [20, "20 mm"]] },
+            { key: "rulers.turn", name: "TURN STEP", def: 1, note: "",
+              options: [[0.5, "0.5°"], [1, "1°"], [5, "5°"]] },
+            { key: "rulers.turn_shift", name: "TURN WITH SHIFT", def: 15, note: "",
+              options: [[10, "10°"], [15, "15°"], [30, "30°"], [45, "45°"]] },
+            { key: "rulers.numbers_h", name: "HORIZONTAL NUMBERED", def: "top", note: "ticks on both edges either way",
+              options: [["top", "top"], ["bottom", "bottom"]] },
+            { key: "rulers.numbers_v", name: "VERTICAL NUMBERED", def: "right", note: "measuring in the top right quadrant",
+              options: [["left", "left"], ["right", "right"]] },
+            { key: "rulers.centre_line", name: "CENTRE LINE", def: true, note: "",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "rulers.hold_pointer", name: "POINTER", def: true, note: "as the rulers come out; s toggles",
+              options: [[true, "held to the steps"], [false, "free"]] },
+            { key: "rulers.width", name: "WIDTH", def: 16, note: "",
+              options: [[12, "12 mm"], [16, "16 mm"], [20, "20 mm"]] }
         ],
         session: [
             { key: "session.restore", name: "RESTORE", def: true, note: "the windows back in their places at login",

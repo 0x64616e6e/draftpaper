@@ -195,6 +195,10 @@ apps = true                # the applications take up their own state (draftpape
                            #   Chromium, Emacs, Neovim, tmux; false: only the windows come back
 skip = ["org.gnome.Calculator"]   # app ids left out (and firefox, chromium, emacs, neovim, tmux)
 
+[rulers]                   # see Rulers; the settings' Rulers page
+step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)
+numbers_h = "top"          # the horizontal ruler numbered by its top or "bottom"; numbers_v "right" or "left"
+
 [outputs.eDP-1]               # when the display is plugged in (see Displays)
 scale = 1.5                # fractional scales work
 position = [0, 0]          # logical pixels
@@ -226,6 +230,11 @@ alignment; `p` (or its ×) hides it when it is in the way of the angles, leaving
 crossing that brings it back. The rulers take clicks only on themselves: the windows around them keep
 theirs.
 
+The steps, the numbered edges and the rest are the settings' Rulers page (Mod+t), or config.toml's
+`[rulers]`: `step` and `step_shift` (the crossing and the pointer, in mm; the zeros move whole
+millimetres), `turn` and `turn_shift` (degrees), `numbers_h` (`"top"` or `"bottom"`), `numbers_v`
+(`"left"` or `"right"`), `centre_line` (true or false), `hold_pointer` (false: free when they come out)
+and `width` (mm, 16 by default).
 ## Displays
 
 A display gets its preferred mode when it is plugged in, right of the others, unless

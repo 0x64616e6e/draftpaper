@@ -14,6 +14,7 @@ Canvas {
     property real clearance: 0
     property bool along: true
     property int zero: 0                // the ruler's zero, whole millimetres from the crossing at its middle
+    property bool centreLine: true      // the very thin line down its middle
     property bool far: false            // the numbers by the far edge (the bottom, the right), else the near one
     transformOrigin: Item.Center
     renderStrategy: Canvas.Cooperative
@@ -23,6 +24,7 @@ Canvas {
     onClearanceChanged: requestPaint()
     onZeroChanged: requestPaint()
     onFarChanged: requestPaint()
+    onCentreLineChanged: requestPaint()
     onWidthChanged: requestPaint()
     onHeightChanged: requestPaint()
 
@@ -35,13 +37,17 @@ Canvas {
         ctx.fillStyle = ink
         ctx.lineWidth = hair
         // the centre line, very thin
-        ctx.globalAlpha = 0.45
-        ctx.beginPath()
-        if (along) { ctx.moveTo(0, wide / 2); ctx.lineTo(len, wide / 2) } else { ctx.moveTo(wide / 2, 0); ctx.lineTo(wide / 2, len) }
-        ctx.stroke()
-        ctx.globalAlpha = 1
+        if (centreLine) {
+            ctx.globalAlpha = 0.45
+            ctx.beginPath()
+            if (along) { ctx.moveTo(0, wide / 2); ctx.lineTo(len, wide / 2) } else { ctx.moveTo(wide / 2, 0); ctx.lineTo(wide / 2, len) }
+            ctx.stroke()
+            ctx.globalAlpha = 1
+        }
         // the ticks on both edges
         ctx.beginPath()
+        // the numbers' line: 6.4 mm in from the edge on a 16 mm ruler, never into the long ticks
+        const numberAt = Math.max(0.4 * wide, 5.6 * mm)
         const most = Math.floor(mid / mm)
         for (let d = -most; d <= most; d++) {
             const off = d * mm
@@ -69,11 +75,11 @@ Canvas {
             if (Math.abs(off) <= clearance + 2 * mm) continue
             const p = mid + off, label = String(Math.abs(v))
             if (along) {
-                ctx.fillText(label, p, far ? wide - 6.4 * mm : 6.4 * mm)
+                ctx.fillText(label, p, far ? wide - numberAt : numberAt)
             } else {
                 // read along the ruler, as on a ruler laid down the sheet
                 ctx.save()
-                ctx.translate(far ? wide - 6.4 * mm : 6.4 * mm, p)
+                ctx.translate(far ? wide - numberAt : numberAt, p)
                 ctx.rotate(-Math.PI / 2)
                 ctx.fillText(label, 0, 0)
                 ctx.restore()

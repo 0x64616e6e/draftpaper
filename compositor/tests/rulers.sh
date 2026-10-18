@@ -13,7 +13,10 @@ cli=$repo/cli/target/release/draftpaper
 check=$repo/compositor/target/release/examples/sheetcheck
 runtime=${XDG_RUNTIME_DIR:?no XDG_RUNTIME_DIR}
 t=$(mktemp -d -p "${XDG_CACHE_HOME:-$HOME/.cache}" draftpaper-rulers.XXXXXX)
-mkdir -p "$t/.config/draftpaper" "$t/Pictures" "$t/run"
+mkdir -p "$t/.config/draftpaper" "$t/Pictures" "$t/run" "$t/bin"
+# idle's service is the user's: left alone when config set applies
+printf '#!/bin/sh\nexit 0\n' > "$t/bin/systemctl"
+chmod +x "$t/bin/systemctl"
 printf 'theme = "softglow"\nmargin = 6\n[apps]\nskip = ["gtk", "qt", "firefox", "x11", "emacs", "alacritty", "foot", "tmux", "neovim"]\n[session]\nrestore = false\napps = false\n' > "$t/.config/draftpaper/config.toml"
 pids=
 trap 'kill $pids 2>/dev/null; rm -rf "$t"' EXIT INT TERM
@@ -28,7 +31,7 @@ until grep -aq "draftpaper: wayland socket" "$t/log" || [ $i -gt 100 ]; do sleep
 wl=$(grep -a "draftpaper: wayland socket" "$t/log" | grep -o "wayland-[0-9]*" | head -1)
 sock=$runtime/draftpaper-$wl.sock
 run() {
-    env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" DRAFTPAPER_BIN="$cli" \
+    env -u DISPLAY PATH="$t/bin:$PATH" HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" DRAFTPAPER_BIN="$cli" \
         DRAFTPAPER_ROOT="$repo" DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" "$@"
 }
 run "$cli" apply > /dev/null
@@ -90,17 +93,17 @@ ipc zeros 0 0
 # (H, V degrees), and somewhere else by the end. The zero: inside the frame's line (26 + 2/1.5 logical
 # pixels in) and 150, 90 mm on, at 6.4/1.5 logical pixels a millimetre
 walk() {
-    h=$1 v=$2
+    h=$1 v=$2 s=${3:-1}
     run "$comp" msg pointer 400 300 > /dev/null
     first=$(pointer)
     bad=0
     for n in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18; do
         run "$comp" msg pointer_by 0.33 0.21 > /dev/null
-        pointer | awk -v h="$h" -v v="$v" '{
+        pointer | awk -v h="$h" -v v="$v" -v s="$s" '{
             mm = 6.4 / 1.5; zx = 26 + 2 / 1.5 + 150 * mm; zy = 26 + 2 / 1.5 + 90 * mm
             pi = atan2(0, -1); ux = cos(h * pi / 180); uy = -sin(h * pi / 180); wx = cos(v * pi / 180); wy = -sin(v * pi / 180)
             det = ux * wy - uy * wx; dx = $1 - zx; dy = $2 - zy
-            a = (dx * wy - dy * wx) / det / mm; b = (ux * dy - uy * dx) / det / mm
+            a = (dx * wy - dy * wx) / det / mm / s; b = (ux * dy - uy * dx) / det / mm / s
             if (a - int(a < 0 ? a - 0.5 : a + 0.5) > 0.01 || int(a < 0 ? a - 0.5 : a + 0.5) - a > 0.01 || b - int(b < 0 ? b - 0.5 : b + 0.5) > 0.01 || int(b < 0 ? b - 0.5 : b + 0.5) - b > 0.01) exit 1
         }' || bad=$((bad + 1))
     done
@@ -110,6 +113,12 @@ ok "level: on whole millimetres every step, and moving" "$(walk 0 90)" "0 moved"
 ipc set 150 90 30 120
 sleep 0.5
 ok "turned to 30° and 120°: on whole millimetres along each, and moving" "$(walk 30 120)" "0 moved"
+# config.toml's [rulers] step = 2 (the settings' Rulers page): the shell tells the compositor, the pointer on
+# even millimetres
+ipc set 150 90 0 90
+run "$cli" config set rulers.step=2 > /dev/null
+sleep 1
+ok "[rulers] step = 2: on even millimetres every step, and moving" "$(walk 0 90 2)" "0 moved"
 # put away: free again
 ipc toggle
 sleep 0.5

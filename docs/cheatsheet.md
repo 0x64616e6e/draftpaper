@@ -92,7 +92,8 @@ chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d
 | Type in the panel's H, V, Enter | Turn a ruler to that angle |
 | p · the panel's × · its tab | Hide the panel by the crossing (a tab stays), or show it |
 
-`draftpaper rulers` does what Mod+r does.
+`draftpaper rulers` does what Mod+r does. The steps, the numbered edges, the centre line, the width and whether the
+pointer is held: the settings' Rulers page, or `[rulers]` in config.toml.
 
 ## Settings (colour scheme, wallpaper, sheet, session, input, idle)
 

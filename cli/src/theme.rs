@@ -248,7 +248,7 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
         "paper": t["paper"], "ink": t["ink"], "inkAlpha": t["sheet"]["pattern_strength"], "alert": t["alert"],
         "strong": t.get("strong").cloned().unwrap_or(json!("#000000")),
         "accent": t["windows"]["focused"],
-        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"),
+        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"), "rulers": get("rulers"),
         "glyphs": truthy(&get("glyphs")),
         // motion in the shell (the settings) follows the compositor's [animations]
         "animations": animations,

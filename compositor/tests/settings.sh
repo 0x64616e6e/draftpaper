@@ -2,8 +2,9 @@
 # make pixels (and alone): the settings' pages of config.toml's rows (issue #36, qml/Settings.qml), headless
 # (nothing on any display). Opened on the Sheet page: the margin stepped from 6 to 8 mm and the revision
 # block turned on reach config.toml a moment later, its comments kept; the compositor takes the margin up
-# (the frame moves in). Escape puts config.toml back as it was, byte for byte. Opened again on Idle · lock:
-# lock after 5 minutes, kept with Enter, is in config.toml and in swayidle's file. The shell loads the
+# (the frame moves in). Escape puts config.toml back as it was, byte for byte. Opened again:
+# the horizontal ruler numbered at the bottom (the Rulers page) and lock after 5 minutes, kept with Enter,
+# are in config.toml, the one in the shell's theme.json, the other in swayidle's file. The shell loads the
 # pages without a QML warning. SHOT=FILE keeps a screenshot of the Sheet page.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
@@ -93,6 +94,12 @@ ok "no mark left" "$(ls "$t/run" | grep -c config.mark)" "0"
 
 ipc toggle
 sleep 1
+ipc page rulers
+sleep 0.3
+ipc row 4
+ipc step 1
+ok "rulers: the horizontal one numbered at the bottom, quoted, in a new [rulers]" "$(waitfor '^numbers_h = "bottom"$')" "1"
+ok "theme.json carries it to the shell" "$(grep -c '"numbers_h": "bottom"' "$t/.cache/draftpaper/theme.json")" "1"
 ipc page idle
 sleep 0.3
 ipc row 1

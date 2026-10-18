@@ -7,7 +7,7 @@
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
 //!   {"request": "sheet", "output": "eDP-1", "merged": {"top": [[7, 9]]}}   cells the shell merged
 //!   {"request": "sheet", "output": "eDP-1", "clear": {"left": [[40, 52]]}}  side spans it letters
-//!   {"request": "rulers", "output": "eDP-1", "zero": [640, 400], "angles": [0, 90], "snap": true}   the rulers out
+//!   {"request": "rulers", "output": "eDP-1", "zero": [640, 400], "angles": [0, 90], "snap": true, "steps": [1, 10]}   the rulers out
 //!   {"request": "rulers"}                                  put away
 //!   {"request": "pointer"}                                 where the pointer is
 //!
@@ -200,7 +200,8 @@ impl Draftpaper {
             }
             "rulers" => {
                 // the shell's rulers (rulers.rs): {"output": NAME, "zero": [X, Y] (logical, from the output's
-                // corner), "angles": [H, V] (degrees from the horizontal), "snap": bool}; without an output,
+                // corner), "angles": [H, V] (degrees from the horizontal), "snap": bool, "steps": [FINE, COARSE] (mm,
+                // 1 and 10 when left out)}; without an output,
                 // put away
                 let Some(name) = request.get("output").and_then(Value::as_str) else {
                     self.rulers = None;
@@ -218,12 +219,14 @@ impl Draftpaper {
                 };
                 let (zero, angles) = (pair("zero")?, pair("angles")?);
                 let snap = request.get("snap").and_then(Value::as_bool).unwrap_or(true);
+                let steps = pair("steps").ok().filter(|s| s.0 > 0.0 && s.1 > 0.0).unwrap_or((1.0, 10.0));
                 self.rulers = Some(crate::rulers::Rulers {
                     output: name.to_string(),
                     zero: (at.x as f64 + zero.0, at.y as f64 + zero.1).into(),
                     angles,
                     mm: screen.mm,
                     snap,
+                    steps,
                 });
                 Ok(Value::Null)
             }

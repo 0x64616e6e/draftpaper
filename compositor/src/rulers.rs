@@ -20,10 +20,12 @@ pub struct Rulers {
     pub mm: f64,
     /// whether the pointer is held to the steps
     pub snap: bool,
+    /// the steps in millimetres: without Shift, and with it (config.toml's [rulers] step, step_shift)
+    pub steps: (f64, f64),
 }
 
 /// `raw` held to the rulers' grid: its offset from the zero point, along each ruler, a whole number of
-/// steps (1 mm, or 10 with `coarse`). Unchanged when the rulers stand (nearly) along one line.
+/// steps (`steps`: 1 mm, or 10 with `coarse`, unless configured). Unchanged when the rulers stand (nearly) along one line.
 pub fn snap(raw: Point<f64, Logical>, r: &Rulers, coarse: bool) -> Point<f64, Logical> {
     let dir = |deg: f64| (deg.to_radians().cos(), -deg.to_radians().sin());
     let (u, w) = (dir(r.angles.0), dir(r.angles.1));
@@ -34,7 +36,7 @@ pub fn snap(raw: Point<f64, Logical>, r: &Rulers, coarse: bool) -> Point<f64, Lo
     let (dx, dy) = (raw.x - r.zero.x, raw.y - r.zero.y);
     let a = (dx * w.1 - dy * w.0) / det;
     let b = (u.0 * dy - u.1 * dx) / det;
-    let step = r.mm * if coarse { 10.0 } else { 1.0 };
+    let step = r.mm * if coarse { r.steps.1 } else { r.steps.0 };
     let (a, b) = ((a / step).round() * step, (b / step).round() * step);
     Point::from((r.zero.x + a * u.0 + b * w.0, r.zero.y + a * u.1 + b * w.1))
 }
@@ -44,7 +46,7 @@ mod tests {
     use super::*;
 
     fn rulers(h: f64, v: f64) -> Rulers {
-        Rulers { output: "x".into(), zero: Point::from((400.0, 300.0)), angles: (h, v), mm: 6.4 / 1.5, snap: true }
+        Rulers { output: "x".into(), zero: Point::from((400.0, 300.0)), angles: (h, v), mm: 6.4 / 1.5, snap: true, steps: (1.0, 10.0) }
     }
 
     /// along each ruler, a whole number of steps from the zero

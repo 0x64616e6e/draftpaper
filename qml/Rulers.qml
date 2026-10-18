@@ -9,7 +9,9 @@
 // between them. A small panel by the crossing says where it and the zeros are, takes the angles typed, and
 // holds the lock and the pointer's steps.
 //
-// The crossing and the zeros move 1 mm a step (10 with Shift), a ruler turns 1° (15° with Shift): by the
+// The crossing moves 1 mm a step (10 with Shift), the zeros whole millimetres, a ruler turns 1° (15° with
+// Shift), unless config.toml's [rulers] says otherwise (step, step_shift, turn, turn_shift; numbers_h top|bottom,
+// numbers_v left|right, centre_line, hold_pointer, width: the settings' Rulers page): by the
 // keys, or dragging (a ruler moves the crossing, with Ctrl turns; a red line slides its zero; a double click
 // puts the zero there). The zeros stay on whole millimetres from the crossing, so the compositor, holding
 // the pointer to the rulers' millimetres while they are out (compositor/src/rulers.rs), counts from the
@@ -62,13 +64,25 @@ PanelWindow {
     // graduations count from there both ways, so the crossing does not hide what is measured near it
     property int zeroH: 0
     property int zeroV: 0
+    // config.toml's [rulers] (the settings' Rulers page), through theme.json
+    readonly property var conf: shell.theme.rulers
+    function setting(k, fallback, lo, hi) { const v = Number(conf[k]); return isFinite(v) && v >= lo && v <= hi ? v : fallback }
+    // the crossing's steps, in mm, without Shift and with it; the compositor holds the pointer to them
+    readonly property real stepFine: setting("step", 1, 0.1, 50)
+    readonly property real stepCoarse: setting("step_shift", 10, 0.1, 200)
+    // the zeros' steps: whole millimetres (the graduations count from them)
+    readonly property int zeroFine: Math.max(1, Math.round(stepFine))
+    readonly property int zeroCoarse: Math.max(1, Math.round(stepCoarse))
+    readonly property real turnFine: setting("turn", 1, 0.1, 90)
+    readonly property real turnCoarse: setting("turn_shift", 15, 0.1, 90)
     // the edge each ruler is numbered by: the measuring is done in the top right quadrant, so the
-    // horizontal ruler's top and the vertical one's right (to be the settings', #36)
-    property bool numbersHFar: false
-    property bool numbersVFar: true
+    // horizontal ruler's top and the vertical one's right unless set otherwise
+    readonly property bool numbersHFar: conf.numbers_h === "bottom"
+    readonly property bool numbersVFar: conf.numbers_v !== "left"
+    readonly property bool centreLine: conf.centre_line !== false
     readonly property real zx: frameX + zeroX * mm
     readonly property real zy: frameY + zeroY * mm
-    readonly property real wide: 16 * mm  // a ruler's width
+    readonly property real wide: setting("width", 16, 8, 40) * mm  // a ruler's width
     readonly property real reach: Math.hypot(frameW, frameH) + wide     // long enough at any angle
     readonly property real tiltH: angleH
     readonly property real tiltV: angleV - 90
@@ -91,6 +105,8 @@ PanelWindow {
             zeroX = Math.round(frameW / mm / 2)
             zeroY = Math.round(frameH / mm / 2)
         }
+        // the pointer held to the steps as they come out, unless [rulers] hold_pointer = false (s toggles)
+        snapOn = conf.hold_pointer !== false
         visible = true
         report()
     }
@@ -101,7 +117,8 @@ PanelWindow {
     // the compositor holds the pointer to the rulers' steps: tell it where they are
     function report() {
         if (!visible || !screen) return
-        Compositor.send({ request: "rulers", output: screen.name, zero: [zx, zy], angles: [angleH, angleV], snap: snapOn && !dragging })
+        Compositor.send({ request: "rulers", output: screen.name, zero: [zx, zy], angles: [angleH, angleV], snap: snapOn && !dragging,
+                          steps: [stepFine, stepCoarse] })
     }
     // any change: the compositor told, the input region made again (once, when the changes are done)
     function changed() { Qt.callLater(report); Qt.callLater(rebuildMask) }
@@ -110,14 +127,17 @@ PanelWindow {
     onAngleHChanged: changed()
     onAngleVChanged: changed()
     onSnapOnChanged: changed()
+    onStepFineChanged: changed()
+    onStepCoarseChanged: changed()
     onPanelShownChanged: changed()
     property bool dragging: false
     onDraggingChanged: changed()
 
     // ---- moving and turning ----
     function moveBy(dx, dy) {
-        zeroX = Math.max(0, Math.min(Math.round(frameW / mm), Math.round(zeroX + dx)))
-        zeroY = Math.max(0, Math.min(Math.round(frameH / mm), Math.round(zeroY + dy)))
+        // on a tenth of a millimetre: a step of 0.5 mm stays on its grid
+        zeroX = Math.max(0, Math.min(Math.round(frameW / mm), Math.round((zeroX + dx) * 10) / 10))
+        zeroY = Math.max(0, Math.min(Math.round(frameH / mm), Math.round((zeroY + dy) * 10) / 10))
     }
     // turn one ruler to `to` degrees; locked, the other turns with it
     function turnH(to) { const d = norm(to - angleH); angleH = norm(angleH + d); if (isLocked) angleV = norm(angleV + d) }
@@ -130,13 +150,14 @@ PanelWindow {
         focus: true
         Keys.onPressed: e => {
             const big = e.modifiers & Qt.ShiftModifier
-            const step = big ? 10 : 1, turn = big ? 15 : 1
+            const step = big ? rulers.stepCoarse : rulers.stepFine, turn = big ? rulers.turnCoarse : rulers.turnFine
+            const zstep = big ? rulers.zeroCoarse : rulers.zeroFine
             const k = e.key
             if (k === Qt.Key_Escape) rulers.close()
-            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Left) rulers.zeroH -= step
-            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Right) rulers.zeroH += step
-            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Up) rulers.zeroV -= step
-            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Down) rulers.zeroV += step
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Left) rulers.zeroH -= zstep
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Right) rulers.zeroH += zstep
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Up) rulers.zeroV -= zstep
+            else if ((e.modifiers & Qt.ControlModifier) && k === Qt.Key_Down) rulers.zeroV += zstep
             else if (k === Qt.Key_Left) rulers.moveBy(-step, 0)
             else if (k === Qt.Key_Right) rulers.moveBy(step, 0)
             else if (k === Qt.Key_Up) rulers.moveBy(0, -step)
@@ -193,12 +214,12 @@ PanelWindow {
         Graduations {
             x: sheet.cx - rulers.reach; y: sheet.cy - rulers.wide / 2; width: 2 * rulers.reach; height: rulers.wide
             rotation: -rulers.tiltH
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH; far: rulers.numbersHFar
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: true; zero: rulers.zeroH; far: rulers.numbersHFar; centreLine: rulers.centreLine
         }
         Graduations {
             x: sheet.cx - rulers.wide / 2; y: sheet.cy - rulers.reach; width: rulers.wide; height: 2 * rulers.reach
             rotation: -rulers.tiltV
-            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV; far: rulers.numbersVFar
+            mm: rulers.mm; ink: rulers.ink; hair: rulers.hair; clearance: rulers.clearance; along: false; zero: rulers.zeroV; far: rulers.numbersVFar; centreLine: rulers.centreLine
         }
 
         // dragging a ruler moves the zero; with Ctrl, turns that ruler about it
@@ -251,7 +272,8 @@ PanelWindow {
                 }
                 Text {          // 0, by the numbered edge
                     readonly property bool far: zeroMark.along ? rulers.numbersHFar : rulers.numbersVFar
-                    readonly property real edge: far ? rulers.wide - 6.4 * rulers.mm : 6.4 * rulers.mm
+                    readonly property real numberAt: Math.max(0.4 * rulers.wide, 5.6 * rulers.mm)
+                    readonly property real edge: far ? rulers.wide - numberAt : numberAt
                     x: zeroMark.along ? rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm : edge - width / 2
                     y: zeroMark.along ? edge - height / 2 : rulers.reach + zeroMark.at * rulers.mm + 0.8 * rulers.mm
                     text: "0"
@@ -269,7 +291,7 @@ PanelWindow {
                     onPositionChanged: e => {
                         if (!pressed) return
                         const p = mapToItem(zeroMark, e.x, e.y)
-                        const unit = (e.modifiers & Qt.ShiftModifier) ? 10 : 1
+                        const unit = (e.modifiers & Qt.ShiftModifier) ? rulers.zeroCoarse : rulers.zeroFine
                         const v = Math.round(((zeroMark.along ? p.x : p.y) - rulers.reach) / rulers.mm / unit) * unit
                         if (zeroMark.along) rulers.zeroH = v
                         else rulers.zeroV = v
@@ -505,14 +527,14 @@ PanelWindow {
         if (turning) {
             // the pointer's direction from the zero, in whole degrees (15 with Shift); a ruler points both
             // ways, so the nearer of the two
-            const unit = big ? 15 : 1
+            const unit = big ? turnCoarse : turnFine
             let a = Math.round(Math.atan2(-(p.y - sheet.cy), p.x - sheet.cx) * 180 / Math.PI / unit) * unit
             const now = which === "v" ? angleV : angleH
             if (Math.abs(norm(a - now)) > 90) a = norm(a + 180)
             which === "v" ? turnV(a) : turnH(a)
         } else {
             // the zero follows, in whole millimetres (10 with Shift)
-            const unit = big ? 10 : 1
+            const unit = big ? stepCoarse : stepFine
             const dx = Math.round((p.x - pressAt.x) / mm / unit) * unit, dy = Math.round((p.y - pressAt.y) / mm / unit) * unit
             moveBy(pressZero.x + dx - zeroX, pressZero.y + dy - zeroY)
         }
