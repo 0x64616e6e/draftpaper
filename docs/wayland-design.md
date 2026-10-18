@@ -190,6 +190,28 @@ strength, margin in millimetres, px/mm and scale for the output. Output: the gra
 Physical size comes from the output's EDID (as wl_output reports it); a configuration override per output
 covers panels that report nonsense.
 
+### Invariants: drawing on the sheet
+
+Everything drawn on the sheet keeps to these, whoever draws it (the compositor, the shell):
+
+1. **Whole millimetres.** Every position is a whole number of millimetres from the frame's corner, and
+   every length is a whole number of millimetres. Nothing sits in between. The millimetre is the
+   display's own, from its measured size: the scale bar and the rulers read true against a ruler held to
+   the glass, and so must everything else.
+2. **Then whole pixels.** Only after that is each edge put on the nearest physical pixel, so a line is
+   one sharp pixel, or two, at every scale (1, 1.25, 1.5, 1.75, 2). A layer surface's corner sits on a
+   pixel that is whole both logically and physically, so what it draws lands on pixels too.
+3. **Geometry once.** The numbers come from one place: `compositor/src/title.rs` and the Grid in
+   `layout.rs` in the compositor, `qml/sheet.js` in the shell. A drawer never rounds on its own.
+4. **No overlaps.** Nothing covers the frame line, the title block, the revision block or another note.
+   Something that does not fit is made smaller, in whole millimetres, or left out; it is never drawn on
+   top.
+5. **Checked.** `make pixels` checks the sheet pixel by pixel, headless. A new check is proven by
+   breaking the thing it checks by a pixel and seeing it fail.
+
+A zone reference ("B3") places a thing 7 mm into the zone, from the zone's corner rounded up to a whole
+millimetre. A thing dragged to a place keeps that place in whole millimetres.
+
 ## Plumbing (what has to work before anyone uses it)
 
 | Need | How |

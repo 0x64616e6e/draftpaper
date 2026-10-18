@@ -132,6 +132,9 @@ ShellRoot {
         const v = t ? parseFloat(t.value) : NaN
         return isNaN(v) ? -1 : v
     }
+    // `draftpaper config set KEY=VALUE ...`: a note dragged to its place keeps it (MachineSchedule.qml, LoadGraph.qml)
+    function setConfig(pairs) { configSet.command = [root.bin, "config", "set"].concat(pairs); configSet.running = true }
+    Process { id: configSet }
     function sampleLoad() {
         if (cpuBusy < 0) return
         const h = loadHistory.concat([{ cpu: cpuBusy, mem: memUsed, temp: cpuTemp }])
@@ -370,8 +373,8 @@ ShellRoot {
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
             RevisionBlock { shell: root; edge: edge }
-            MachineSchedule { id: schedule; shell: root; edge: edge }
-            LoadGraph { shell: root; edge: edge; above: schedule }
+            MachineSchedule { id: schedule; shell: root; edge: edge; other: load }
+            LoadGraph { id: load; shell: root; edge: edge; other: schedule }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

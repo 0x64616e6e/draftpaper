@@ -100,6 +100,14 @@ PanelWindow {
               options: [[true, "on"], [false, "off"]] },
             { key: "sheet.load", name: "PLOTTED LOAD", def: true, note: "an empty workspace's: the last ten minutes",
               options: [[true, "on"], [false, "off"]] },
+            { key: "sheet.machine_at", zone: "row", name: "SCHEDULE · ZONE ROW", def: "A1", note: "7 mm into the zone; or drag it on the sheet",
+              options: settings.zoneRows(false) },
+            { key: "sheet.machine_at", zone: "col", name: "SCHEDULE · ZONE COLUMN", def: "A1", note: "",
+              options: settings.zoneCols() },
+            { key: "sheet.load_at", zone: "row", name: "LOAD · ZONE ROW", def: "auto", note: "auto: the bottom left, under the schedule",
+              options: settings.zoneRows(true) },
+            { key: "sheet.load_at", zone: "col", name: "LOAD · ZONE COLUMN", def: "auto", note: "",
+              options: settings.zoneCols() },
             { key: "glyphs", name: "GLYPHS", def: true, note: "Nerd Font glyphs before the readings",
               options: [[true, "on"], [false, "words only"]] },
             { key: "animations.enabled", name: "MOTION", def: true, note: "parking, workspaces, the settings",
@@ -376,6 +384,10 @@ PanelWindow {
         cfgVals = v
     }
     function rowNote(row) {
+        if (row.zone === "row" && Array.isArray(cfgRaw(row))) {
+            const v = cfgRaw(row)
+            return "dragged: " + v[0] + ", " + v[1] + " mm from the frame's corner; a zone puts it back"
+        }
         if (row.legible) {
             const l = legibility(cfgGet(row), row.legible)
             return "x-height " + l.xh.toFixed(2) + " mm · " + l.deg.toFixed(3) + "° at " + l.dist + " cm · "
@@ -397,10 +409,40 @@ PanelWindow {
     // ---- the pages of config.toml's rows ----
     function cfgGet(row) {
         if (row.pseudo) return (dispPlace[row.output] || {})[row.pseudo] || row.def
-        if (row.key in cfgVals) return cfgVals[row.key]
+        if (row.zone) return zonePart(cfgRaw(row), row.zone)
+        return cfgRaw(row)
+    }
+    function cfgRaw(row) {
+        if (row.key in cfgVals) return cfgVals[row.key] === "" ? row.def : cfgVals[row.key]
         let v = cfg
         for (const part of row.key.split(".")) v = (v && typeof v === "object") ? v[part] : undefined
         return v === undefined || v === null ? row.def : v
+    }
+    // ---- a note's place on the sheet: a zone ("B2"), "auto", or millimetres where it was dragged ----
+    function zoneRows(auto) {
+        const n = out ? out.zones.down : 4
+        const rows = Array.from({ length: n }, (_, i) => { const l = String.fromCharCode(65 + i); return [l, l] })
+        return auto ? [["auto", "auto"]].concat(rows) : rows
+    }
+    function zoneCols() {
+        const n = out ? out.zones.across : 6
+        return Array.from({ length: n }, (_, i) => [i + 1, String(i + 1)])
+    }
+    function zonePart(v, part) {
+        if (Array.isArray(v)) return "dragged"
+        if (v === "auto") return part === "row" ? "auto" : "auto"
+        const m = /^([A-Za-z])([0-9]+)$/.exec(String(v))
+        if (!m) return part === "row" ? "A" : 1
+        return part === "row" ? m[1].toUpperCase() : Number(m[2])
+    }
+    // the place with one part changed: "auto" (the key taken out), or a zone, its other part as it was
+    function zoneWith(row, value) {
+        if (value === "auto") return ""
+        const v = cfgRaw(row)
+        const m = /^([A-Za-z])([0-9]+)$/.exec(Array.isArray(v) ? "" : String(v))
+        const letter = row.zone === "row" ? value : m ? m[1].toUpperCase() : "A"
+        const col = row.zone === "col" ? value : m ? Number(m[2]) : 1
+        return letter + col
     }
     // the values offered, and the one set when it is none of them
     function cfgOptions(row) {
@@ -417,7 +459,7 @@ PanelWindow {
             dispPlace = p
         } else {
             const v = Object.assign({}, cfgVals)
-            v[row.key] = value
+            v[row.key] = row.zone ? zoneWith(row, value) : value
             cfgVals = v
         }
         // a display's scale or place: every display's position written again

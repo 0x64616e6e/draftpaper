@@ -32,7 +32,9 @@ Build the package with `dpkg-buildpackage -us -uc -b` (needs `debhelper`); check
   and what you could not (one screen or two, HiDPI or not, laptop or desktop).
 - A change to what the sheet draws (the frame, the ticks, the title block, the wallpaper, the windows'
   borders, the magnifier) also runs `make pixels`: the sheet at every scale, headless (nothing is shown on
-  a display), checked pixel by pixel against `compositor/src/title.rs` and `layout.rs`.
+  a display), checked pixel by pixel against `compositor/src/title.rs` and `layout.rs`. Anything drawn on
+  the sheet keeps to the invariants in `docs/wayland-design.md` ("Invariants: drawing on the sheet"):
+  whole millimetres from the frame's corner, then whole pixels, one source of geometry, no overlaps.
 - Update `README.md` and `docs/draftpaper.1` when you change commands, keys or configuration.
 - New dependencies need a reason: every one becomes a Debian package dependency.
 

@@ -400,6 +400,13 @@ impl Draftpaper {
             Action::Screenshot => crate::tty::screenshot(self),
             Action::PointerBy(dx, dy) => self.pointer_by(smithay::utils::Point::from((dx, dy)), self.start_time.elapsed().as_millis() as u32),
             Action::Pointer(x, y) => self.warp_pointer(smithay::utils::Point::from((x, y))),
+            Action::Button(button, down) => {
+                let pointer = self.seat.get_pointer().unwrap();
+                let state = if down { smithay::backend::input::ButtonState::Pressed } else { smithay::backend::input::ButtonState::Released };
+                let event = ButtonEvent { button, state, serial: SERIAL_COUNTER.next_serial(), time: self.start_time.elapsed().as_millis() as u32 };
+                pointer.button(self, &event);
+                pointer.frame(self);
+            }
             Action::Zoom => {
                 self.lens = match self.lens.take() {
                     Some(_) => None,

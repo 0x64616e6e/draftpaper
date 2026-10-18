@@ -49,6 +49,7 @@ pids="$pids $!"
 i=0
 until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 layers() { run "$comp" msg outputs | jq -r '.[0].layers[]' | grep -c "draftpaper-machine\|draftpaper-load"; }
+waitcfg() { i=0; until grep -q "$1" "$cfg" || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done; grep -c "$1" "$cfg"; }
 waitlayers() { i=0; until [ "$(layers)" = "$1" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; layers; }
 shot() {
     rm -f "$t"/Pictures/*.png
@@ -71,6 +72,38 @@ darkest() { for x in $(($1 - 3)) $(($1 - 2)) $(($1 - 1)) $1 $(($1 + 1)) $(($1 + 
 row=$(awk -v f="$fx" 'BEGIN { printf "%d", f + 20 * 6.4 }')
 ok "the schedule's outline, 7 mm in" "$([ "$(darkest "$edge" "$row")" -lt 110 ] && echo ink)" "ink"
 ok "the paper a millimetre inside" "$([ "$(lum $((edge + 7)) "$row")" -gt 130 ] && echo paper)" "paper"
+# exact to the millimetre: the outline's left edge where frame + 7 mm falls (its nearest physical pixel),
+# the paper two pixels outside it; in zone B2, where B2's corner rounded up to a millimetre, + 7 mm, falls
+o() { run "$comp" msg outputs | jq -r ".[0] | $1"; }
+mmL=$(o .px_per_mm); fxL=$(o .frame.x); fyL=$(o .frame.y)
+colAt() { awk -v f="$fxL" -v m="$mmL" -v k="$1" 'BEGIN { v = (f + k * m) * 1.5; printf "%d", int(v + 0.5) }'; }
+rowAt() { awk -v f="$fyL" -v m="$mmL" -v k="$1" 'BEGIN { v = (f + k * m) * 1.5; printf "%d", int(v + 0.5) }'; }
+edgeAt() { lum "$1" "$2"; }
+exact() {   # $1 mm across, $2 mm down: the 2-pixel outline on that pixel and the next, the paper on the one before
+    x=$(colAt "$1"); y=$(rowAt "$(($2 + 20))")
+    [ "$(lum "$x" "$y")" -lt 110 ] && [ "$(lum $((x + 1)) "$y")" -lt 110 ] && [ "$(lum $((x - 1)) "$y")" -gt 130 ] && echo exact || echo "off: $(lum $((x - 1)) "$y") $(lum "$x" "$y") $(lum $((x + 1)) "$y") at $x"
+}
+ok "the outline on its millimetre: 7 mm from the frame's corner" "$(exact 7 7)" "exact"
+zx=$(awk -v w="$(o .zones.width)" -v m="$mmL" 'BEGIN { v = w / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
+zy=$(awk -v h="$(o .zones.height)" -v m="$mmL" 'BEGIN { v = h / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
+run "$cli" config set 'sheet.machine_at=B2' > /dev/null
+sleep 1.5
+shot "$t/b2.png"
+cp "$t/b2.png" "$t/notes.png"
+ok "zone B2: 7 mm into it, ${zx} mm, ${zy} mm from the frame's corner" "$(exact "$zx" "$zy")" "exact"
+# dragged by the title: 10 mm right and 5 mm down, then let go; config.toml keeps the place
+gx=$(awk -v f="$fxL" -v m="$mmL" -v k="$zx" 'BEGIN { print f + (k + 20) * m }'); gy=$(awk -v f="$fyL" -v m="$mmL" -v k="$zy" 'BEGIN { print f + (k + 3) * m }')
+run "$comp" msg pointer "$gx" "$gy" > /dev/null; sleep 0.2
+run "$comp" msg button left down > /dev/null; sleep 0.2
+run "$comp" msg pointer "$(awk -v g="$gx" -v m="$mmL" 'BEGIN { print g + 5 * m }')" "$gy" > /dev/null; sleep 0.1
+run "$comp" msg pointer "$(awk -v g="$gx" -v m="$mmL" 'BEGIN { print g + 10 * m }')" "$(awk -v g="$gy" -v m="$mmL" 'BEGIN { print g + 5 * m }')" > /dev/null; sleep 0.2
+run "$comp" msg button left up > /dev/null
+ok "dragged 10 mm right, 5 mm down: kept in millimetres" "$(waitcfg "^machine_at = \\[$((zx + 10)), $((zy + 5))\\]")" "1"
+sleep 1.5
+shot "$t/dragged.png"
+cp "$t/dragged.png" "$t/notes.png"
+ok "and drawn there, on its millimetre" "$(exact $((zx + 10)) $((zy + 5)))" "exact"
+ok "the load still up, moved out of its way" "$(waitlayers 2)" "2"
 command -v foot > /dev/null && {
     run foot sh > /dev/null 2>&1 &
     pids="$pids $!"

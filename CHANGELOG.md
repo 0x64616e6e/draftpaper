@@ -10,7 +10,11 @@ On an empty workspace, a ruled schedule of equipment (the machine, processor, gr
 system, desktop, each display and the sheet; `draftpaper machine`) and, below it, the processor's load,
 the memory and the temperature over the last ten minutes on millimetre graph paper, from the readings
 the title block already takes. `[sheet] machine = false` and `load = false` (the Sheet page) take them
-away.
+away. Each goes where `[sheet] machine_at` / `load_at` say, a zone ("B2") or millimetres from
+the frame's corner, or where it is dragged, a whole millimetre at a time, clear of the title block and of
+each other. A design invariant, now in docs/wayland-design.md: everything on the sheet sits at whole
+millimetres from the frame's corner. `draftpaper-compositor msg button left down|up`, for scripts and
+tests.
 
 A workspace switch to another display brings the pointer along, to the middle of its focused window (or of
 the sheet): with the focus following the mouse, the focus stays where the switch put it.

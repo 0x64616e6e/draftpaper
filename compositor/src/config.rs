@@ -62,6 +62,9 @@ pub enum Action {
     Pointer(f64, f64),
     /// the pointer moved by this much (logical pixels), as a mouse moves it: through the rulers' steps
     PointerBy(f64, f64),
+    /// a mouse button (Linux's code: left 0x110, right 0x111) pressed or let go where the pointer is, for
+    /// scripts and tests (a drag: button left down, pointer ..., button left up)
+    Button(u32, bool),
     /// park the focused window in the first free cell, or, with nothing showing, bring every parked
     /// window back (parking.rs)
     Park,
@@ -216,6 +219,20 @@ pub(crate) fn parse_action(s: &str) -> Result<Option<Action>, String> {
             match (xy.next(), xy.next()) {
                 (Some(Ok(x)), Some(Ok(y))) => Action::PointerBy(x, y),
                 _ => return Err(format!("\"{s}\": pointer_by DX DY")),
+            }
+        }
+        "button" => {
+            let mut a = arg.split_whitespace();
+            let code = match a.next() {
+                Some("left") => 0x110,
+                Some("right") => 0x111,
+                Some("middle") => 0x112,
+                _ => return Err(format!("\"{s}\": button left|right|middle down|up")),
+            };
+            match a.next() {
+                Some("down") => Action::Button(code, true),
+                Some("up") => Action::Button(code, false),
+                _ => return Err(format!("\"{s}\": button left|right|middle down|up")),
             }
         }
         "reload" => Action::Reload,
