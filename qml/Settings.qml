@@ -76,12 +76,13 @@ PanelWindow {
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
-    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["sheet", "SHEET"], ["rulers", "RULERS"],
+    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["text", "TEXT"], ["sheet", "SHEET"], ["rulers", "RULERS"],
                                      ["session", "SESSION"], ["input", "INPUT"], ["idle", "IDLE · LOCK"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
     // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
     readonly property var cfgPages: ({
         displays: settings.dispRows,
+        text: settings.textRows,
         sheet: [
             { key: "margin", name: "MARGIN", def: 6, note: "between the screen's edge and the frame",
               options: [[4, "4 mm"], [5, "5 mm"], [6, "6 mm"], [8, "8 mm"], [10, "10 mm"]] },
@@ -259,6 +260,43 @@ PanelWindow {
         visible = false
     }
 
+    // ---- the Text page: [text]'s faces among those installed, and sizes against the legibility target ----
+    readonly property var ifaceFaces: ["IBM Plex Sans", "Noto Sans", "DejaVu Sans", "Cantarell", "Source Sans 3", "Fira Sans", "Ubuntu", "Liberation Sans"]
+    readonly property var monoFaces: ["IBM Plex Mono", "JetBrains Mono", "DejaVu Sans Mono", "Fira Mono", "Source Code Pro", "Hack", "Noto Sans Mono", "Liberation Mono"]
+    // up to five installed, the one set first among them when it is not one of the five
+    function faceOptions(list, now) {
+        const all = Qt.fontFamilies()
+        const have = list.filter(f => all.indexOf(f) >= 0).slice(0, 5)
+        if (now && have.indexOf(now) < 0) have.unshift(now)
+        return have.map(f => [f, f])
+    }
+    readonly property var ptSizes: [9, 10, 10.5, 11, 12, 13, 14].map(s => [s, s + " pt"])
+    readonly property var textRows: {
+        const t = (cfg && cfg.text) || {}
+        return [
+            { key: "text.interface", name: "INTERFACE", def: t.interface || "IBM Plex Sans", face: true, note: "GTK (Firefox's interface with it), Qt",
+              options: faceOptions(ifaceFaces, t.interface) },
+            { key: "text.monospace", name: "MONOSPACE", def: t.monospace || "IBM Plex Mono", face: true, note: "terminals, Emacs, the sheet's lettering",
+              options: faceOptions(monoFaces, t.monospace) },
+            { key: "text.size", name: "INTERFACE SIZE", def: t.size || 11, legible: "interface", options: ptSizes },
+            { key: "text.mono_size", name: "MONOSPACE SIZE", def: t.mono_size || 11, legible: "monospace", options: ptSizes },
+            { key: "text.min_degrees", name: "LEGIBILITY TARGET", def: t.min_degrees || 0.2, note: "sizes below it are lettered so, not refused",
+              options: [[0.18, "0.18°"], [0.2, "0.2°"], [0.25, "0.25°"]] }
+        ]
+    }
+    function textRow(k) { return textRows.find(r => r.key === k) }
+    // a size's x-height in mm on the focused display, and the angle it makes at the viewing distance
+    function legibility(pt, which) {
+        const m = which === "monospace" ? monoMetrics : ifaceMetrics
+        const ratio = m.xHeight / 100
+        const pxPerMm = out ? out.px_per_mm : 4.27
+        const xh = pt * 96 / 72 * ratio / pxPerMm
+        const dist = Number(cfgGet({ key: "viewing_distance", def: 55 }))
+        const deg = Math.atan(xh / (dist * 10)) * 180 / Math.PI
+        return { xh: xh, deg: deg, dist: dist, ok: deg >= Number(cfgGet(textRow("text.min_degrees"))) - 1e-9 }
+    }
+    FontMetrics { id: ifaceMetrics; font.family: settings.cfgGet(settings.textRow("text.interface")); font.pixelSize: 100 }
+    FontMetrics { id: monoMetrics; font.family: settings.cfgGet(settings.textRow("text.monospace")); font.pixelSize: 100 }
     // ---- the Displays page: built when the settings open, from the displays as they are then ----
     property var dispOutputs: []        // the outputs then: the built-in panel first, then left to right
     property var dispPlace: ({})        // each further display: { side: right|left|above|below, align: start|centre|end }
@@ -334,6 +372,11 @@ PanelWindow {
         cfgVals = v
     }
     function rowNote(row) {
+        if (row.legible) {
+            const l = legibility(cfgGet(row), row.legible)
+            return "x-height " + l.xh.toFixed(2) + " mm · " + l.deg.toFixed(3) + "° at " + l.dist + " cm · "
+                + (l.ok ? "meets " : "below ") + cfgGet(textRow("text.min_degrees")) + "°"
+        }
         if (row.noteOf === "scale") {
             const o = dispOutputs.find(o => o.name === row.output)
             if (!o) return ""
@@ -803,9 +846,45 @@ PanelWindow {
             visible: settings.cfgRows.length > 0
             readonly property real rowH: 12 * settings.mm
             readonly property real optX: 58 * settings.mm
+            // the Text page: the faces at the sizes picked, at true size, above the rows
+            Row {
+                visible: settings.page === "text"
+                x: settings.x0; y: board.inY + settings.gutter
+                width: settings.cw; height: cfgPage.bandH - 6 * settings.mm
+                spacing: 8 * settings.mm
+                Repeater {
+                    model: [
+                        { which: "interface", face: "text.interface", size: "text.size", title: "AS IT READS · INTERFACE",
+                          sample: "The quick sketch fits the sheet: every word at 4.5:1, every letter a fifth of a degree tall at the distance you sit." },
+                        { which: "monospace", face: "text.monospace", size: "text.mono_size", title: "MONOSPACE",
+                          sample: "fn zones(len: i32) -> u32 {\n    (len as f64 / 50.0).round() as u32\n}" }
+                    ]
+                    Column {
+                        id: sample
+                        required property var modelData
+                        readonly property real pt: Number(settings.cfgGet(settings.textRow(modelData.size)))
+                        width: (settings.cw - 8 * settings.mm) / 2
+                        spacing: 2 * settings.mm
+                        Text {
+                            text: sample.modelData.title + ", " + sample.pt + " PT"
+                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.75; font.bold: true; font.letterSpacing: 0.2 * settings.mm
+                            color: settings.ink
+                        }
+                        Text {
+                            width: parent.width
+                            text: sample.modelData.sample
+                            wrapMode: sample.modelData.which === "interface" ? Text.WordWrap : Text.NoWrap
+                            // points as the applications letter them: 96 to the inch, in the display's logical pixels
+                            font.family: settings.cfgGet(settings.textRow(sample.modelData.face))
+                            font.pixelSize: sample.pt * 96 / 72
+                            color: settings.ink
+                        }
+                    }
+                }
+            }
             // the Displays page: the displays as arranged at the scales picked, to scale, above the rows
             readonly property bool arranging: settings.page === "displays" && settings.dispOutputs.length > 0
-            readonly property real bandH: arranging ? 52 * settings.mm : 0
+            readonly property real bandH: arranging ? 52 * settings.mm : settings.page === "text" ? 40 * settings.mm : 0
             Item {
                 id: arrangement
                 visible: cfgPage.arranging
@@ -898,13 +977,17 @@ PanelWindow {
                                 id: co
                                 required property var modelData
                                 readonly property bool chosen: cr.value === modelData[0]
+                                // a size below the legibility target: lettered in the alert ink, still to be picked
+                                readonly property bool low: !!cr.modelData.legible && !settings.legibility(modelData[0], cr.modelData.legible).ok
                                 width: coLabel.implicitWidth + 5 * settings.mm; height: 7 * settings.mm
                                 Text {
                                     id: coLabel
                                     anchors.centerIn: parent
                                     text: co.modelData[1]
-                                    font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: co.chosen
-                                    color: co.chosen ? settings.ink : settings.inkA(0.7)
+                                    // a face lettered in itself
+                                    font.family: cr.modelData.face ? co.modelData[0] : Fonts.mono
+                                    font.pixelSize: settings.font * (cr.modelData.face ? 0.9 : 0.8); font.bold: co.chosen
+                                    color: co.low ? settings.shell.theme.alert : co.chosen ? settings.ink : settings.inkA(0.7)
                                 }
                                 Rectangle {
                                     visible: co.chosen
@@ -925,7 +1008,7 @@ PanelWindow {
                             leftPadding: 3 * settings.mm
                             text: settings.rowNote(cr.modelData)
                             font.family: Fonts.mono; font.pixelSize: settings.font * 0.7
-                            color: settings.inkA(0.6)
+                            color: cr.modelData.legible && !settings.legibility(cr.value, cr.modelData.legible).ok ? settings.shell.theme.alert : settings.inkA(0.6)
                         }
                     }
                     MouseArea {    // the row's name picks the row

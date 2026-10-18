@@ -106,10 +106,13 @@ fn str_of<'a>(t: &'a Map<String, Value>, path: &[&str]) -> &'a str {
 }
 
 /// The sheet's lettering face, as the shell picks it (qml/Fonts.qml).
-fn mono_font() -> &'static str {
+/// The launcher's and the lock screen's face: [text] monospace when installed, else IBM Plex Mono, else
+/// DejaVu Sans Mono.
+fn mono_font(cfg: &Map<String, Value>) -> String {
     let families = util::run(&["fc-list", ":", "family"], 10).unwrap_or_default();
-    let plex = families.lines().flat_map(|l| l.split(',')).any(|f| f.trim() == "IBM Plex Mono");
-    if plex { "IBM Plex Mono" } else { "DejaVu Sans Mono" }
+    let has = |name: &str| families.lines().flat_map(|l| l.split(',')).any(|f| f.trim() == name);
+    let own = crate::text::faces(cfg).1.family.filter(|f| has(f));
+    own.unwrap_or_else(|| if has("IBM Plex Mono") { "IBM Plex Mono".into() } else { "DejaVu Sans Mono".into() })
 }
 
 /// fuzzel's config for theme t. Colours are RRGGBBAA.
@@ -248,15 +251,15 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
         "paper": t["paper"], "ink": t["ink"], "inkAlpha": t["sheet"]["pattern_strength"], "alert": t["alert"],
         "strong": t.get("strong").cloned().unwrap_or(json!("#000000")),
         "accent": t["windows"]["focused"],
-        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"), "rulers": get("rulers"),
+        "title": get("title"), "cells": get("cell"), "alerts": get("alerts"), "commands": get("commands"), "rulers": get("rulers"), "text": get("text"),
         "glyphs": truthy(&get("glyphs")),
         // motion in the shell (the settings) follows the compositor's [animations]
         "animations": animations,
         "themes": listed(p),
     });
     util::write_atomic(&p.theme_json(), &util::dumps_indent(&shell, 1));
-    let font = mono_font();
-    util::write(&p.cache.join("fuzzel.ini"), &fuzzel_ini(&t, font));
+    let font = mono_font(&cfg);
+    util::write(&p.cache.join("fuzzel.ini"), &fuzzel_ini(&t, &font));
     if apps_too {
         crate::apps::apply(p, &t, &cfg);
         // and their own session restore switched on (restore.rs)
@@ -264,7 +267,7 @@ pub fn apply(p: &Paths, name: Option<&str>, apps_too: bool) -> Map<String, Value
         // and the login screen's copy of the sheet (greeter.rs)
         crate::greeter::sync(p);
     }
-    util::write(&p.cache.join("swaylock.conf"), &swaylock_conf(&t, font));
+    util::write(&p.cache.join("swaylock.conf"), &swaylock_conf(&t, &font));
     let idle = p.cache.join("swayidle.conf");
     let text = swayidle_conf(&cfg);
     if util::read(&idle) != text || !idle.exists() {

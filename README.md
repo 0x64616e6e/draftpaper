@@ -195,6 +195,11 @@ apps = true                # the applications take up their own state (draftpape
                            #   Chromium, Emacs, Neovim, tmux; false: only the windows come back
 skip = ["org.gnome.Calculator"]   # app ids left out (and firefox, chromium, emacs, neovim, tmux)
 
+[text]                     # one interface face and one monospace face, everywhere (the settings' Text page)
+interface = "IBM Plex Sans" #   GTK (Firefox's interface follows it), Qt; size = 11 (points)
+monospace = "IBM Plex Mono" #   GTK's and Qt's fixed font, Alacritty (its size; alacritty.toml's own family
+mono_size = 11             #   wins), foot, Emacs, the sheet's lettering; taken out: the fonts as they were
+
 [rulers]                   # see Rulers; the settings' Rulers page
 step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)
 numbers_h = "top"          # the horizontal ruler numbered by its top or "bottom"; numbers_v "right" or "left"

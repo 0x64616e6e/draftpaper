@@ -293,4 +293,6 @@ pub fn apply(p: &Paths, t: &Map<String, Value>, cfg: &Map<String, Value>) {
             util::run(&["xrdb", "-merge", &res.display().to_string()], 10);
         }
     }
+    // the files above written again: [text]'s fonts at their ends again (text.rs)
+    crate::text::apply(p, cfg);
 }

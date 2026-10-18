@@ -10,6 +10,7 @@ mod readings;
 mod restore;
 mod revisions;
 mod scheme;
+mod text;
 mod theme;
 mod tmux;
 mod util;
@@ -153,12 +154,17 @@ fn main() {
             if pairs.iter().any(|k| k.starts_with("session.")) {
                 restore::apply(&p, &config::load(&p));
             }
+            // the fonts everywhere, when [text] changed (text.rs)
+            if pairs.iter().any(|k| k.starts_with("text.")) {
+                text::apply(&p, &config::load(&p));
+            }
         }
         ["config", "mark", ..] => config::mark(&p),
         ["config", "back", ..] => {
             if config::back(&p) {
                 theme::apply(&p, None, false);
                 restore::apply(&p, &config::load(&p));
+                text::apply(&p, &config::load(&p));
             }
         }
         ["config", "keep", ..] => config::keep(&p),
@@ -666,5 +672,8 @@ fn config_json(p: &Paths) {
             }
         }
     }
+    // the text as it is set, the system's where config.toml sets none
+    let shown = text::shown(p, &cfg);
+    cfg.insert("text".into(), Value::Object(shown));
     println!("{}", util::dumps_indent(&Value::Object(cfg), 1));
 }
