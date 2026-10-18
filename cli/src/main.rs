@@ -6,6 +6,7 @@ mod apps;
 mod config;
 mod greeter;
 mod machine;
+mod processes;
 mod programs;
 mod readings;
 mod restore;
@@ -78,6 +79,10 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper revisions        the focused window's repository and latest commits, as JSON (the revision block)
   draftpaper machine          the machine schedule's facts, as JSON: machine, processor, graphics, memory,
                               storage, system, versions, uptime
+  draftpaper processes        the process schedule's rows, as JSON: the busiest programs, each one's share
+                              of a processor, memory and processor time
+  draftpaper schedule [next|equipment|processes|hide]
+                              the schedules on the sheet (Mod+i: next): equipment, processes, or neither
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
@@ -149,6 +154,16 @@ fn main() {
         ["readings", ..] => readings::main(&p),
         ["revisions", ..] => revisions::main(),
         ["machine", ..] => machine::main(),
+        ["processes", ..] => processes::main(12),
+        ["schedule", rest @ ..] => {
+            // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
+            let which = rest.first().copied().unwrap_or("next");
+            if !["next", "equipment", "processes", "hide"].contains(&which) {
+                util::die("draftpaper schedule next|equipment|processes|hide");
+            }
+            let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "schedules", which]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
+            std::process::exit(code);
+        }
         ["config", "json", ..] => config_json(&p),
         ["config", "set", pairs @ ..] if !pairs.is_empty() => {
             config::set_pairs(&p, pairs);

@@ -200,11 +200,9 @@ interface = "IBM Plex Sans" #   GTK (Firefox's interface follows it), Qt; size =
 monospace = "IBM Plex Mono" #   GTK's and Qt's fixed font, Alacritty (its size; alacritty.toml's own family
 mono_size = 11             #   wins), foot, Emacs, the sheet's lettering; taken out: the fonts as they were
 
-[sheet]                    # the notes on an empty workspace's sheet (#49)
-machine = true             #   the machine schedule: the machine, the displays, the system
-load = true                #   the processor, memory and temperature over the last ten minutes
-machine_at = "A1"          #   where: a zone (7 mm into it), or [x, y] mm from the frame's corner, as
-load_at = "C1"             #   dragging one leaves it; load_at left out: the bottom left, under the schedule
+[sheet]                    # the notes on the sheet (#49): Mod+i brings the schedules in turn, a click on a
+schedule_at = [10, 10]     #   reading's cell its graph; where: [x, y] mm from the frame's corner, or a zone
+load_at = "C1"             #   ("C1": 7 mm into it), as dragging one leaves it; load_at left out: bottom left
 
 [rulers]                   # see Rulers; the settings' Rulers page
 step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)

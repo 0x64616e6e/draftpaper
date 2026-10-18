@@ -10,6 +10,7 @@ Mod is Super (the Windows key); in a nested session, Alt. Every key below can be
 | Mod+Return | Terminal (alacritty) |
 | Mod+d | Launcher: the applications as a register on the sheet (fuzzel stays an alternative) |
 | Mod+r | Rulers: two, crossing at a zero point, true millimetres; the pointer held to them (see Rulers) |
+| Mod+i | The schedules on the sheet in turn: the equipment, the processes, neither (fading) |
 | Mod+h j k l · Mod+Up/Down | Move the focus |
 | Mod+Shift+h j k l · Mod+Shift+arrows | Move the window a zone, keeping its size, into free zones; past a window of the same rows (or columns) they swap; else it stays |
 | Mod+Ctrl+h j k l · Mod+Ctrl+arrows | Resize by a zone (hold to keep going): right and down larger, left and up smaller |
@@ -129,6 +130,7 @@ between them, ← → along, each change shown at once.
 | BT (bottom left) | blueman-manager |
 | SHOT (bottom right) | A region into swappy (`[commands] screenshot`) |
 | The theme name (bottom right) | Left: the settings; right: the next theme |
+| CPU / MEMORY, TEMPERATURE · FAN, POWER, BATTERY (the title block) | Their last ten minutes as a graph on the sheet; again: away; another: switched |
 | PROFILE (title block) | Cycle power-saver, balanced, performance |
 | A cell of your own | Its `left` / `right` commands |
 

@@ -5,6 +5,13 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+The schedules and the graph on demand (#49): Mod+i brings the schedule of equipment, then a process
+schedule (`draftpaper processes`: the busiest programs, each one's processes counted as one, its share of
+a processor ruled as a bar), then neither, fading in and out in one place, the top left 10 mm in; both
+part of the sheet, no outline or panel. A click on a reading's cell in the title block (CPU / memory,
+temperature and fan, power, battery) shows its last ten minutes as the graph, again puts it away.
+`draftpaper schedule next|equipment|processes|hide`.
+
 The sheet's 5 mm dots are counted from the frame's top-left corner, each on the pixel nearest its true
 place (they were counted from the screen's corner in a step rounded down once: on a display of 5.6 px/mm a
 millimetre off across the sheet). The plotted load's squares fall on them, every tenth line heavier on

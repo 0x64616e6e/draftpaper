@@ -121,26 +121,53 @@ ShellRoot {
     // a second sample a quarter second in, so the CPU reading is there from the start (not after 2 s)
     Timer { interval: 250; running: true; onTriggered: stat.rerun() }
 
-    // ---- the notes on the sheet (issue #49): the machine schedule's facts, and the load over ten minutes ----
-    Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: theme.sheet.machine !== false }
+    // ---- the notes on the sheet (issue #49): the schedules (Mod+i) and a reading's last ten minutes ----
+    // the schedule shown ("", "equipment", "processes") and on which screen: the focused one when it came
+    property string schedule: ""
+    property string scheduleOn: ""
+    function focusedName() { const o = Compositor.outputs.find(o => o.focused); return o ? o.name : "" }
+    function showSchedule(which) {
+        scheduleOn = focusedName()
+        schedule = which
+        if (which === "equipment") machinePoll.rerun()
+        if (which === "processes") processPoll.rerun()
+    }
+    function nextSchedule() { showSchedule(schedule === "" ? "equipment" : schedule === "equipment" ? "processes" : "") }
+    Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: root.schedule === "equipment" }
     readonly property var machine: { try { return machinePoll.output ? JSON.parse(machinePoll.output) : null } catch (e) { return null } }
-    // a sample every 5 s of what the title block reads: the processor's load and the memory in use (0..1),
-    // the processor's temperature (°C); -1 where a reading is missing. The last ten minutes, and one more.
+    Poll { id: processPoll; command: [root.bin, "processes"]; interval: 2000; running: root.schedule === "processes" }
+    readonly property var processes: { try { return processPoll.output ? JSON.parse(processPoll.output) : null } catch (e) { return null } }
+
+    // the graph: which readings ("", "load", "temperature", "power", "battery") on which screen; a click on
+    // their cell in the title block shows them, again puts them away, another's switches
+    property string graph: ""
+    property string graphOn: ""
+    function toggleGraph(which, screenName) {
+        if (graph === which && graphOn === screenName) graph = ""
+        else { graph = which; graphOn = screenName }
+    }
+    // a sample every 5 s of what the title block reads, kept ten minutes (and one more): the processor's
+    // load and the memory in use (0..1), the temperatures (°C) and the fan (RPM), the power drawn (W) and
+    // the battery (0..1); -1 where a reading is missing
     property var loadHistory: []
-    readonly property real cpuTemp: {
-        const t = (readings.temps || []).find(t => t.label === "CPU")
+    function reading(label) {
+        const t = (readings.temps || []).find(t => t.label === label)
         const v = t ? parseFloat(t.value) : NaN
         return isNaN(v) ? -1 : v
     }
-    // `draftpaper config set KEY=VALUE ...`: a note dragged to its place keeps it (MachineSchedule.qml, LoadGraph.qml)
+    // `draftpaper config set KEY=VALUE ...`: a note dragged to its place keeps it (Schedule.qml, LoadGraph.qml)
     function setConfig(pairs) { configSet.command = [root.bin, "config", "set"].concat(pairs); configSet.running = true }
     Process { id: configSet }
     function sampleLoad() {
         if (cpuBusy < 0) return
-        const h = loadHistory.concat([{ cpu: cpuBusy, mem: memUsed, temp: cpuTemp }])
+        const power = readings.power !== null && readings.power !== undefined ? Number(readings.power) : -1
+        const h = loadHistory.concat([{
+            cpu: cpuBusy, mem: memUsed, temp: reading("CPU"), nvme: reading("NVME"), fan: reading("FAN"),
+            power: isNaN(power) ? -1 : power, battery: battery.isLaptopBattery ? battery.percentage : -1
+        }])
         loadHistory = h.length > 121 ? h.slice(h.length - 121) : h
     }
-    Timer { interval: 5000; repeat: true; running: theme.sheet.load !== false; triggeredOnStart: true; onTriggered: root.sampleLoad() }
+    Timer { interval: 5000; repeat: true; running: true; triggeredOnStart: true; onTriggered: root.sampleLoad() }
 
     // everything the title block letters is in (the readings, the network, memory and CPU): told to the
     // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing
@@ -277,6 +304,21 @@ ShellRoot {
         function cancel(): void { if (settings.visible) settings.cancel() }
     }
     // the launcher (Mod+d: `draftpaper launcher`) and the menu (`draftpaper menu`), Launcher.qml
+    // the schedules on the sheet (Mod+i: `draftpaper schedule next`), and the graph of a reading (its cell)
+    IpcHandler {
+        target: "schedules"
+        function next(): void { root.nextSchedule() }
+        function equipment(): void { root.showSchedule("equipment") }
+        function processes(): void { root.showSchedule("processes") }
+        function hide(): void { root.showSchedule("") }
+        function state(): string { return root.schedule }
+    }
+    IpcHandler {
+        target: "graph"
+        // load, temperature, power, battery: as a click on its cell on the focused screen (again: away)
+        function toggle(which: string): void { root.toggleGraph(which, root.focusedName()) }
+        function state(): string { return root.graph }
+    }
     Rulers { id: rulers; shell: root }
     IpcHandler {
         target: "rulers"
@@ -373,8 +415,10 @@ ShellRoot {
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
             RevisionBlock { shell: root; edge: edge }
-            MachineSchedule { id: schedule; shell: root; edge: edge; other: load }
-            LoadGraph { id: load; shell: root; edge: edge; other: schedule }
+            // the schedules take turns in one place; the graph keeps clear of whichever is out
+            MachineSchedule { id: equip; shell: root; edge: edge; other: load; wanted: root.schedule === "equipment" && root.scheduleOn === edge.screen.name }
+            ProcessSchedule { id: procs; shell: root; edge: edge; other: load; wanted: root.schedule === "processes" && root.scheduleOn === edge.screen.name }
+            LoadGraph { id: load; shell: root; edge: edge; other: procs.shown ? procs : equip; domain: root.graphOn === edge.screen.name ? root.graph : "" }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

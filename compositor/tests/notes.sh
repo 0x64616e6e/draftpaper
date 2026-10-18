@@ -1,10 +1,11 @@
 #!/bin/sh
-# make pixels (and alone): the notes on the sheet (issue #49: qml/MachineSchedule.qml, qml/LoadGraph.qml),
-# headless (nothing on any display), on the T14's panel (1920x1200 at 1.5, 6.4 px/mm). On the empty
-# workspace both are up (their layer surfaces), the schedule's outline 7 mm in from the frame's corner on
-# whole pixels (ink there, paper a millimetre inside), the figure below it; a window opened takes both
-# away, closed brings them back; [sheet] machine = false and load = false take them away.
-# SHOT=FILE keeps a screenshot of the empty workspace.
+# make pixels (and alone): the notes on the sheet (issue #49: qml/Schedule.qml, qml/MachineSchedule.qml,
+# qml/ProcessSchedule.qml, qml/LoadGraph.qml), headless (nothing on any display), on the T14's panel
+# (1920x1200 at 1.5, 6.4 px/mm). Nothing until asked. The schedules take turns (Mod+i: next): the
+# equipment, its first column's rule on its pixel 19 mm from the frame's corner (10 mm in, 9 mm on); the
+# processes; neither. A reading's graph comes and goes with its cell (load, temperature, power), its heavy
+# line on the sheet's 50 mm. Zone B2 and a drag move the schedule, a whole millimetre at a time, kept in
+# config.toml. Over a wallpaper still there. SHOT=FILE keeps a screenshot of the equipment and the load.
 set -u
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
@@ -48,9 +49,9 @@ run qs -p "$repo/qml/shell.qml" -n > "$t/qs.log" 2>&1 &
 pids="$pids $!"
 i=0
 until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
-layers() { run "$comp" msg outputs | jq -r '.[0].layers[]' | grep -c "draftpaper-machine\|draftpaper-load"; }
+layers() { run "$comp" msg outputs | jq -r ".[0].layers[]" | grep -c "draftpaper-$1"; }
 waitcfg() { i=0; until grep -q "$1" "$cfg" || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done; grep -c "$1" "$cfg"; }
-waitlayers() { i=0; until [ "$(layers)" = "$1" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; layers; }
+waitlayers() { i=0; until [ "$(layers "$1")" = "$2" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; layers "$1"; }
 shot() {
     rm -f "$t"/Pictures/*.png
     kill -USR1 $nest
@@ -59,73 +60,80 @@ shot() {
     sleep 0.3
     mv "$(ls "$t"/Pictures/*.png | head -n 1)" "$1"
 }
-# the first sample of the load comes 5 s in
-ok "an empty workspace: the schedule and the load up" "$(waitlayers 2)" "2"
-sleep 1
-shot "$t/notes.png"
-[ -n "${SHOT:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/notes.png"; cp "$t/notes.png" "$SHOT"; }
-# the frame's corner: the margin (6 mm) and its 2-pixel line; the schedule's outline 7 mm further in, a
-# column of ink; a millimetre inside it, the paper
-fx=$(awk 'BEGIN { printf "%d", 6 * 6.4 + 2 }'); edge=$(awk -v f="$fx" 'BEGIN { printf "%d", f + 7 * 6.4 }')
-lum() { "$check" "$t/notes.png" 1.5 6.4 6 lum "$1" "$2"; }
-darkest() { for x in $(($1 - 3)) $(($1 - 2)) $(($1 - 1)) $1 $(($1 + 1)) $(($1 + 2)) $(($1 + 3)); do lum $x "$2"; done | sort -n | head -n 1; }
-row=$(awk -v f="$fx" 'BEGIN { printf "%d", f + 20 * 6.4 }')
-ok "the schedule's outline, 7 mm in" "$([ "$(darkest "$edge" "$row")" -lt 110 ] && echo ink)" "ink"
-ok "the paper a millimetre inside" "$([ "$(lum $((edge + 7)) "$row")" -gt 130 ] && echo paper)" "paper"
-# exact to the millimetre: the outline's left edge where frame + 7 mm falls (its nearest physical pixel),
-# the paper two pixels outside it; in zone B2, where B2's corner rounded up to a millimetre, + 7 mm, falls
+sched() { run qs ipc -p "$repo/qml/shell.qml" call schedules "$@" 2> /dev/null; }
+graph() { run qs ipc -p "$repo/qml/shell.qml" call graph "$@" 2> /dev/null; }
 o() { run "$comp" msg outputs | jq -r ".[0] | $1"; }
 mmL=$(o .px_per_mm); fxL=$(o .frame.x); fyL=$(o .frame.y)
 colAt() { awk -v f="$fxL" -v m="$mmL" -v k="$1" 'BEGIN { v = (f + k * m) * 1.5; printf "%d", int(v + 0.5) }'; }
 rowAt() { awk -v f="$fyL" -v m="$mmL" -v k="$1" 'BEGIN { v = (f + k * m) * 1.5; printf "%d", int(v + 0.5) }'; }
-edgeAt() { lum "$1" "$2"; }
-exact() {   # $1 mm across, $2 mm down: the 2-pixel outline on that pixel and the next, the paper on the one before
-    x=$(colAt "$1"); y=$(rowAt "$(($2 + 20))")
-    [ "$(lum "$x" "$y")" -lt 110 ] && [ "$(lum $((x + 1)) "$y")" -lt 110 ] && [ "$(lum $((x - 1)) "$y")" -gt 130 ] && echo exact || echo "off: $(lum $((x - 1)) "$y") $(lum "$x" "$y") $(lum $((x + 1)) "$y") at $x"
+lum() { "$check" "$t/notes.png" 1.5 6.4 6 lum "$1" "$2"; }
+# a 1-pixel rule down the sheet $1 mm from the frame's corner, at $2 mm down: darker than either side
+rule() {
+    x=$(colAt "$1"); y=$(rowAt "$2")
+    l=$(lum "$x" "$y"); a=$(lum $((x - 1)) "$y"); b=$(lum $((x + 1)) "$y")
+    [ "$l" -lt $((a - 10)) ] && [ "$l" -lt $((b - 10)) ] && echo exact || echo "off: $a $l $b at $x"
 }
-ok "the outline on its millimetre: 7 mm from the frame's corner" "$(exact 7 7)" "exact"
-# the load's heavy lines on the sheet's own 10 mm: 50 mm from the frame's corner (a column of the dots too),
-# halfway up the graph (the bottom left, 72 mm tall, 7 mm off the frame's bottom): darker than the 49, 51 mm lines
+
+sleep 1
+ok "nothing until asked" "$(layers schedule)$(layers load)" "00"
+sched next
+ok "Mod+i: the equipment" "$(waitlayers schedule 1)/$(sched state)" "1/equipment"
+sleep 1
+shot "$t/notes.png"
+ok "its first column's rule on its pixel: 10 + 9 mm from the frame's corner" "$(rule 19 30)" "exact"
+sched next
+sleep 0.5
+ok "again: the processes, in its place" "$(waitlayers schedule 1)/$(sched state)" "1/processes"
+sched next
+ok "again: neither (faded away)" "$(waitlayers schedule 0)/$(sched state)" "0/"
+# a reading's graph: its cell shows it, again puts it away; the first sample comes 5 s in
+sleep 5
+graph toggle load
+ok "the load's cell: its graph" "$(waitlayers load 1)" "1"
+sched equipment
+sleep 1.5
+shot "$t/notes.png"
+[ -n "${SHOT:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/notes.png"; cp "$t/notes.png" "$SHOT"; }
 fh=$(awk -v h="$(o .frame.height)" -v m="$mmL" 'BEGIN { print int(h / m + 1e-6) }')
-x50=$(colAt 50); ymid=$(rowAt $((fh - 7 - 36)))
+ymid=$(rowAt $((fh - 7 - 36))); x50=$(colAt 50)
 l50=$(lum "$x50" "$ymid"); l49=$(lum "$(colAt 49)" "$ymid"); l51=$(lum "$(colAt 51)" "$ymid")
-ok "the load's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
+ok "the graph's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
+graph toggle load
+ok "again: away" "$(waitlayers load 0)" "0"
+graph toggle temperature
+ok "the temperature's cell: its graph" "$(waitlayers load 1)/$(graph state)" "1/temperature"
+graph toggle power
+ok "the power's: switched to it (on mains here)" "$(waitlayers load 1)/$(graph state)" "1/power"
+# SHOT_PROC=FILE: the processes and the temperature's graph
+if [ -n "${SHOT_PROC:-}" ]; then
+    sched processes; graph toggle temperature; sleep "${SHOT_AFTER:-3}"; shot "$t/proc.png"; cp "$t/proc.png" "$SHOT_PROC"
+    graph toggle power; sched equipment; sleep 1
+fi
+# zone B2: the schedule 7 mm into it, its first column's rule 9 mm on
 zx=$(awk -v w="$(o .zones.width)" -v m="$mmL" 'BEGIN { v = w / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
 zy=$(awk -v h="$(o .zones.height)" -v m="$mmL" 'BEGIN { v = h / m; c = int(v); if (c < v - 1e-6) c++; print c + 7 }')
-run "$cli" config set 'sheet.machine_at=B2' > /dev/null
+run "$cli" config set 'sheet.schedule_at=B2' > /dev/null
 sleep 1.5
-shot "$t/b2.png"
-cp "$t/b2.png" "$t/notes.png"
-ok "zone B2: 7 mm into it, ${zx} mm, ${zy} mm from the frame's corner" "$(exact "$zx" "$zy")" "exact"
-# dragged by the title: 10 mm right and 5 mm down, then let go; config.toml keeps the place
+shot "$t/notes.png"
+ok "zone B2: ${zx} mm, ${zy} mm from the frame's corner" "$(rule $((zx + 9)) $((zy + 20)))" "exact"
+# dragged by its heading: 10 mm right and 5 mm down; config.toml keeps the place
 gx=$(awk -v f="$fxL" -v m="$mmL" -v k="$zx" 'BEGIN { print f + (k + 20) * m }'); gy=$(awk -v f="$fyL" -v m="$mmL" -v k="$zy" 'BEGIN { print f + (k + 3) * m }')
 run "$comp" msg pointer "$gx" "$gy" > /dev/null; sleep 0.2
 run "$comp" msg button left down > /dev/null; sleep 0.2
 run "$comp" msg pointer "$(awk -v g="$gx" -v m="$mmL" 'BEGIN { print g + 5 * m }')" "$gy" > /dev/null; sleep 0.1
 run "$comp" msg pointer "$(awk -v g="$gx" -v m="$mmL" 'BEGIN { print g + 10 * m }')" "$(awk -v g="$gy" -v m="$mmL" 'BEGIN { print g + 5 * m }')" > /dev/null; sleep 0.2
 run "$comp" msg button left up > /dev/null
-ok "dragged 10 mm right, 5 mm down: kept in millimetres" "$(waitcfg "^machine_at = \\[$((zx + 10)), $((zy + 5))\\]")" "1"
+ok "dragged 10 mm right, 5 mm down: kept in millimetres" "$(waitcfg "^schedule_at = \\[$((zx + 10)), $((zy + 5))\\]")" "1"
 sleep 1.5
-shot "$t/dragged.png"
-cp "$t/dragged.png" "$t/notes.png"
-ok "and drawn there, on its millimetre" "$(exact $((zx + 10)) $((zy + 5)))" "exact"
-ok "the load still up, moved out of its way" "$(waitlayers 2)" "2"
-# over a wallpaper: still both up (the load's lines on a halo of the paper); SHOT_PIC=FILE keeps it
+shot "$t/notes.png"
+ok "and drawn there, on its millimetre" "$(rule $((zx + 19)) $((zy + 25)))" "exact"
+ok "the graph still up, out of its way" "$(layers load)" "1"
+# over a wallpaper: both still there (on the paper's halo)
 magick -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png" 2> /dev/null || convert -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png"
 run "$cli" config set "wallpaper=$t/pic.png" > /dev/null
 sleep 2
-ok "over a wallpaper: both still up" "$(waitlayers 2)" "2"
+ok "over a wallpaper: both still there" "$(layers schedule)$(layers load)" "11"
 [ -n "${SHOT_PIC:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/pic-shot.png"; cp "$t/pic-shot.png" "$SHOT_PIC"; }
-run "$cli" config set "wallpaper=" > /dev/null
-command -v foot > /dev/null && {
-    run foot sh > /dev/null 2>&1 &
-    pids="$pids $!"
-    ok "a window opened: both away" "$(waitlayers 0)" "0"
-    kill "$(run "$comp" msg windows | jq -r ".[0].pid")" 2>/dev/null
-    ok "closed: both back" "$(waitlayers 2)" "2"
-}
-run "$cli" config set sheet.machine=false sheet.load=false > /dev/null
-ok "[sheet] machine = false, load = false: both away" "$(waitlayers 0)" "0"
-ok "no QML warning from the notes" "$(grep -c 'MachineSchedule.qml\|LoadGraph.qml' "$t/qs.log")" "0"
-[ "$fail" = 0 ] && echo "notes: ok" || { grep -a 'MachineSchedule.qml\|LoadGraph.qml' "$t/qs.log" | head -5; echo "notes: FAILED"; }
+ok "no QML warning from the notes" "$(grep -c 'Schedule.qml\|LoadGraph.qml\|sheet.js' "$t/qs.log")" "0"
+[ "$fail" = 0 ] && echo "notes: ok" || { grep -a 'Schedule.qml\|LoadGraph.qml\|sheet.js' "$t/qs.log" | head -5; echo "notes: FAILED"; }
 exit $fail

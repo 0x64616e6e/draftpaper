@@ -33,18 +33,19 @@ Item {
     readonly property real oy: geo ? geo.rect.y - (edge.height - marginR - surfH) : 0
 
     // per cell, in the compositor's order: [x, y, w, h] in mm (only without its geometry), label, value
+    // (the readings' cells: a click shows their last ten minutes on the sheet, LoadGraph.qml, or puts it away)
     // (StyledText), click (left), click (right), alert
     readonly property var cells: [
         [0, 0, 34, 24, "TIME", Qt.formatDateTime(shell.now, "HH:mm"), null, null, false],
         [34, 0, 32, 12, "DATE", Qt.formatDateTime(shell.now, "ddd dd MMM yyyy"), null, null, false],
         [66, 0, 22, 12, "SHEET", spaceName || "-", null, null, false],
         [88, 0, 42, 12, "PROJECT", theme.title.project || "", null, null, false],
-        [34, 12, 24, 12, "POWER", shell.powerText, null, null, false],
-        [58, 12, 22, 12, "BATTERY", shell.batteryText, null, null, shell.batteryLow],
+        [34, 12, 24, 12, "POWER", shell.powerText, () => shell.toggleGraph("power", block.edge.screen.name), null, false],
+        [58, 12, 22, 12, "BATTERY", shell.batteryText, () => shell.toggleGraph("battery", block.edge.screen.name), null, shell.batteryLow],
         [80, 12, 22, 12, "PROFILE", shell.profileText || "-", () => shell.profileNext(), null, false],
-        [102, 12, 28, 12, "CPU / MEMORY", shell.loadText, null, null, false],
+        [102, 12, 28, 12, "CPU / MEMORY", shell.loadText, () => shell.toggleGraph("load", block.edge.screen.name), null, false],
         [0, 24, 34, 12, "NETWORK", shell.networkText, null, null, false],
-        [34, 24, 52, 12, "TEMPERATURE · FAN", shell.tempText || "-", null, null, shell.tempHot],
+        [34, 24, 52, 12, "TEMPERATURE · FAN", shell.tempText || "-", () => shell.toggleGraph("temperature", block.edge.screen.name), null, shell.tempHot],
         custom ? [86, 24, 44, 12, custom.label || "", shell.customText || "-", custom.left ? () => shell.run(custom.left) : null,
                   custom.right ? () => shell.run(custom.right) : null, false]
                : [86, 24, 44, 12, "DRAWN", theme.title.drawn || "", null, null, false],

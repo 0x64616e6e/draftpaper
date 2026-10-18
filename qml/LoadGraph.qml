@@ -80,8 +80,36 @@ Item {
         return r.w >= 100 && r.h >= 40
     }
 
-    readonly property bool shown: theme.sheet.load !== false && !!out && !!edge.activeSpace && edge.activeSpace.windows === 0
-        && wMm >= 100 && hMm >= 40 && samples.length > 0
+    // which readings: "load", "temperature", "power", "battery" (a click on their cell in the title block),
+    // or none
+    property string domain: ""
+    readonly property bool shown: domain !== "" && !!out && wMm >= 100 && hMm >= 40 && samples.length > 0
+    property real fade: shown ? 1 : 0
+    Behavior on fade { enabled: graph.theme.animations; NumberAnimation { duration: 240; easing.type: Easing.InOutQuad } }
+    property string drawn: ""                          // the domain drawn, kept while it fades out
+    onDomainChanged: if (domain !== "") drawn = domain
+    // the highest of a reading in the ten minutes, for a scale that fits it
+    function most(key) { return samples.reduce((m, s) => Math.max(m, s[key] === undefined ? -1 : s[key]), -1) }
+    // each line of the domain: the sample's key, its scale (min, max), its ink, weight (mm) and dash, and how
+    // its name and value are lettered at its end
+    readonly property var series: {
+        const dash = [1.4 * mm, 0.7 * mm], dots = [0.3 * mm, 0.9 * mm]
+        if (drawn === "load") return [
+            { key: "cpu", min: 0, max: 1, colour: ink, w: 0.4, dash: [], bold: true, text: v => "CPU " + Math.round(v * 100) + "%" },
+            { key: "mem", min: 0, max: 1, colour: ink, w: 0.3, dash: dash, text: v => "MEMORY " + Math.round(v * 100) + "%" }]
+        if (drawn === "temperature") return [
+            { key: "temp", min: 30, max: 100, colour: alert, w: 0.4, dash: [], bold: true, text: v => "CPU " + Math.round(v) + "°" },
+            { key: "nvme", min: 30, max: 100, colour: ink, w: 0.3, dash: dash, text: v => "NVME " + Math.round(v) + "°" },
+            { key: "fan", min: 0, max: Math.max(6000, Math.ceil(most("fan") / 1000) * 1000), colour: ink, w: 0.3, dash: dots, text: v => "FAN " + Math.round(v) + " RPM" }]
+        if (drawn === "power") return [
+            { key: "power", min: 0, max: Math.max(20, Math.ceil(most("power") / 10) * 10), colour: ink, w: 0.4, dash: [], bold: true, text: v => "POWER " + v.toFixed(1) + " W" }]
+        if (drawn === "battery") return [
+            { key: "battery", min: 0, max: 1, colour: ink, w: 0.4, dash: [], bold: true, text: v => "BATTERY " + Math.round(v * 100) + "%" }]
+        return []
+    }
+    // nothing of the domain in the ten minutes (the power on mains, no battery): said where the line would be
+    readonly property string none: drawn === "" || series.some(s => samples.some(x => x[s.key] !== undefined && x[s.key] >= 0)) ? ""
+        : drawn === "power" ? "POWER · ON MAINS, NOTHING DRAWN TO PLOT" : drawn === "battery" ? "BATTERY · NONE" : ""
 
     // the surface: its corner on a whole logical and physical pixel, at or before the graph's own
     readonly property int sx: out ? Sheet.surfaceAt(Sheet.at(out, dpr, xMm, true), dpr) : 0
@@ -92,11 +120,11 @@ Item {
     // inside the top and the bottom, so a full or an idle processor stays clear of the edge
     function xAt(i) { return ix(0) + (ix(wMm) - ix(0)) * (1 - (samples.length - 1 - i) / span) }
     function yPct(v) { return iy(hMm - 2) - Math.max(0, Math.min(1, v)) * (iy(hMm - 2) - iy(2)) }
-    function yTemp(c) { return yPct((c - 30) / 70) }
+    function yOf(v, s) { return yPct((v - s.min) / (s.max - s.min)) }
 
     PanelWindow {
         screen: graph.edge.screen
-        visible: graph.shown
+        visible: graph.fade > 0
         anchors { top: true; left: true }
         margins { top: graph.sy; left: graph.sx }
         implicitWidth: Math.max(1, Math.ceil(graph.ix(graph.wMm)) + 1)
@@ -110,6 +138,7 @@ Item {
         Canvas {
             id: paper
             anchors.fill: parent
+            opacity: graph.fade
             renderStrategy: Canvas.Cooperative
             onPaint: {
                 const c = getContext("2d"), g = graph, hair = 1 / g.dpr
@@ -168,17 +197,17 @@ Item {
                     c.stroke()
                 }
                 c.lineJoin = "round"; c.lineCap = "round"
-                const readings = [["cpu", g.yPct, ink(1), 0.4, []], ["mem", g.yPct, ink(1), 0.3, [1.4 * g.mm, 0.7 * g.mm]], ["temp", g.yTemp, g.alert, 0.3, []]]
                 if (g.theme.pictured) {
                     const halo = Qt.rgba(g.theme.paper.r, g.theme.paper.g, g.theme.paper.b, 0.85)
-                    for (const [key, at, , w] of readings) line(key, at, halo, (w + 0.8) * g.mm, [])
+                    for (const s of g.series) line(s.key, v => g.yOf(v, s), halo, (s.w + 0.8) * g.mm, [])
                 }
-                for (const [key, at, colour, w, dash] of readings) line(key, at, colour, w * g.mm, dash)
+                for (const s of g.series) line(s.key, v => g.yOf(v, s), s.colour, s.w * g.mm, s.dash)
                 c.setLineDash([])
             }
             Connections {
                 target: graph
                 function onSamplesChanged() { paper.requestPaint() }
+                function onSeriesChanged() { paper.requestPaint() }
                 function onXMmChanged() { paper.requestPaint() }
                 function onYMmChanged() { paper.requestPaint() }
                 function onWMmChanged() { paper.requestPaint() }
@@ -194,9 +223,11 @@ Item {
                 const l = graph.samples.length ? graph.samples[graph.samples.length - 1] : null
                 if (!l) return []
                 const out = []
-                if (l.cpu >= 0) out.push({ y: graph.yPct(l.cpu), text: "CPU " + Math.round(l.cpu * 100) + "%", colour: graph.ink, bold: true })
-                if (l.mem >= 0) out.push({ y: graph.yPct(l.mem), text: "MEMORY " + Math.round(l.mem * 100) + "%", colour: graph.ink, bold: false })
-                if (l.temp >= 0) out.push({ y: graph.yTemp(l.temp), text: "TEMPERATURE " + Math.round(l.temp) + "°", colour: graph.alert, bold: false })
+                for (const s of graph.series) {
+                    const v = l[s.key]
+                    if (v !== undefined && v >= 0) out.push({ y: graph.yOf(v, s), text: s.text(v), colour: s.colour, bold: !!s.bold })
+                }
+                if (graph.none) out.push({ y: graph.iy(graph.hMm / 2), text: graph.none, colour: graph.ink, bold: false })
                 out.sort((a, b) => a.y - b.y)
                 const gap = 3.2 * graph.mm
                 for (let i = 1; i < out.length; i++) out[i].y = Math.max(out[i].y, out[i - 1].y + gap)
@@ -206,6 +237,7 @@ Item {
             Rectangle {
                 id: tag
                 required property var modelData
+                opacity: graph.fade
                 readonly property real pad: 0.6 * graph.mm
                 width: label.implicitWidth + 2 * pad; height: label.implicitHeight
                 x: graph.ix(graph.wMm - 1) - width
