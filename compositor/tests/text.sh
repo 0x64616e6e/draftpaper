@@ -76,9 +76,10 @@ qtline() { grep "^$1=" "$t/.config/qt6ct/qt6ct.conf"; }
 
 ok "config json: the system's text where config.toml sets none" "$(run "$cli" config json | jq -c '.text')" '{"interface":"Cantarell","size":11.0,"monospace":"DejaVu Sans Mono","mono_size":10.0,"min_degrees":0.2}'
 ipc toggle
-sleep 1
+# the settings load the config (config json) as they open: time for that on a loaded machine
+sleep 2.5
 ipc page text
-sleep 0.5
+sleep 1
 ipc row 2
 ipc step 1
 ok "interface size 12 in config.toml's [text]" "$(waitfor '^size = 12$' "$cfg")" "1"

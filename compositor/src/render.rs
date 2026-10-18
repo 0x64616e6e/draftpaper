@@ -377,6 +377,12 @@ fn scene_elements(
         let Some(loc) = state.space.element_location(window) else { continue };
         let at = Rectangle::new(loc, window.geometry().size);
         let tile = crate::layout::tile_of(window, at);
+        // a tile is drawn on its own output only: its pixels are that output's, and only its shadow
+        // reaches any other (Firefox's, over onto the panel beside a 4K display, was drawn whole there,
+        // at its place on the other)
+        if tile.is_some() && state.home_output(window).as_ref() != Some(output) {
+            continue;
+        }
         match (state.anim.flight(window), shift) {
             // unparking: from its cell into its place, appearing
             (Some(f), _) if f.to.is_none() => {
