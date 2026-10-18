@@ -62,6 +62,12 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               picture=FILE|none, margins=paper|ambient, tint, fit=fill|fit|centre,
                               position=centre|top|bottom|left|right, brightness, wash, blur (mm):
                               any of them in one write (the settings' wallpaper page)
+  draftpaper config json      config.toml as read, the defaults filled in
+  draftpaper config set KEY=VALUE ...
+                              keys in config.toml, dotted for tables (title.scale=false,
+                              outputs.eDP-1.scale=1.25), comments kept; KEY= removes one (its default)
+  draftpaper config mark|back|keep
+                              the settings' Escape: config.toml kept as it is, put back, or let go
   draftpaper margins paper|ambient
                               with a wallpaper: the margins the theme's paper or the picture's colours
   draftpaper tmux save|keep|restore [SOCKET]
@@ -138,6 +144,25 @@ fn main() {
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
         ["revisions", ..] => revisions::main(),
+        ["config", "json", ..] => config_json(&p),
+        ["config", "set", pairs @ ..] if !pairs.is_empty() => {
+            config::set_pairs(&p, pairs);
+            // the shell's copy (theme.json) and idle follow; the compositor reads the file itself
+            theme::apply(&p, None, false);
+            // the applications' own session restore, when [session] changed (restore.rs)
+            if pairs.iter().any(|k| k.starts_with("session.")) {
+                restore::apply(&p, &config::load(&p));
+            }
+        }
+        ["config", "mark", ..] => config::mark(&p),
+        ["config", "back", ..] => {
+            if config::back(&p) {
+                theme::apply(&p, None, false);
+                restore::apply(&p, &config::load(&p));
+            }
+        }
+        ["config", "keep", ..] => config::keep(&p),
+        ["config", ..] => util::die("draftpaper config json | set KEY=VALUE ... | mark | back | keep"),
         ["version", ..] => println!("{}", env!("CARGO_PKG_VERSION")),
         _ => util::die(USAGE),
     }
@@ -625,4 +650,21 @@ fn lock(p: &Paths) {
         }
     }
     util::die("draftpaper: the screen did not lock within 5 seconds");
+}
+
+/// `draftpaper config json`: config.toml as read, with the defaults, and [sheet]'s hatching as it shows
+/// (the theme's, where config.toml sets none): what the settings' rows start from.
+fn config_json(p: &Paths) {
+    let mut cfg = config::load(p);
+    let name = cfg.get("theme").and_then(Value::as_str).unwrap_or("softglow").to_string();
+    let t = theme::load(p, &name);
+    let sheet = cfg.entry("sheet").or_insert_with(|| Value::Object(Default::default()));
+    if let Value::Object(s) = sheet {
+        for (k, d) in [("hatch_strength", 0.35), ("hatch_spacing", 1.5)] {
+            if !s.contains_key(k) {
+                s.insert(k.into(), t["sheet"].get(k).cloned().unwrap_or(serde_json::json!(d)));
+            }
+        }
+    }
+    println!("{}", util::dumps_indent(&Value::Object(cfg), 1));
 }

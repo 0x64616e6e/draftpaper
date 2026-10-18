@@ -94,15 +94,16 @@ chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d
 
 `draftpaper rulers` does what Mod+r does.
 
-## Settings (colour scheme, wallpaper)
+## Settings (colour scheme, wallpaper, sheet, session, input, idle)
 
 | Keys | |
 |---|---|
 | Mod+t · click the theme name | Open the settings on the board |
-| Tab · click a page's cell | Colour scheme, wallpaper |
+| Tab · Shift+Tab · click a page's cell | Colour scheme, wallpaper, sheet, session, input, idle · lock |
 | ↑ ↓ · k j | Between the drawings (the themes) and the builder's rows |
 | ← → · h l · wheel | Along them: a theme, or a choice (the sheet previews it) |
 | Enter · click the picked drawing | Keep it (the applications too; a built scheme becomes the theme `custom`) |
+| ↑ ↓ then ← → on the other pages | A row, then its value: config.toml changes at once, comments kept (Escape puts the file back) |
 | Esc · click elsewhere | Back to the theme and wallpaper you had |
 | R twice | Your copy of a shipped theme back to the shipped one |
 
@@ -141,6 +142,7 @@ between them, ← → along, each change shown at once.
 | `draftpaper scheme options\|json\|preview\|keep [choice=value]` | A scheme built from choices, as the settings build it |
 | `draftpaper theme revert NAME` | A shipped theme as shipped again |
 | `draftpaper settings` | Open or close the settings |
+| `draftpaper config set KEY=VALUE ...` | Keys in config.toml (`title.scale=false`), comments kept, as the settings' rows write them |
 | `draftpaper wallpaper [FILE \| none]` | A picture in the frame, or none |
 | `draftpaper margins paper\|ambient` | With a wallpaper: the margins in paper, or the picture's colours |
 | `draftpaper lock` | Lock the screen; back once it is locked (swaylock if the lock screen does not lock) |

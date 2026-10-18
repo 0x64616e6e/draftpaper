@@ -136,7 +136,15 @@ impl Theme {
         let colour = |key: &str, fallback: &str| {
             table.get(key).and_then(|v| v.as_str()).and_then(rgb).unwrap_or_else(|| rgb(fallback).unwrap())
         };
-        let s = table.get("sheet").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let mut s = table.get("sheet").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        // config.toml's [sheet] hatch_strength, hatch_spacing over the theme's (the settings' Sheet page)
+        if let Some(own) = config.get("sheet").and_then(|v| v.as_table()) {
+            for k in ["hatch_strength", "hatch_spacing"] {
+                if let Some(v) = own.get(k) {
+                    s.insert(k.into(), v.clone());
+                }
+            }
+        }
         let num = |key: &str, fallback: f32| {
             s.get(key).and_then(|v| v.as_float().or_else(|| v.as_integer().map(|i| i as f64))).map(|f| f as f32).unwrap_or(fallback)
         };

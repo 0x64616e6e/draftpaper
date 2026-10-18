@@ -247,6 +247,7 @@ ShellRoot {
         function row(n: int): void {
             if (!settings.visible) return
             if (settings.page === "wallpaper") settings.wpRow = Math.max(0, Math.min(settings.wpRows.length, n))
+            else if (settings.cfgRows.length) settings.cfgRow = Math.max(0, Math.min(settings.cfgRows.length - 1, n))
             else settings.row = Math.max(0, Math.min(settings.rows.length, n))
         }
         function page(name: string): void { if (settings.visible) settings.page = name }

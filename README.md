@@ -391,7 +391,8 @@ the paper, the ink, the focused workspace's colour (`strong`), the window colour
 palette (`[apps]`; see `/usr/share/draftpaper/themes/softglow.toml`); your own go in
 `~/.config/draftpaper/themes/`. Its `[sheet]` shades the paper and sets how strongly the lines are drawn,
 and the parked cells' hatching: `hatch_strength` (0 to 1, 0.35 by default) and `hatch_spacing` (in mm,
-1.5 by default; 0 turns it off).
+1.5 by default; 0 turns it off). A `[sheet]` in config.toml with either key sets it over the theme's
+(the settings' Sheet page).
 
 ![The settings' wallpaper page: the pictures as drawings, and the wallpaper's settings below them](docs/wallpaper.jpg)
 

@@ -33,7 +33,8 @@ impl Paths {
         Paths {
             config: config_dir.join("draftpaper/config.toml"),
             cache: xdg("XDG_CACHE_HOME", home.join(".cache")).join("draftpaper"),
-            runtime: xdg("XDG_RUNTIME_DIR", "/tmp".into()).join("draftpaper"),
+            // DRAFTPAPER_RUNTIME: as the shell is given it (start), and for the tests
+            runtime: env::var_os("DRAFTPAPER_RUNTIME").map(PathBuf::from).unwrap_or_else(|| xdg("XDG_RUNTIME_DIR", "/tmp".into()).join("draftpaper")),
             state: xdg("XDG_STATE_HOME", home.join(".local/state")).join("draftpaper"),
             config_dir,
             root,

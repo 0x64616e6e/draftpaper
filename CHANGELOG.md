@@ -3,6 +3,14 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+One settings tool for the whole desktop (#36), begun: the settings (Mod+t) gain Sheet, Session, Input and
+Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
+Enter keeps it, Escape puts config.toml back as it was. `draftpaper config set table.key=value ...`
+writes any key, the file's comments and order kept; `draftpaper config json` reads them. Hatching can be
+set in config.toml's `[sheet]`, over the theme's.
+
 ## 0.6.0 (2026-10-18)
 
 The sheet keeps a drawing's conventions: a scale bar true to size, a revision block, hatching, a key

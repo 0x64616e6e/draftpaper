@@ -75,6 +75,63 @@ PanelWindow {
     function wpArgs(picture, vals) { return ["wallpaper", "set", "picture=" + (picture || "none")].concat(wpRows.map(r => r.key + "=" + vals[r.key])) }
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
+    // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
+    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["sheet", "SHEET"],
+                                     ["session", "SESSION"], ["input", "INPUT"], ["idle", "IDLE · LOCK"]]
+    // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
+    // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
+    readonly property var cfgPages: ({
+        sheet: [
+            { key: "margin", name: "MARGIN", def: 6, note: "between the screen's edge and the frame",
+              options: [[4, "4 mm"], [5, "5 mm"], [6, "6 mm"], [8, "8 mm"], [10, "10 mm"]] },
+            { key: "title.scale", name: "SCALE BAR", def: true, note: "true to size; NTS where a display reports no size",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "title.revisions", name: "REVISION BLOCK", def: false, note: "the focused repository's last commits",
+              options: [[false, "off"], [true, "on"]] },
+            { key: "title.key_plan", name: "KEY PLAN", def: true, note: "with several screens: their plan, the north mark",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "sheet.hatch_strength", name: "HATCHING", def: 0.35, note: "parked windows' cells",
+              options: [[0, "none"], [0.2, "light"], [0.35, "standard"], [0.55, "strong"]] },
+            { key: "sheet.hatch_spacing", name: "HATCH SPACING", def: 1.5, note: "",
+              options: [[1, "1 mm"], [1.5, "1.5 mm"], [2, "2 mm"]] },
+            { key: "glyphs", name: "GLYPHS", def: true, note: "Nerd Font glyphs before the readings",
+              options: [[true, "on"], [false, "words only"]] },
+            { key: "animations.enabled", name: "MOTION", def: true, note: "parking, workspaces, the settings",
+              options: [[true, "on"], [false, "reduced"]] }
+        ],
+        session: [
+            { key: "session.restore", name: "RESTORE", def: true, note: "the windows back in their places at login",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "session.apps", name: "APPLICATIONS' STATE", def: true, note: "tabs, files, editors, tmux",
+              options: [[true, "on"], [false, "off"]] }
+        ],
+        input: [
+            { key: "input.repeat_delay", name: "REPEAT DELAY", def: 200, note: "before a held key repeats",
+              options: [[150, "150 ms"], [200, "200 ms"], [300, "300 ms"], [400, "400 ms"]] },
+            { key: "input.repeat_rate", name: "REPEAT RATE", def: 25, note: "",
+              options: [[20, "20/s"], [25, "25/s"], [30, "30/s"], [40, "40/s"]] },
+            { key: "input.tap", name: "TAP TO CLICK", def: true, note: "the touchpad",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "input.natural_scroll", name: "NATURAL SCROLLING", def: false, note: "the content follows the fingers",
+              options: [[false, "off"], [true, "on"]] },
+            { key: "input.focus_follows_mouse", name: "FOCUS FOLLOWS THE MOUSE", def: true, note: "",
+              options: [[true, "on"], [false, "off"]] }
+        ],
+        idle: [
+            { key: "idle.screens_off", name: "SCREENS OFF AFTER", def: 15, note: "any input wakes them",
+              options: [[5, "5 min"], [10, "10 min"], [15, "15 min"], [30, "30 min"], [0, "never"]] },
+            { key: "idle.lock_after", name: "LOCK AFTER", def: 0, note: "Mod+Shift+x locks now",
+              options: [[0, "never"], [5, "5 min"], [10, "10 min"], [15, "15 min"]] },
+            { key: "idle.lock_on_sleep", name: "LOCK BEFORE SUSPEND", def: false, note: "Mod+Shift+p: for the day",
+              options: [[false, "off"], [true, "on"]] }
+        ]
+    })
+    readonly property var cfgRows: cfgPages[page] || []
+    property var cfg: null              // `draftpaper config json`
+    property var cfgVals: ({})          // the rows changed, key: value
+    property bool cfgMarked: false      // config.toml kept as it was (`config mark`): Escape puts it back
+    property int cfgRow: 0
+    onPageChanged: cfgRow = 0
     readonly property var rows: ["paper", "tone", "accent", "windows", "shade", "terminal", "text", "contrast"]
     readonly property var rowNames: ({ paper: "PAPER", tone: "TONE", accent: "ACCENT", windows: "WINDOWS", shade: "WINDOWS SHADE",
                                        terminal: "TERMINAL", text: "TERMINAL TEXT", contrast: "CONTRAST" })
@@ -86,6 +143,7 @@ PanelWindow {
     readonly property string hint: !visible ? ""
         : reverting ? "r again: " + (picked ? picked.label : "") + " as shipped"
         : page === "wallpaper" ? "↑↓ pictures, margins, tint · ←→ pick · tab colour scheme · enter keep · esc back"
+        : cfgRows.length ? "↑↓ rows · ←→ pick · tab next page · enter keep · esc back"
         : "↑↓ drawings and choices · ←→ pick · tab wallpaper · enter keep · esc back to " + (themes.find(t => t.name === original) || { label: original }).label
           + (picked && picked.own && picked.shipped ? " · r revert" : "")
 
@@ -100,6 +158,13 @@ PanelWindow {
         wpWas = null
         wpApplied = false
         loadWallpaper.running = true
+        cfg = null
+        cfgVals = {}
+        cfgMarked = false
+        cfgRow = 0
+        // a mark left by settings that did not close (the shell restarted) goes: config.toml stays as it is
+        queue(["config", "keep"], "")
+        loadConfig.running = true
         reverting = false
         themes = []
         custom = null
@@ -107,6 +172,10 @@ PanelWindow {
         loadThemes.running = true
         wall.running = true
         visible = true
+    }
+    function turnPage(dir) {
+        const i = pageList.findIndex(p => p[0] === page)
+        page = pageList[(i + dir + pageList.length) % pageList.length][0]
     }
     function args() { return rows.map(k => k + "=" + choices[k]) }
     function pickCard(i) {
@@ -125,6 +194,7 @@ PanelWindow {
     }
     function step(dir) {
         if (page === "wallpaper") return wpStep(dir)
+        if (cfgRows.length) return cfgStep(dir)
         if (row === 0) pickCard(card + dir)
         else {
             const k = rows[row - 1], opts = options[k] || []
@@ -146,6 +216,8 @@ PanelWindow {
     function keep() {
         settle.stop()
         wpSettle.stop()
+        if (cfgSettle.running) { cfgSettle.stop(); cfgApply() }
+        if (cfgMarked) queue(["config", "keep"], "")
         if (wpTouched) wpApply()
         if (schemeTouched && picked) {
             if (isCustom) queue(["scheme", "keep"].concat(args()), "")
@@ -157,11 +229,52 @@ PanelWindow {
     function cancel() {
         settle.stop()
         wpSettle.stop()
+        cfgSettle.stop()
+        // config.toml as it was: the rows, and anything else changed meanwhile (the wallpaper restore below agrees)
+        if (cfgMarked) queue(["config", "back"], "")
         if (shown !== original) queue(["theme", original, "--preview"], "")
         if (wpWas && wpApplied) queue(wpArgs(wpWas.restore, wpWas.vals), "")
         visible = false
     }
 
+    // ---- the pages of config.toml's rows ----
+    function cfgGet(row) {
+        if (row.key in cfgVals) return cfgVals[row.key]
+        let v = cfg
+        for (const part of row.key.split(".")) v = (v && typeof v === "object") ? v[part] : undefined
+        return v === undefined || v === null ? row.def : v
+    }
+    // the values offered, and the one set when it is none of them
+    function cfgOptions(row) {
+        const v = cfgGet(row)
+        return row.options.some(o => o[0] === v) ? row.options : row.options.concat([[v, String(v)]])
+    }
+    function cfgSet(row, value) {
+        if (!cfgMarked) { queue(["config", "mark"], ""); cfgMarked = true }
+        const v = Object.assign({}, cfgVals)
+        v[row.key] = value
+        cfgVals = v
+        cfgSettle.restart()
+    }
+    function cfgStep(dir) {
+        const row = cfgRows[cfgRow]
+        if (!row) return
+        const opts = cfgOptions(row), vals = opts.map(o => o[0])
+        const i = vals.indexOf(cfgGet(row))
+        const n = Math.max(0, Math.min(vals.length - 1, (i < 0 ? 0 : i) + dir))
+        if (n !== i) cfgSet(row, vals[n])
+    }
+    function cfgApply() {
+        const keys = Object.keys(cfgVals)
+        if (keys.length) queue(["config", "set"].concat(keys.map(k => k + "=" + String(cfgVals[k]))), "config")
+    }
+    // the sheet shows a change a moment after the picking pauses
+    Timer { id: cfgSettle; interval: 200; onTriggered: settings.cfgApply() }
+    Process {
+        id: loadConfig
+        command: [settings.shell.bin, "config", "json"]
+        stdout: StdioCollector { onStreamFinished: { try { settings.cfg = JSON.parse(this.text) } catch (e) {} } }
+    }
     // ---- the wallpaper page ----
     function wpPick(path) { wpPicture = path; wpSettle.restart() }
     function wpSet(key, value) {
@@ -337,9 +450,11 @@ PanelWindow {
             if (k !== Qt.Key_R) settings.reverting = false
             if (k === Qt.Key_Escape) settings.cancel()
             else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) settings.keep()
-            else if (k === Qt.Key_Tab || k === Qt.Key_Backtab) settings.page = settings.page === "scheme" ? "wallpaper" : "scheme"
+            else if (k === Qt.Key_Tab || k === Qt.Key_Backtab) settings.turnPage(k === Qt.Key_Tab && !(e.modifiers & Qt.ShiftModifier) ? 1 : -1)
             else if (settings.page === "wallpaper" && (k === Qt.Key_Up || k === Qt.Key_K)) settings.wpRow = Math.max(0, settings.wpRow - 1)
             else if (settings.page === "wallpaper" && (k === Qt.Key_Down || k === Qt.Key_J)) settings.wpRow = Math.min(settings.wpRows.length, settings.wpRow + 1)
+            else if (settings.cfgRows.length && (k === Qt.Key_Up || k === Qt.Key_K)) settings.cfgRow = Math.max(0, settings.cfgRow - 1)
+            else if (settings.cfgRows.length && (k === Qt.Key_Down || k === Qt.Key_J)) settings.cfgRow = Math.min(settings.cfgRows.length - 1, settings.cfgRow + 1)
             else if (k === Qt.Key_Up || k === Qt.Key_K) settings.row = Math.max(0, settings.row - 1)
             else if (k === Qt.Key_Down || k === Qt.Key_J) settings.row = Math.min(settings.rows.length, settings.row + 1)
             else if (k === Qt.Key_Left || k === Qt.Key_H) settings.step(-1)
@@ -359,7 +474,7 @@ PanelWindow {
 
         // the pages, ruled like the title block's cells: the one shown in heavier ink
         Repeater {
-            model: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"]]
+            model: settings.pageList
             Rectangle {
                 id: pg
                 required property var modelData
@@ -553,6 +668,87 @@ PanelWindow {
                             }
                         }
                     }
+                    }
+                }
+            }
+        }
+
+        // ---- the pages of config.toml's rows (Sheet, Session, Input, Idle) ----
+        Item {
+            id: cfgPage
+            anchors.fill: parent
+            visible: settings.cfgRows.length > 0
+            readonly property real rowH: 12 * settings.mm
+            readonly property real optX: 58 * settings.mm
+            Repeater {
+                model: settings.cfgRows
+                Item {
+                    id: cr
+                    required property var modelData
+                    required property int index
+                    readonly property bool here: settings.cfgRow === index
+                    readonly property var value: settings.cfgGet(modelData)
+                    x: settings.x0
+                    y: board.inY + settings.gutter + index * cfgPage.rowH
+                    width: settings.cw; height: cfgPage.rowH
+                    Rectangle { y: parent.height - height; width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
+                    Column {
+                        y: (cfgPage.rowH - height) / 2
+                        spacing: 0.6 * settings.mm
+                        Text {
+                            text: cr.modelData.name
+                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.bold: cr.here
+                            color: cr.here ? settings.ink : settings.inkA(0.75)
+                        }
+                        Text {     // where it goes in config.toml
+                            readonly property int dot: cr.modelData.key.lastIndexOf(".")
+                            text: dot < 0 ? cr.modelData.key : "[" + cr.modelData.key.slice(0, dot) + "] " + cr.modelData.key.slice(dot + 1)
+                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.62
+                            color: settings.inkA(0.55)
+                        }
+                    }
+                    Row {          // the values, each as wide as its words; the note after them
+                        x: cfgPage.optX; y: (cfgPage.rowH - 7 * settings.mm) / 2
+                        spacing: 3 * settings.mm
+                        Repeater {
+                            model: settings.cfgOptions(cr.modelData)
+                            Item {
+                                id: co
+                                required property var modelData
+                                readonly property bool chosen: cr.value === modelData[0]
+                                width: coLabel.implicitWidth + 5 * settings.mm; height: 7 * settings.mm
+                                Text {
+                                    id: coLabel
+                                    anchors.centerIn: parent
+                                    text: co.modelData[1]
+                                    font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: co.chosen
+                                    color: co.chosen ? settings.ink : settings.inkA(0.7)
+                                }
+                                Rectangle {
+                                    visible: co.chosen
+                                    anchors.fill: parent
+                                    color: "transparent"
+                                    border.width: cr.here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.2 * settings.mm)
+                                    border.color: cr.here ? settings.ink : settings.inkA(0.6)
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onPressed: { settings.cfgRow = cr.index; if (!co.chosen) settings.cfgSet(cr.modelData, co.modelData[0]) }
+                                }
+                            }
+                        }
+                        Text {
+                            height: 7 * settings.mm
+                            verticalAlignment: Text.AlignVCenter
+                            leftPadding: 3 * settings.mm
+                            text: cr.modelData.note
+                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.7
+                            color: settings.inkA(0.6)
+                        }
+                    }
+                    MouseArea {    // the row's name picks the row
+                        width: cfgPage.optX; height: parent.height
+                        onPressed: settings.cfgRow = cr.index
                     }
                 }
             }

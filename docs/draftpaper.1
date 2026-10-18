@@ -131,6 +131,17 @@ Any of picture (a file, or none), margins (paper, ambient), tint, fit (fill, fit
 (centre, top, bottom, left, right), brightness, wash and blur (millimetres), in one write, as the
 settings' wallpaper page sets them.
 .TP
+.B config json
+config.toml as read, the defaults filled in, as JSON (the settings' rows start from it).
+.TP
+.BR "config set" " \fIKEY\fR=\fIVALUE\fR ..."
+Keys in config.toml, dotted for tables (title.scale=false, outputs.eDP-1.scale=1.25), in one write:
+the line replaced with its comment kept, a commented-out example set in its place, or a new line at
+the table's end; KEY= removes one, its default again. Refused when the file would not read back.
+.TP
+.BR config " " mark "|" back "|" keep
+The settings' Escape: config.toml kept as it is, put back as kept, or let go.
+.TP
 .BR margins " " paper "|" ambient
 With a wallpaper: the margins in the theme's paper or in the picture's colours.
 .TP
