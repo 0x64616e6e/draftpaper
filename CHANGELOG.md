@@ -3,67 +3,49 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.0 (2026-10-18)
 
-Colour correction (#50): `[outputs."<model>"] icc = "profile.icc"` loads an ICC profile's calibration
-curves (vcgt, a table or a formula) into the display's gamma table, as xcalib does on X11; and
-wlr-gamma-control, so gammastep and wlsunset work (a tool's ramps while it runs, the profile's again when
-it quits). `draftpaper-compositor msg gamma`.
+One settings tool for the whole desktop, the machine and its load drawn on the sheet, colour correction,
+and everything on the sheet on one millimetre grid.
 
-The schedules and the graph on demand (#49): Mod+i brings the schedule of equipment, then a process
-schedule (`draftpaper processes`: the busiest programs, each one's processes counted as one, its share of
-a processor ruled as a bar), then neither, fading in and out in one place, the top left 10 mm in; both
-part of the sheet, no outline or panel. A click on a reading's cell in the title block (CPU / memory,
-temperature and fan, power, battery) shows its last ten minutes as the graph, again puts it away.
-`draftpaper schedule next|equipment|processes|hide`.
-The schedules sit in the title block's column, its three zones, from the top of the frame down; the title
-block has a PROCESSES cell (how many are running), which brings the process schedule, and PROJECT brings
-the schedule of equipment. A cell that does something takes the click over the whole of it, to the middle
-of its rules, and shows a faint tint under the pointer.
-
-The sheet's 5 mm dots are counted from the frame's top-left corner, each on the pixel nearest its true
-place (they were counted from the screen's corner in a step rounded down once: on a display of 5.6 px/mm a
-millimetre off across the sheet). The plotted load's squares fall on them, every tenth line heavier on
-the sheet's own 10 mm; `make pixels` checks every dot on its pixel at every scale. The rulers' zero is counted from the
-frame's corner too (it was from inside the frame's line, 2 pixels off), and each of their ticks is on
-the pixel nearest its true millimetre: a level ruler's ticks fall on the dots.
-
-A display's settings follow it: `[outputs."ASUS MB166C"]`, by its model, before `[outputs.DP-3]`, by its
-port; the Displays page writes them by model (by connector for a panel's code, or two displays of one
-model). `config set` takes quoted names (`outputs."ASUS MB166C".scale=1`) and writes them quoted.
-
-The machine schedule and the plotted load (#49): what neofetch and top tell, drawn as the sheet draws.
-On an empty workspace, a ruled schedule of equipment (the machine, processor, graphics, memory, storage,
-system, desktop, each display and the sheet; `draftpaper machine`) and, below it, the processor's load,
-the memory and the temperature over the last ten minutes on millimetre graph paper, from the readings
-the title block already takes. `[sheet] machine = false` and `load = false` (the Sheet page) take them
-away. Each goes where `[sheet] machine_at` / `load_at` say, a zone ("B2") or millimetres from
-the frame's corner, or where it is dragged, a whole millimetre at a time, clear of the title block and of
-each other. The load is blended into the sheet: no title, figures, frame or margins, its millimetre
-squares fading to nothing at every edge, each line lettered at its end with its name and its value (the
-line broken there, as a drawing breaks it); over a wallpaper each line on a halo of the paper. A design invariant, now in docs/wayland-design.md: everything on the sheet sits at whole
-millimetres from the frame's corner. `draftpaper-compositor msg button left down|up`, for scripts and
-tests.
-
-A workspace switch to another display brings the pointer along, to the middle of its focused window (or of
-the sheet): with the focus following the mouse, the focus stays where the switch put it.
-
-A window whose shadow reaches over onto a display of another scale (Firefox at the left margin of a 4K
-display at scale 2 beside the panel at 1.5) is told only its own display's scale: it was told each in
-turn, frame by frame, and flickered.
-Such a tile is drawn on its own display only: on the other it was drawn whole, at its place on its own.
-
-One settings tool for the whole desktop (#36), begun: the settings (Mod+t) gain Displays, Text, Sheet, Rulers, Session,
-Input and Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
-Enter keeps it, Escape puts config.toml back as it was. `draftpaper config set table.key=value ...`
-writes any key, the file's comments and order kept; `draftpaper config json` reads them. Hatching can be
-set in config.toml's `[sheet]`, over the theme's. The rulers' steps, turns, numbered edges, centre line, width
-and pointer hold are config.toml's `[rulers]`. The Displays page draws the displays as arranged, to
-scale, and sets each one's scale and which side of the one before it it sits (every position written at
-once); a display whose `[outputs.NAME]` key is taken out goes back as it was plugged in. The Text page sets
-one interface face and one monospace face with their sizes for GTK, Qt, the terminals, Emacs and the
-sheet's lettering (`[text]`), each size with its x-height and the angle it makes at the viewing
-distance, lettered red below the legibility target; Escape puts the fonts back as they were.
+- **Settings (#36).** The settings (Mod+t) gain Displays, Text, Sheet, Rulers, Session, Input and
+  Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
+  Enter keeps it, Escape puts config.toml back as it was. The Displays page draws the displays as
+  arranged, to scale, and sets each one's scale and which side of the one before it it sits. The Text
+  page sets one interface face and one monospace face with their sizes for GTK, Qt, the terminals, Emacs
+  and the sheet's lettering (`[text]`), each size with its x-height and the angle it makes at the
+  viewing distance, lettered red below the legibility target. `draftpaper config set table.key=value`
+  writes any key, the file's comments and order kept (quoted names too: `outputs."ASUS MB166C".scale=1`);
+  `draftpaper config json` reads them.
+- **A display's settings follow it.** `[outputs."ASUS MB166C"]`, by its model, before `[outputs.DP-3]`,
+  by its port; a key taken out puts the display back as plugged in.
+- **The schedules and the graph (#49).** Mod+i (`draftpaper schedule next`) brings a schedule of
+  equipment (machine, processor, graphics, memory, storage, system, each display, the sheet: `draftpaper
+  machine`), then a process schedule (`draftpaper processes`: the busiest programs, each one's processes
+  counted as one, its share of a processor ruled as a bar), then neither, fading in and out in the title
+  block's column from the top of the frame; PROJECT and a new PROCESSES cell in the title block bring
+  them too. A click on a reading's cell (CPU / memory, temperature and fan, power, battery) shows its
+  last ten minutes on millimetre squares that fade out, each line lettered with its name and value. All
+  part of the sheet: no outline or panel; over a wallpaper on the paper's halo. A zone (`[sheet]
+  schedule_at`, `load_at`) or a drag moves them, a whole millimetre at a time.
+- **Colour correction (#50).** `[outputs."<model>"] icc = "profile.icc"` loads an ICC profile's
+  calibration curves (vcgt) into the display's gamma table, as xcalib does on X11; and wlr-gamma-control,
+  so gammastep and wlsunset work (a tool's ramps while it runs, the profile's again when it quits).
+  `draftpaper-compositor msg gamma`.
+- **One millimetre grid.** A design invariant, in docs/wayland-design.md: everything on the sheet sits at
+  whole millimetres from the frame's corner, then on whole pixels. The sheet's 5 mm dots are counted from
+  the frame's corner, each on its nearest pixel (they drifted a millimetre across a 5.6 px/mm display);
+  the rulers' zero too (it was 2 pixels off) and each of their ticks on its pixel, so a level ruler's
+  ticks fall on the dots. `make pixels` checks every dot and tick on its pixel.
+- **Rulers.** `[rulers]`: the steps, turns, numbered edges, centre line, width and pointer hold.
+- **Two displays at different scales.** A window whose shadow reaches over onto the other display
+  (Firefox at the left margin of a 4K display beside the panel) is told only its own display's scale and
+  drawn only there: it flickered and was drawn whole on the other.
+- **The pointer comes along** on a workspace switch to another display, so the focus stays there.
+- A clickable cell of the title block takes the click over the whole of it and shows a tint under the
+  pointer. Hatching can be set in config.toml's `[sheet]`, over the theme's.
+- For scripts and tests: `draftpaper-compositor msg button left down|up`; headless displays take their
+  models from DRAFTPAPER_MODELS.
 
 ## 0.6.0 (2026-10-18)
 

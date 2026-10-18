@@ -1,3 +1,29 @@
+draftpaper (0.7.0) unstable; urgency=medium
+
+  * Settings (#36): Displays, Text, Sheet, Rulers, Session, Input and
+    Idle · lock pages of config.toml's keys; a pick shows at once, Enter
+    keeps it, Escape puts config.toml back. `draftpaper config
+    set|json|mark|back|keep`, comments and order kept, quoted names.
+    [text] sets the fonts for GTK, Qt, the terminals, Emacs and the sheet.
+  * A display's settings by its model ([outputs."<model>"]) before its
+    connector; a key taken out puts the display back as plugged in.
+  * Schedules on the sheet (#49): Mod+i (`draftpaper schedule`) brings the
+    schedule of equipment (`draftpaper machine`), then the processes
+    (`draftpaper processes`), then neither, fading, in the title block's
+    column; the title block's PROJECT and new PROCESSES cells too. A
+    reading's cell shows its last ten minutes as a graph on the sheet.
+  * Colour correction (#50): [outputs.X] icc = a profile's calibration
+    curves (vcgt) into the gamma table; wlr-gamma-control for gammastep
+    and wlsunset; msg gamma.
+  * Everything on the sheet at whole millimetres from the frame's corner:
+    the dots, the rulers' zero and ticks, the notes; checked by make pixels.
+  * Two displays at different scales: a window is told and drawn only on
+    its own (Firefox flickered and was drawn on both).
+  * A workspace switch to another display brings the pointer along.
+  * msg button; DRAFTPAPER_MODELS for headless displays.
+
+ -- 0x64616e6e <daniel@este.systems>  Sun, 18 Oct 2026 20:38:52 +0300
+
 draftpaper (0.6.0) unstable; urgency=medium
 
   * Rulers (#48, Mod+r, `draftpaper rulers`): a horizontal and a vertical

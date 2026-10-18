@@ -16,12 +16,14 @@ own login screen under greetd with a flicker-free handoff to the session (0.4.0)
 login screen and the session restored after a logout or a reboot, the applications back in their places
 with their files, tabs and editors (0.5.0; #38), and the drawing's conventions on the sheet: a scale
 bar true to size, a revision block, hatching for parked windows, a key plan of the screens, and rulers in
-true millimetres that hold the pointer to them (0.6.0). It replaces the i3 edition in the `draftpaper`
-package.
+true millimetres that hold the pointer to them (0.6.0), and one settings tool for the whole desktop, the
+machine and its load drawn on the sheet (schedules, graphs), colour correction (ICC profiles, gamma
+control) and everything on the sheet on one millimetre grid (0.7.0). It replaces the i3 edition in the
+`draftpaper` package.
 Design: `docs/wayland-design.md`.
 
-Next: one settings tool for the whole desktop (#36: displays, text, and the sheet's marks and rulers);
-drag and drop (#18); CI building every change (#43).
+Next: drag and drop (#18); the login screen's reveal without skipped frames (#42); full colour management
+(gamut mapping) after #50's calibration curves.
 
 ## 3. A distribution (vision)
 
