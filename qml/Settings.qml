@@ -76,11 +76,12 @@ PanelWindow {
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
-    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["sheet", "SHEET"], ["rulers", "RULERS"],
+    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["sheet", "SHEET"], ["rulers", "RULERS"],
                                      ["session", "SESSION"], ["input", "INPUT"], ["idle", "IDLE · LOCK"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
     // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
     readonly property var cfgPages: ({
+        displays: settings.dispRows,
         sheet: [
             { key: "margin", name: "MARGIN", def: 6, note: "between the screen's edge and the frame",
               options: [[4, "4 mm"], [5, "5 mm"], [6, "6 mm"], [8, "8 mm"], [10, "10 mm"]] },
@@ -185,6 +186,7 @@ PanelWindow {
         // a mark left by settings that did not close (the shell restarted) goes: config.toml stays as it is
         queue(["config", "keep"], "")
         loadConfig.running = true
+        buildDisplays()
         reverting = false
         themes = []
         custom = null
@@ -257,8 +259,97 @@ PanelWindow {
         visible = false
     }
 
+    // ---- the Displays page: built when the settings open, from the displays as they are then ----
+    property var dispOutputs: []        // the outputs then: the built-in panel first, then left to right
+    property var dispPlace: ({})        // each further display: { side: right|left|above|below, align: start|centre|end }
+    property var dispRows: []
+    readonly property var scales: [[1, "1"], [1.25, "1.25"], [1.5, "1.5"], [1.75, "1.75"], [2, "2"]]
+    function buildDisplays() {
+        const builtIn = n => /^(eDP|LVDS|DSI|headless$)/.test(n)
+        // (a compositor before 0.7 reports no mode or size: the mode from the logical size and scale)
+        const outs = Compositor.outputs.map(o => Object.assign({ mode: [Math.round(o.width * o.scale), Math.round(o.height * o.scale)],
+                                                                 physical: [0, 0], model: "" }, o)).sort((a, b) => (builtIn(b.name) - builtIn(a.name)) || (a.x - b.x) || (a.y - b.y))
+        const place = {}
+        for (let i = 1; i < outs.length; i++) {
+            const o = outs[i], p = outs[i - 1]
+            const side = o.x >= p.x + p.width ? "right" : o.x + o.width <= p.x ? "left" : o.y + o.height <= p.y ? "above" : "below"
+            const across = side === "right" || side === "left"
+            const a0 = across ? o.y : o.x, a1 = across ? o.y + o.height : o.x + o.width
+            const b0 = across ? p.y : p.x, b1 = across ? p.y + p.height : p.x + p.width
+            const align = Math.abs(a0 - b0) <= 1 ? "start" : Math.abs(a1 - b1) <= 1 ? "end" : "centre"
+            place[o.name] = { side: side, align: align }
+        }
+        dispOutputs = outs
+        dispPlace = place
+        const rows = []
+        outs.forEach((o, i) => {
+            rows.push({ key: "outputs." + o.name + ".scale", name: o.name + " · SCALE", def: o.scale, noteOf: "scale", output: o.name,
+                        options: scales })
+            if (i === 0) return
+            const p = outs[i - 1].name
+            rows.push({ key: "~" + o.name + ".side", pseudo: "side", output: o.name, name: o.name + " · BESIDE", def: "right", note: "",
+                        options: [["right", "right of " + p], ["left", "left of " + p], ["above", "above"], ["below", "below"]] })
+            rows.push({ key: "~" + o.name + ".align", pseudo: "align", output: o.name, name: o.name + " · ALIGNED", def: "start", noteOf: "align",
+                        options: [["start", "start"], ["centre", "centred"], ["end", "end"]] })
+        })
+        rows.push({ key: "viewing_distance", name: "VIEWING DISTANCE", def: 55, note: "the Text page's legibility is worked out at it",
+                    options: [[40, "40 cm"], [55, "55 cm"], [70, "70 cm"], [90, "90 cm"]] })
+        dispRows = rows
+    }
+    function dispScale(name) {
+        const r = dispRows.find(r => r.noteOf === "scale" && r.output === name)
+        return r ? cfgGet(r) : 1
+    }
+    // each display's place and logical size at the scales picked: the first at the origin, each further
+    // one beside the one before it, then all moved so none is left of or above 0, 0
+    function dispLayout() {
+        const out = []
+        dispOutputs.forEach((o, i) => {
+            const s = dispScale(o.name)
+            // rounded up, as the compositor rounds a logical size
+            const w = Math.ceil(o.mode[0] / s - 1e-9), h = Math.ceil(o.mode[1] / s - 1e-9)
+            let x = 0, y = 0
+            if (i > 0) {
+                const p = out[i - 1], pl = dispPlace[o.name] || { side: "right", align: "start" }
+                const across = pl.side === "right" || pl.side === "left"
+                const lay = (len, plen, at) => pl.align === "start" ? at : pl.align === "end" ? at + plen - len : at + Math.round((plen - len) / 2)
+                if (pl.side === "right") x = p.x + p.w
+                else if (pl.side === "left") x = p.x - w
+                else if (pl.side === "above") y = p.y - h
+                else y = p.y + p.h
+                if (across) y = lay(h, p.h, p.y)
+                else x = lay(w, p.w, p.x)
+            }
+            out.push({ name: o.name, x: x, y: y, w: w, h: h, o: o })
+        })
+        const mx = Math.min(0, ...out.map(d => d.x)), my = Math.min(0, ...out.map(d => d.y))
+        for (const d of out) { d.x -= mx; d.y -= my }
+        return out
+    }
+    // the positions written for every display, so the arrangement is whole whatever changed
+    function dispWrite() {
+        if (dispOutputs.length < 2) return
+        const v = Object.assign({}, cfgVals)
+        for (const d of dispLayout()) v["outputs." + d.name + ".position"] = [d.x, d.y]
+        cfgVals = v
+    }
+    function rowNote(row) {
+        if (row.noteOf === "scale") {
+            const o = dispOutputs.find(o => o.name === row.output)
+            if (!o) return ""
+            const s = cfgGet(row), mm = o.px_per_mm * o.scale / s
+            return Math.ceil(o.mode[0] / s - 1e-9) + " × " + Math.ceil(o.mode[1] / s - 1e-9) + " logical · " + mm.toFixed(1) + " px a mm · 11 pt reads "
+                + (11 * 96 / 72 / mm).toFixed(1) + " mm"
+        }
+        if (row.noteOf === "align") {
+            const pl = dispPlace[row.output]
+            return pl && (pl.side === "above" || pl.side === "below") ? "start: left edges level; end: right edges" : "start: tops level; end: bottoms level"
+        }
+        return row.note || ""
+    }
     // ---- the pages of config.toml's rows ----
     function cfgGet(row) {
+        if (row.pseudo) return (dispPlace[row.output] || {})[row.pseudo] || row.def
         if (row.key in cfgVals) return cfgVals[row.key]
         let v = cfg
         for (const part of row.key.split(".")) v = (v && typeof v === "object") ? v[part] : undefined
@@ -271,9 +362,19 @@ PanelWindow {
     }
     function cfgSet(row, value) {
         if (!cfgMarked) { queue(["config", "mark"], ""); cfgMarked = true }
-        const v = Object.assign({}, cfgVals)
-        v[row.key] = value
-        cfgVals = v
+        if (row.pseudo) {
+            // a display's side or alignment: not a key of its own, the positions follow from it
+            const p = Object.assign({}, dispPlace)
+            p[row.output] = Object.assign({ side: "right", align: "start" }, p[row.output] || {})
+            p[row.output][row.pseudo] = value
+            dispPlace = p
+        } else {
+            const v = Object.assign({}, cfgVals)
+            v[row.key] = value
+            cfgVals = v
+        }
+        // a display's scale or place: every display's position written again
+        if (row.pseudo || row.noteOf === "scale") dispWrite()
         cfgSettle.restart()
     }
     function cfgStep(dir) {
@@ -286,7 +387,9 @@ PanelWindow {
     }
     function cfgApply() {
         const keys = Object.keys(cfgVals)
-        if (keys.length) queue(["config", "set"].concat(keys.map(k => k + "=" + String(cfgVals[k]))), "config")
+        // a list as TOML writes it ([0, 0]), the rest as it is
+        const raw = v => Array.isArray(v) ? "[" + v.join(", ") + "]" : String(v)
+        if (keys.length) queue(["config", "set"].concat(keys.map(k => k + "=" + raw(cfgVals[k]))), "config")
     }
     // the sheet shows a change a moment after the picking pauses
     Timer { id: cfgSettle; interval: 200; onTriggered: settings.cfgApply() }
@@ -700,6 +803,64 @@ PanelWindow {
             visible: settings.cfgRows.length > 0
             readonly property real rowH: 12 * settings.mm
             readonly property real optX: 58 * settings.mm
+            // the Displays page: the displays as arranged at the scales picked, to scale, above the rows
+            readonly property bool arranging: settings.page === "displays" && settings.dispOutputs.length > 0
+            readonly property real bandH: arranging ? 52 * settings.mm : 0
+            Item {
+                id: arrangement
+                visible: cfgPage.arranging
+                x: settings.x0; y: board.inY + settings.gutter
+                width: settings.cw; height: cfgPage.bandH - 6 * settings.mm
+                readonly property var lay: settings.page === "displays" ? settings.dispLayout() : []
+                readonly property real spanW: Math.max(1, ...lay.map(d => d.x + d.w))
+                readonly property real spanH: Math.max(1, ...lay.map(d => d.y + d.h))
+                readonly property real k: Math.min(width / spanW, height / spanH)
+                readonly property real offsetX: (width - spanW * k) / 2
+                Repeater {
+                    model: arrangement.lay
+                    Rectangle {
+                        id: box
+                        required property var modelData
+                        readonly property var o: modelData.o
+                        // the display the row picked is about, in heavier ink
+                        readonly property bool here: (settings.cfgRows[settings.cfgRow] || {}).output === modelData.name
+                        x: arrangement.offsetX + modelData.x * arrangement.k
+                        y: modelData.y * arrangement.k
+                        width: modelData.w * arrangement.k; height: modelData.h * arrangement.k
+                        color: here ? settings.inkA(0.12) : "transparent"
+                        border.width: here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.25 * settings.mm)
+                        border.color: settings.ink
+                        Behavior on x { enabled: settings.shell.theme.animations; NumberAnimation { duration: 160 } }
+                        Behavior on y { enabled: settings.shell.theme.animations; NumberAnimation { duration: 160 } }
+                        Column {
+                            x: 2 * settings.mm; y: 1.6 * settings.mm
+                            width: parent.width - 4 * settings.mm
+                            spacing: 0.6 * settings.mm
+                            clip: true
+                            Text {
+                                width: parent.width; elide: Text.ElideRight
+                                text: box.modelData.name + (box.o.model && box.o.model !== "Unknown" ? " · " + box.o.model : "")
+                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: true
+                                color: settings.ink
+                            }
+                            Text {
+                                readonly property real inches: Math.hypot(box.o.physical[0], box.o.physical[1]) / 25.4
+                                width: parent.width; elide: Text.ElideRight
+                                text: (inches > 0 ? inches.toFixed(1) + "″ · " : "") + box.o.mode[0] + " × " + box.o.mode[1]
+                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.68
+                                color: settings.inkA(0.75)
+                            }
+                            Text {
+                                width: parent.width; elide: Text.ElideRight
+                                text: (box.o.px_per_mm * box.o.scale).toFixed(1) + " px/mm · at " + settings.dispScale(box.modelData.name)
+                                      + " · " + box.modelData.w + " × " + box.modelData.h
+                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.68
+                                color: settings.inkA(0.75)
+                            }
+                        }
+                    }
+                }
+            }
             Repeater {
                 model: settings.cfgRows
                 Item {
@@ -709,7 +870,7 @@ PanelWindow {
                     readonly property bool here: settings.cfgRow === index
                     readonly property var value: settings.cfgGet(modelData)
                     x: settings.x0
-                    y: board.inY + settings.gutter + index * cfgPage.rowH
+                    y: board.inY + settings.gutter + cfgPage.bandH + index * cfgPage.rowH
                     width: settings.cw; height: cfgPage.rowH
                     Rectangle { y: parent.height - height; width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
                     Column {
@@ -722,7 +883,8 @@ PanelWindow {
                         }
                         Text {     // where it goes in config.toml
                             readonly property int dot: cr.modelData.key.lastIndexOf(".")
-                            text: dot < 0 ? cr.modelData.key : "[" + cr.modelData.key.slice(0, dot) + "] " + cr.modelData.key.slice(dot + 1)
+                            text: cr.modelData.pseudo ? "[outputs.*] position"
+                                : dot < 0 ? cr.modelData.key : "[" + cr.modelData.key.slice(0, dot) + "] " + cr.modelData.key.slice(dot + 1)
                             font.family: Fonts.mono; font.pixelSize: settings.font * 0.62
                             color: settings.inkA(0.55)
                         }
@@ -761,7 +923,7 @@ PanelWindow {
                             height: 7 * settings.mm
                             verticalAlignment: Text.AlignVCenter
                             leftPadding: 3 * settings.mm
-                            text: cr.modelData.note
+                            text: settings.rowNote(cr.modelData)
                             font.family: Fonts.mono; font.pixelSize: settings.font * 0.7
                             color: settings.inkA(0.6)
                         }

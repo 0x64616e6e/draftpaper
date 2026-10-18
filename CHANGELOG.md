@@ -5,12 +5,14 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
-One settings tool for the whole desktop (#36), begun: the settings (Mod+t) gain Sheet, Rulers, Session, Input and
-Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
+One settings tool for the whole desktop (#36), begun: the settings (Mod+t) gain Displays, Sheet, Rulers, Session,
+Input and Idle · lock pages, each a list of config.toml's keys with their values to pick. A pick shows at once;
 Enter keeps it, Escape puts config.toml back as it was. `draftpaper config set table.key=value ...`
 writes any key, the file's comments and order kept; `draftpaper config json` reads them. Hatching can be
 set in config.toml's `[sheet]`, over the theme's. The rulers' steps, turns, numbered edges, centre line, width
-and pointer hold are config.toml's `[rulers]`.
+and pointer hold are config.toml's `[rulers]`. The Displays page draws the displays as arranged, to
+scale, and sets each one's scale and which side of the one before it it sits (every position written at
+once); a display whose `[outputs.NAME]` key is taken out goes back as it was plugged in.
 
 ## 0.6.0 (2026-10-18)
 

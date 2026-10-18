@@ -415,10 +415,11 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         let settings = output_settings(&name);
         let mm = settings.mm.unwrap_or(if phys_w > 0 { w as f32 / phys_w as f32 } else { FALLBACK_MM });
         let scale = settings.scale.unwrap_or(1.0);
-        let position = settings.position.unwrap_or_else(|| {
+        let auto = {
             let right = data.space.outputs().filter_map(|o| data.space.output_geometry(o)).map(|g| g.loc.x + g.size.w).max().unwrap_or(0);
             (right, 0)
-        });
+        };
+        let position = settings.position.unwrap_or(auto);
         eprintln!(
             "draftpaper: output {name} {w}x{h} ({phys_w}x{phys_h} mm, {mm:.2} px/mm), scale {scale}, at {position:?}, {}",
             if adopted { "taken over as it is" } else { "mode set" }
@@ -439,6 +440,9 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
         let wl_mode = WlMode::from(mode);
         output.set_preferred(wl_mode);
         output.change_current_state(Some(wl_mode), None, Some(Scale::Fractional(scale)), Some(position.into()));
+        output.user_data().insert_if_missing(|| crate::theme::PlugDefaults { scale: 1.0, position: auto });
+        let set = crate::config::LastSet { scale: settings.scale.is_some(), position: settings.position.is_some() };
+        output.user_data().insert_if_missing(|| std::cell::RefCell::new(set));
         data.space.map_output(&output, position);
         attach_sheet(&output, theme.clone(), mm);
 

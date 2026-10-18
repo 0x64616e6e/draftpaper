@@ -78,6 +78,7 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
         let mode = Mode { size: size.into(), refresh: 60_000 };
         output.change_current_state(Some(mode), Some(Transform::Normal), Some(Scale::Fractional(scale)), Some((x, 0).into()));
         output.set_preferred(mode);
+        output.user_data().insert_if_missing(|| crate::theme::PlugDefaults { scale, position: (x, 0) });
         data.space.map_output(&output, (x, 0));
         x += (size.0 as f64 / scale).round() as i32;
         let theme = Theme::load();

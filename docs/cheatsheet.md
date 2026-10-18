@@ -95,12 +95,12 @@ chosen (exit 1 when closed): a `fuzzel --dmenu` for scripts. For fuzzel on Mod+d
 `draftpaper rulers` does what Mod+r does. The steps, the numbered edges, the centre line, the width and whether the
 pointer is held: the settings' Rulers page, or `[rulers]` in config.toml.
 
-## Settings (colour scheme, wallpaper, sheet, session, input, idle)
+## Settings (colour scheme, wallpaper, displays, sheet, rulers, session, input, idle)
 
 | Keys | |
 |---|---|
 | Mod+t · click the theme name | Open the settings on the board |
-| Tab · Shift+Tab · click a page's cell | Colour scheme, wallpaper, sheet, session, input, idle · lock |
+| Tab · Shift+Tab · click a page's cell | Colour scheme, wallpaper, displays, sheet, rulers, session, input, idle · lock |
 | ↑ ↓ · k j | Between the drawings (the themes) and the builder's rows |
 | ← → · h l · wheel | Along them: a theme, or a choice (the sheet previews it) |
 | Enter · click the picked drawing | Keep it (the applications too; a built scheme becomes the theme `custom`) |

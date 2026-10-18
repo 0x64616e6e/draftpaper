@@ -344,6 +344,14 @@ impl Config {
     }
 }
 
+/// Which of an output's `[outputs.<name>]` scale and position config.toml set at the last read (or when it
+/// was plugged in), kept with it: only a key that goes puts the output back as plugged in.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LastSet {
+    pub scale: bool,
+    pub position: bool,
+}
+
 impl crate::state::Draftpaper {
     /// Read config.toml again when it has changed since the last look (and once at start): bindings,
     /// keyboard and touchpad, the theme (sheet and borders), the margin, and output scale and position.
@@ -380,8 +388,17 @@ impl crate::state::Draftpaper {
         // output scale and position
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
             let settings = crate::theme::output_settings(&output.name());
-            let scale = settings.scale.map(smithay::output::Scale::Fractional);
-            let position = settings.position.map(smithay::utils::Point::from);
+            // a key taken out since the last read (the settings' Escape): the output as it would be without
+            // config.toml; one never set leaves the output as it is (wlr-randr's arrangement, say)
+            let plug = output.user_data().get::<crate::theme::PlugDefaults>().copied();
+            output.user_data().insert_if_missing(|| std::cell::RefCell::new(LastSet::default()));
+            let last = output.user_data().get::<std::cell::RefCell<LastSet>>().unwrap();
+            let was = last.replace(LastSet { scale: settings.scale.is_some(), position: settings.position.is_some() });
+            let scale = settings.scale.or(plug.filter(|_| was.scale).map(|d| d.scale)).map(smithay::output::Scale::Fractional);
+            let position = settings.position.or(plug.filter(|_| was.position).map(|d| d.position)).map(smithay::utils::Point::from);
+            // only what differs: clients hear of a change, not of every save
+            let scale = scale.filter(|s| (s.fractional_scale() - output.current_scale().fractional_scale()).abs() > 1e-6);
+            let position = position.filter(|p| self.space.output_geometry(&output).map(|g| g.loc) != Some(*p));
             if scale.is_some() || position.is_some() {
                 output.change_current_state(None, None, scale, position);
                 if let Some(p) = position {

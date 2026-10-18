@@ -304,11 +304,18 @@ impl Draftpaper {
                     let g = self.space.output_geometry(&s.output)?;
                     let margin = (s.margin_mm * s.mm).round();
                     let frame = (s.grid.origin.x, s.grid.origin.y, s.grid.zone.0 * s.grid.zones.0 as f64, s.grid.zone.1 * s.grid.zones.1 as f64);
+                    let (mode, phys) = (crate::render::mode_size(&s.output), s.output.physical_properties());
                     Some(json!({
                         "name": s.output.name(),
                         "focused": i == focused,
                         "x": g.loc.x, "y": g.loc.y, "width": g.size.w, "height": g.size.h,
                         "scale": s.output.current_scale().fractional_scale(),
+                        // the mode in physical pixels, the size in millimetres, and the EDID's names (the
+                        // settings' Displays page)
+                        "mode": [mode.0, mode.1],
+                        "physical": [phys.size.w, phys.size.h],
+                        "make": phys.make,
+                        "model": phys.model,
                         "workspace": s.workspace().number,
                         // the sheet, in logical pixels
                         "px_per_mm": s.mm,

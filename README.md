@@ -239,6 +239,9 @@ and `width` (mm, 16 by default).
 
 A display gets its preferred mode when it is plugged in, right of the others, unless
 `[outputs.<name>]` in config.toml gives its scale and position (`wlr-randr` lists the names).
+The settings' Displays page (Mod+t, then Tab) draws them as arranged, to scale, and sets each one's scale
+and which side of the one before it it sits on, aligned by its start, its centre or its end; it writes
+every display's position at once. Escape puts them back as they were.
 
 Tools that speak wlr-output-management arrange the displays while the session runs: `wlr-randr` from
 a shell, wdisplays with a mouse, and kanshi, which switches between profiles as displays come and go

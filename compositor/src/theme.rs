@@ -181,6 +181,15 @@ impl Theme {
     }
 }
 
+/// An output's scale and position as it would have them without config.toml (scale 1, or the headless
+/// one; right of the others as plugged in), kept with it: a key taken out of `[outputs.<name>]` (the
+/// settings' Escape) puts the output back to these.
+#[derive(Debug, Clone, Copy)]
+pub struct PlugDefaults {
+    pub scale: f64,
+    pub position: (i32, i32),
+}
+
 /// Per-output settings from config.toml, `[outputs.<name>]`: `scale` (1, 1.5, 2...), `position` (logical
 /// x and y, `[x, y]`), and `mm` (physical pixels per millimetre, for panels that report a wrong size).
 #[derive(Debug, Clone, Default)]
