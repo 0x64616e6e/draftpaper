@@ -207,6 +207,9 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
                     eprintln!("draftpaper: session active after {} ms", data.start_time.elapsed().as_millis());
                     let _ = tty.libinput.resume();
                     let _ = tty.manager.activate(false);
+                    // the gamma tables, as the session had them (another session may have changed them)
+                    crate::gamma::refresh_all(data);
+                    let Some(tty) = data.tty_data.as_mut() else { return };
                     let crtcs: Vec<_> = tty.outputs.keys().copied().collect();
                     for crtc in crtcs {
                         render(data, crtc);
@@ -236,6 +239,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     log_screens(tty_data.manager.device(), "the rest switched off");
     data.tty_data = Some(tty_data);
     data.relayout();
+    crate::gamma::refresh_all(data);
     for crtc in started {
         render(data, crtc);
     }
@@ -316,6 +320,8 @@ fn scan_outputs(data: &mut Draftpaper) {
     let started = scan_with(data, &mut tty_data);
     data.tty_data = Some(tty_data);
     data.relayout();
+    // a display plugged in: its ramps (its ICC profile's curves) into its gamma table
+    crate::gamma::refresh_all(data);
     for crtc in started {
         render(data, crtc);
     }
@@ -986,4 +992,25 @@ fn log_screens(device: &DrmDevice, when: &str) {
         .map(|i| format!("crtc {} framebuffer {}", u32::from(i.handle()), i.framebuffer().map(u32::from).unwrap_or(0)))
         .collect();
     eprintln!("draftpaper: {when}: {}", if shown.is_empty() { "no CRTC on".into() } else { shown.join(", ") });
+}
+
+/// The output's CRTC: its gamma table's size (entries per channel), as the driver says (gamma.rs).
+pub fn gamma_size(data: &Draftpaper, output: &Output) -> Option<usize> {
+    let tty = data.tty_data.as_ref()?;
+    let crtc = tty.outputs.iter().find(|(_, (o, _, _))| o == output).map(|(c, _)| *c)?;
+    let n = tty.manager.device().get_crtc(crtc).ok()?.gamma_length() as usize;
+    (n >= 2).then_some(n)
+}
+
+/// Load ramps into the output's gamma table (gamma.rs); the driver keeps them until they are set again.
+pub fn set_gamma(data: &Draftpaper, output: &Output, ramps: &[Vec<u16>; 3]) -> bool {
+    let Some(tty) = data.tty_data.as_ref() else { return false };
+    let Some(crtc) = tty.outputs.iter().find(|(_, (o, _, _))| o == output).map(|(c, _)| *c) else { return false };
+    match tty.manager.device().set_gamma(crtc, &ramps[0], &ramps[1], &ramps[2]) {
+        Ok(()) => true,
+        Err(e) => {
+            eprintln!("draftpaper: {}: gamma: {e}", output.name());
+            false
+        }
+    }
 }

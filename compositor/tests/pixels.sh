@@ -54,12 +54,14 @@ shot() {
     until DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
     sleep 1.5
     rm -f "$t"/Pictures/*.png
-    # the magnifier: a screenshot without it, then the pointer at $4 $5 and the lens out
+    # the magnifier: the pointer at $4 $5 (a cell under it shows so: in both pictures), a screenshot
+    # without the lens, then the lens out
     if [ "${3:-}" = lens ]; then
+        DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" "$comp" msg pointer "$4" "$5" > /dev/null
+        sleep 0.5
         kill -USR1 "$nest"
         sleep 1
         mv "$t"/Pictures/*.png "${2%.png}-before.png"
-        DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" "$comp" msg pointer "$4" "$5" > /dev/null
         DRAFTPAPER_SOCKET="$runtime/draftpaper-$wl.sock" "$comp" msg zoom > /dev/null
         sleep 0.5
     fi

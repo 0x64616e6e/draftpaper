@@ -60,7 +60,7 @@ check: $(CLI)
 # zones.sh, launcher.sh, scale.sh, revisions.sh, hatch.sh, keyplan.sh, rulers.sh, greeter.sh, lock.sh,
 # session.sh)
 pixels: $(COMPOSITOR) $(CLI)
-	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd
+	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd --example gammaset --example iccwarm
 	compositor/tests/pixels.sh
 	compositor/tests/zones.sh
 	compositor/tests/launcher.sh
@@ -74,6 +74,7 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/models.sh
 	compositor/tests/text.sh
 	compositor/tests/notes.sh
+	compositor/tests/gamma.sh
 	compositor/tests/greeter.sh
 	compositor/tests/lock.sh
 	compositor/tests/session.sh

@@ -113,6 +113,8 @@ pub struct Draftpaper {
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
     /// the output-management clients and what they were last told (output_management.rs)
     pub output_management: crate::output_management::OutputManagement,
+    /// who holds each display's gamma, and headless's tables (gamma.rs)
+    pub gamma: crate::gamma::Gamma,
     /// the session saved and restored (session.rs)
     pub saved: crate::session::Session,
 }
@@ -132,6 +134,7 @@ impl Draftpaper {
         crate::screencopy::init(&dh);
         // displays arranged by kanshi, wlr-randr, wdisplays
         crate::output_management::init(&dh);
+        crate::gamma::init(&dh);
         let xdg_shell_state = XdgShellState::new::<Self>(&dh);
         let xwayland_shell_state = smithay::wayland::xwayland_shell::XWaylandShellState::new::<Self>(&dh);
         let layer_shell_state = smithay::wayland::shell::wlr_layer::WlrLayerShellState::new::<Self>(&dh);
@@ -230,6 +233,7 @@ impl Draftpaper {
             pointer_over: (None, None),
             screencopies: Vec::new(),
             output_management: Default::default(),
+            gamma: Default::default(),
             saved: Default::default(),
         }
     }

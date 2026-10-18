@@ -211,6 +211,7 @@ numbers_h = "top"          # the horizontal ruler numbered by its top or "bottom
 [outputs.eDP-1]               # when the display is plugged in (see Displays)
 scale = 1.5                # fractional scales work
 position = [0, 0]          # logical pixels
+icc = "~/.local/share/icc/panel.icc"   # its calibration curves into the gamma table (see Displays)
 
 [bindings]                 # key = action; "none" removes a default
 "Mod+Return" = "spawn foot"
@@ -254,6 +255,12 @@ so do two displays of one model.
 The settings' Displays page (Mod+t, then Tab) draws them as arranged, to scale, and sets each one's scale
 and which side of the one before it it sits on, aligned by its start, its centre or its end; it writes
 every display's position at once. Escape puts them back as they were.
+
+Colour: `icc = "~/.local/share/icc/t430s.icc"` in a display's table loads the profile's calibration curves
+(its `vcgt`, as xcalib and colord do on X11) into the display's gamma table, when it is plugged in and
+whenever config.toml changes. Colour tools that speak wlr-gamma-control (gammastep, wlsunset) set the
+ramps themselves while they run; when they quit the profile's come back. `draftpaper-compositor msg gamma`
+says what each display has. Full colour management (gamut mapping) is not done.
 
 Tools that speak wlr-output-management arrange the displays while the session runs: `wlr-randr` from
 a shell, wdisplays with a mouse, and kanshi, which switches between profiles as displays come and go

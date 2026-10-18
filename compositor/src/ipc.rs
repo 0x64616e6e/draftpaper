@@ -9,6 +9,7 @@
 //!   {"request": "sheet", "output": "eDP-1", "clear": {"left": [[40, 52]]}}  side spans it letters
 //!   {"request": "rulers", "output": "eDP-1", "zero": [640, 400], "angles": [0, 90], "snap": true, "steps": [1, 10]}   the rulers out
 //!   {"request": "rulers"}                                  put away
+//!   {"request": "gamma"}                                   each display's gamma ramps, as loaded (gamma.rs)
 //!   {"request": "pointer"}                                 where the pointer is
 //!
 //! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
@@ -229,6 +230,21 @@ impl Draftpaper {
                     steps,
                 });
                 Ok(Value::Null)
+            }
+            "gamma" => {
+                // each display's gamma ramps as last loaded (gamma.rs): where they came from (icc, client,
+                // identity), how many entries, and each channel's value halfway and at the top
+                let mut out: Vec<Value> = self
+                    .gamma
+                    .kept
+                    .iter()
+                    .map(|(name, (r, source))| {
+                        let at = |k: usize| json!([r[0][k], r[1][k], r[2][k]]);
+                        json!({ "name": name, "source": source, "size": r[0].len(), "mid": at(r[0].len() / 2), "top": at(r[0].len() - 1) })
+                    })
+                    .collect();
+                out.sort_by_key(|v| v["name"].as_str().unwrap_or("").to_string());
+                Ok(Value::Array(out))
             }
             "pointer" => {
                 // where the pointer is (logical, in the layout), for scripts and tests
@@ -574,7 +590,7 @@ pub fn msg(args: &[String]) -> i32 {
             eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|pointer|subscribe KIND...|ACTION");
             return 2;
         }
-        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output")) => {
+        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma")) => {
             json!({ "request": if r == "focused-output" { "outputs" } else { r } })
         }
         // where the pointer is; with X Y, the action that puts it there

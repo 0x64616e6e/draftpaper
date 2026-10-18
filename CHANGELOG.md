@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+Colour correction (#50): `[outputs."<model>"] icc = "profile.icc"` loads an ICC profile's calibration
+curves (vcgt, a table or a formula) into the display's gamma table, as xcalib does on X11; and
+wlr-gamma-control, so gammastep and wlsunset work (a tool's ramps while it runs, the profile's again when
+it quits). `draftpaper-compositor msg gamma`.
+
 The schedules and the graph on demand (#49): Mod+i brings the schedule of equipment, then a process
 schedule (`draftpaper processes`: the busiest programs, each one's processes counted as one, its share of
 a processor ruled as a bar), then neither, fading in and out in one place, the top left 10 mm in; both

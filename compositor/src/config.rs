@@ -428,6 +428,8 @@ impl crate::state::Draftpaper {
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
             self.update_screen(&output);
         }
+        // the gamma tables: a display's ICC profile may have changed
+        crate::gamma::refresh_all(self);
         self.refresh_output_management();
     }
 

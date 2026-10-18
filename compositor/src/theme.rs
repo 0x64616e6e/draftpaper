@@ -197,6 +197,8 @@ pub struct OutputSettings {
     pub scale: Option<f64>,
     pub position: Option<(i32, i32)>,
     pub mm: Option<f32>,
+    /// an ICC profile whose calibration curves go into the display's gamma table (gamma.rs, icc.rs)
+    pub icc: Option<std::path::PathBuf>,
 }
 
 /// Per-output settings from config.toml, by the display's model (`[outputs."ASUS MB166C"]`: they follow the
@@ -225,6 +227,7 @@ fn settings_in(config: &toml::Table, name: &str, model: &str) -> OutputSettings 
             Some((a.first().and_then(num)? as i32, a.get(1).and_then(num)? as i32))
         }),
         mm: o.get("mm").and_then(num).map(|m| m as f32),
+        icc: o.get("icc").and_then(|v| v.as_str()).filter(|p| !p.is_empty()).map(|p| p.strip_prefix("~/").map(|rest| home().join(rest)).unwrap_or_else(|| std::path::PathBuf::from(p))),
     }
 }
 

@@ -103,6 +103,7 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
         outputs.push((output, None));
     }
     data.headless = Some(Headless { renderer, outputs });
+    crate::gamma::refresh_all(data);
     std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
 
     // a frame every 16 ms, drawn offscreen where something changed

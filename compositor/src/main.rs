@@ -21,6 +21,8 @@ mod parking;
 mod animation;
 mod screencopy;
 mod output_management;
+mod gamma;
+mod icc;
 mod wallpaper;
 mod lens;
 mod blur;

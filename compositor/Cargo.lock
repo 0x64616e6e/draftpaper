@@ -391,6 +391,8 @@ dependencies = [
  "thiserror 2.0.21",
  "toml",
  "tracing-subscriber",
+ "wayland-client",
+ "wayland-protocols-wlr",
  "xcursor",
 ]
 
