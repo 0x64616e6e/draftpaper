@@ -16,7 +16,8 @@ the memory and the temperature over the last ten minutes on millimetre graph pap
 the title block already takes. `[sheet] machine = false` and `load = false` (the Sheet page) take them
 away. Each goes where `[sheet] machine_at` / `load_at` say, a zone ("B2") or millimetres from
 the frame's corner, or where it is dragged, a whole millimetre at a time, clear of the title block and of
-each other. A design invariant, now in docs/wayland-design.md: everything on the sheet sits at whole
+each other. The load is blended into the sheet: no title, figures, frame or margins, its millimetre
+squares fading out toward their edges; over a wallpaper each line on a halo of the paper. A design invariant, now in docs/wayland-design.md: everything on the sheet sits at whole
 millimetres from the frame's corner. `draftpaper-compositor msg button left down|up`, for scripts and
 tests.
 

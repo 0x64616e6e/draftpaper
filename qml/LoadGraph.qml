@@ -1,14 +1,14 @@
-// The plotted load (issue #49, one per screen): what top's meters tell, as a drawing's figure: the
-// processor's load and the memory in use (0 to 100 %, left) and the processor's temperature (30 to 100 °C,
-// right, in the alert ink) over the last ten minutes, on millimetre graph paper with every tenth line
-// heavier, each line lettered at its end. From the readings the title block already has (shell.qml keeps
-// a sample every 5 s): no polling of its own. On the bottom layer, under every window; with a wallpaper,
-// on the theme's paper.
+// The plotted load (issue #49, one per screen): what top's meters tell, blended into the sheet: the
+// processor's load and the memory in use (0 to 100 %) and the processor's temperature (30 to 100 °C, in the
+// alert ink) over the last ten minutes, on millimetre squares (every tenth heavier) that fade out toward
+// their edges: no title, no figures, no frame, no margins (the title block letters the readings now).
+// From the readings the title block already has (shell.qml keeps a sample every 5 s): no polling of its
+// own. On the bottom layer, under every window; over a wallpaper, each line on a halo of the paper.
 //
 // Where: [sheet] load_at, a zone ("C1": 7 mm into it) or millimetres from the frame's corner ([12, 100]),
-// as dragging it leaves it; without one, in the bottom left, under the machine schedule. 150 mm by 72 mm,
-// smaller where the sheet, the title block or the schedule leave less; not shown under 100 by 40. All of
-// it whole millimetres from the frame's corner (sheet.js). [sheet] load = false takes it away.
+// as dragging it leaves it; without one, in the bottom left, under the machine schedule. Up to 210 mm by
+// 72 mm, smaller where the sheet, the title block or the schedule leave less; not shown under 100 by 40.
+// All of it whole millimetres from the frame's corner (sheet.js). [sheet] load = false takes it away.
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
@@ -26,9 +26,10 @@ Item {
     readonly property real dpr: edge.dpr
     readonly property color ink: theme.ink
     readonly property color alert: theme.alert
-    readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
     readonly property var samples: shell.loadHistory
     readonly property int span: 120                    // samples across: ten minutes at one every 5 s
+    readonly property int maxW: 210
+    readonly property int maxH: 72
     readonly property var frame: Sheet.frameMm(out)
     readonly property var titleMm: out && out.title && out.title.rect
         ? { x: Math.floor((out.title.rect.x - (out.frame.x - out.x)) / mm), y: Math.floor((out.title.rect.y - (out.frame.y - out.y)) / mm) } : null
@@ -41,7 +42,7 @@ Item {
         const z = Sheet.zoneCorner(out, at, 7)
         if (z) return z
         // without one: the first clear of the bottom left, beside the schedule, under it, the top left
-        const low = frame.h - 7 - 72
+        const low = frame.h - 7 - maxH
         const tries = [{ x: 7, y: low }]
         if (scheduleUp) tries.push({ x: other.xMm + other.wMm + 8, y: low }, { x: 7, y: other.yMm + other.hMm + 8 })
         tries.push({ x: 7, y: 7 })
@@ -50,7 +51,7 @@ Item {
     property var dragged: null
     readonly property int xMm: (dragged || place).x
     readonly property int yMm: (dragged || place).y
-    // the room it has from (x, y), up to 150 by 72 mm: inside the frame (2 mm, 7 at the bottom), giving way
+    // the room it has from (x, y), up to maxW by maxH: inside the frame (2 mm, 7 at the bottom), giving way
     // to the title block (6 mm clear beside it, 2 above it) and the schedule (4 mm clear), along whichever
     // edge keeps more of it
     function room(x, y) {
@@ -59,14 +60,14 @@ Item {
         if (titleMm) obstacles.push({ x: titleMm.x - 6, y: titleMm.y - 2, r: frame.w, b: frame.h })
         if (scheduleUp) obstacles.push({ x: other.xMm - 4, y: other.yMm - 4, r: other.xMm + other.wMm + 4, b: other.yMm + other.hMm + 4 })
         for (const o of obstacles) {
-            const r = Math.min(right, x + 150), b = Math.min(bottom, y + 72)
+            const r = Math.min(right, x + maxW), b = Math.min(bottom, y + maxH)
             if (o.r <= x || o.x >= r || o.b <= y || o.y >= b) continue
             const across = o.x > x ? (o.x - x) * (b - y) : -1, down = o.y > y ? (r - x) * (o.y - y) : -1
             if (across < 0 && down < 0) return { w: 0, h: 0 }
             if (across >= down) right = Math.min(right, o.x)
             else bottom = Math.min(bottom, o.y)
         }
-        return { w: Math.min(150, right - x), h: Math.min(72, bottom - y) }
+        return { w: Math.min(maxW, right - x), h: Math.min(maxH, bottom - y) }
     }
     readonly property var size: room(xMm, yMm)
     readonly property int wMm: Math.max(0, size.w)
@@ -81,23 +82,16 @@ Item {
     readonly property bool shown: theme.sheet.load !== false && !!out && !!edge.activeSpace && edge.activeSpace.windows === 0
         && wMm >= 100 && hMm >= 40 && samples.length > 0
 
-    // the plot inside it: the title 6 mm and 2 mm under it, the figures of the scales 9 mm either side,
-    // the time 6 mm below; whole millimetres, the paper's squares
-    readonly property int pxMm: 9
-    readonly property int pyMm: 8
-    readonly property int pwMm: wMm - 2 * pxMm
-    readonly property int phMm: hMm - pyMm - 6
-
-    // the surface: its corner on a whole logical and physical pixel, at or before the figure's own
+    // the surface: its corner on a whole logical and physical pixel, at or before the graph's own
     readonly property int sx: out ? Sheet.surfaceAt(Sheet.at(out, dpr, xMm, true), dpr) : 0
     readonly property int sy: out ? Sheet.surfaceAt(Sheet.at(out, dpr, yMm, false), dpr) : 0
     function ix(u) { return out ? Sheet.at(out, dpr, xMm + u, true) - sx : 0 }
     function iy(v) { return out ? Sheet.at(out, dpr, yMm + v, false) - sy : 0 }
-    // the plot's values to where they are drawn (lines between the millimetres, not things placed)
-    function xAt(i) { return ix(pxMm) + (ix(pxMm + pwMm) - ix(pxMm)) * (1 - (samples.length - 1 - i) / span) }
-    function yPct(v) { return iy(pyMm + phMm) - Math.max(0, Math.min(1, v)) * (iy(pyMm + phMm) - iy(pyMm)) }
+    // the readings to where they are drawn (lines between the millimetres, not things placed); 2 mm
+    // inside the top and the bottom, so a full or an idle processor stays clear of the edge
+    function xAt(i) { return ix(0) + (ix(wMm) - ix(0)) * (1 - (samples.length - 1 - i) / span) }
+    function yPct(v) { return iy(hMm - 2) - Math.max(0, Math.min(1, v)) * (iy(hMm - 2) - iy(2)) }
     function yTemp(c) { return yPct((c - 30) / 70) }
-    readonly property var last: samples.length ? samples[samples.length - 1] : null
 
     PanelWindow {
         screen: graph.edge.screen
@@ -112,25 +106,6 @@ Item {
         color: "transparent"
         WlrLayershell.namespace: "draftpaper-load"
 
-        Rectangle {
-            x: graph.ix(0); y: graph.iy(0); width: graph.ix(graph.wMm) - x; height: graph.iy(graph.hMm) - y
-            visible: graph.theme.pictured
-            color: Qt.rgba(graph.theme.paper.r, graph.theme.paper.g, graph.theme.paper.b, Math.max(0.8, graph.theme.titleTint))
-        }
-        Text {
-            x: graph.ix(0); y: graph.iy(0); height: graph.iy(6) - y
-            verticalAlignment: Text.AlignVCenter
-            text: "LOAD · THE LAST 10 MINUTES"
-            font.family: Fonts.mono; font.pixelSize: 2.8 * graph.mm; font.bold: true; font.letterSpacing: 0.25 * graph.mm
-            color: graph.ink
-        }
-        Text {
-            x: graph.ix(graph.wMm) - width; y: graph.iy(0); height: graph.iy(6) - y
-            verticalAlignment: Text.AlignVCenter
-            text: "FIG. 1 · 1 MIN = " + (graph.pwMm / 10) + " MM"
-            font.family: Fonts.mono; font.pixelSize: 2.0 * graph.mm; font.letterSpacing: 0.3 * graph.mm
-            color: graph.faint
-        }
         Canvas {
             id: paper
             anchors.fill: parent
@@ -140,27 +115,40 @@ Item {
                 c.reset()
                 const mid = v => v + hair / 2                       // a 1-pixel line on its pixel
                 const ink = (a) => Qt.rgba(g.ink.r, g.ink.g, g.ink.b, a)
-                const left = g.ix(g.pxMm), right = g.ix(g.pxMm + g.pwMm), top = g.iy(g.pyMm), bottom = g.iy(g.pyMm + g.phMm)
+                const left = g.ix(0), right = g.ix(g.wMm), top = g.iy(0), bottom = g.iy(g.hMm)
                 // the squares: a millimetre each, every tenth heavier, counted from the bottom left
                 c.lineWidth = hair
                 for (const heavy of [false, true]) {
-                    c.strokeStyle = ink(heavy ? 0.32 : 0.12)
+                    c.strokeStyle = ink(heavy ? 0.32 : 0.13)
                     c.beginPath()
-                    for (let i = 0; i <= g.pwMm; i++) {
+                    for (let i = 0; i <= g.wMm; i++) {
                         if ((i % 10 === 0) !== heavy) continue
-                        const x = mid(g.ix(g.pxMm + i)); c.moveTo(x, top); c.lineTo(x, bottom)
+                        const x = mid(g.ix(i)); c.moveTo(x, top); c.lineTo(x, bottom)
                     }
-                    for (let i = 0; i <= g.phMm; i++) {
+                    for (let i = 0; i <= g.hMm; i++) {
                         if ((i % 10 === 0) !== heavy) continue
-                        const y = mid(g.iy(g.pyMm + g.phMm - i)); c.moveTo(left, y); c.lineTo(right, y)
+                        const y = mid(g.iy(g.hMm - i)); c.moveTo(left, y); c.lineTo(right, y)
                     }
                     c.stroke()
                 }
-                c.strokeStyle = ink(1); c.lineWidth = 2 * hair
-                c.strokeRect(left + hair, top + hair, right - left, bottom - top)
-                // the readings: the processor solid, the memory dashed, the temperature in the alert ink
-                const line = (key, at, colour, width, dash) => {
-                    c.strokeStyle = colour; c.lineWidth = width; c.setLineDash(dash)
+                // ... fading out toward the edges: no line where they end (the readings are drawn after)
+                // an ellipse as the graph is proportioned: 0.62 of its width across, of its height down
+                const w = right - left, h = bottom - top
+                c.save()
+                c.translate((left + right) / 2, top + h * 0.55)
+                c.scale(1, h / Math.max(1, w))
+                const fade = c.createRadialGradient(0, 0, 0, 0, 0, 0.62 * w)
+                fade.addColorStop(0.45, Qt.rgba(0, 0, 0, 1))
+                fade.addColorStop(1, Qt.rgba(0, 0, 0, 0))
+                c.globalCompositeOperation = "destination-in"
+                c.fillStyle = fade
+                c.fillRect(-w, -w, 2 * w, 2 * w)
+                c.restore()
+                c.globalCompositeOperation = "source-over"
+                // the readings: the processor solid, the memory dashed, the temperature in the alert ink; over a
+                // wallpaper each on a halo of the paper first
+                const line = (key, at, colour, w, dash) => {
+                    c.strokeStyle = colour; c.lineWidth = w; c.setLineDash(dash)
                     c.beginPath()
                     let on = false
                     g.samples.forEach((s, i) => {
@@ -173,9 +161,13 @@ Item {
                     })
                     c.stroke()
                 }
-                line("cpu", g.yPct, ink(1), 0.4 * g.mm, [])
-                line("mem", g.yPct, ink(1), 0.3 * g.mm, [1.4 * g.mm, 0.7 * g.mm])
-                line("temp", g.yTemp, g.alert, 0.3 * g.mm, [])
+                c.lineJoin = "round"; c.lineCap = "round"
+                const readings = [["cpu", g.yPct, ink(1), 0.4, []], ["mem", g.yPct, ink(1), 0.3, [1.4 * g.mm, 0.7 * g.mm]], ["temp", g.yTemp, g.alert, 0.3, []]]
+                if (g.theme.pictured) {
+                    const halo = Qt.rgba(g.theme.paper.r, g.theme.paper.g, g.theme.paper.b, 0.85)
+                    for (const [key, at, , w] of readings) line(key, at, halo, (w + 0.8) * g.mm, [])
+                }
+                for (const [key, at, colour, w, dash] of readings) line(key, at, colour, w * g.mm, dash)
                 c.setLineDash([])
             }
             Connections {
@@ -187,60 +179,6 @@ Item {
                 function onHMmChanged() { paper.requestPaint() }
             }
             Connections { target: graph.theme; function onDataChanged() { paper.requestPaint() } }
-        }
-        // the scales' figures: % on the left, °C on the right, the time below
-        Repeater {
-            model: [0, 25, 50, 75, 100]
-            Text {
-                required property int modelData
-                x: graph.ix(graph.pxMm - 1) - width; y: graph.yPct(modelData / 100) - height / 2
-                text: modelData === 100 ? "100%" : String(modelData)
-                font.family: Fonts.mono; font.pixelSize: 2.0 * graph.mm
-                color: graph.ink
-            }
-        }
-        Repeater {
-            model: [30, 50, 70, 90]
-            Text {
-                required property int modelData
-                x: graph.ix(graph.pxMm + graph.pwMm + 1); y: graph.yTemp(modelData) - height / 2
-                text: modelData + (modelData === 90 ? "°" : "")
-                font.family: Fonts.mono; font.pixelSize: 2.0 * graph.mm
-                color: graph.alert
-            }
-        }
-        Repeater {
-            model: [10, 8, 6, 4, 2, 0]
-            Text {
-                required property int modelData
-                x: graph.ix(graph.pxMm + graph.pwMm - modelData / 10 * graph.pwMm) - width / 2; y: graph.iy(graph.pyMm + graph.phMm + 1)
-                text: modelData === 0 ? "now" : "−" + modelData + " min"
-                font.family: Fonts.mono; font.pixelSize: 2.0 * graph.mm
-                color: graph.ink
-            }
-        }
-        // each line lettered at its end, just above it, inside the plot; kept apart
-        Repeater {
-            model: {
-                const l = graph.last
-                if (!l) return []
-                const out = []
-                if (l.cpu >= 0) out.push({ y: graph.yPct(l.cpu), text: "CPU " + Math.round(l.cpu * 100) + "%", colour: graph.ink, bold: true })
-                if (l.mem >= 0) out.push({ y: graph.yPct(l.mem), text: "MEMORY " + Math.round(l.mem * 100) + "%", colour: graph.ink, bold: false })
-                if (l.temp >= 0) out.push({ y: graph.yTemp(l.temp), text: "CPU " + Math.round(l.temp) + "°", colour: graph.alert, bold: false })
-                out.sort((a, b) => a.y - b.y)
-                const gap = 3.2 * graph.mm
-                for (let i = 1; i < out.length; i++) out[i].y = Math.max(out[i].y, out[i - 1].y + gap)
-                return out
-            }
-            Text {
-                required property var modelData
-                x: graph.ix(graph.pxMm + graph.pwMm - 1) - width
-                y: Math.max(graph.iy(graph.pyMm), Math.min(graph.iy(graph.pyMm + graph.phMm) - height, modelData.y - height - 0.6 * graph.mm))
-                text: modelData.text
-                font.family: Fonts.mono; font.pixelSize: 2.1 * graph.mm; font.bold: modelData.bold
-                color: modelData.colour
-            }
         }
 
         // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release

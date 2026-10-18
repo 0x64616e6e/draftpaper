@@ -104,6 +104,13 @@ shot "$t/dragged.png"
 cp "$t/dragged.png" "$t/notes.png"
 ok "and drawn there, on its millimetre" "$(exact $((zx + 10)) $((zy + 5)))" "exact"
 ok "the load still up, moved out of its way" "$(waitlayers 2)" "2"
+# over a wallpaper: still both up (the load's lines on a halo of the paper); SHOT_PIC=FILE keeps it
+magick -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png" 2> /dev/null || convert -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png"
+run "$cli" config set "wallpaper=$t/pic.png" > /dev/null
+sleep 2
+ok "over a wallpaper: both still up" "$(waitlayers 2)" "2"
+[ -n "${SHOT_PIC:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/pic-shot.png"; cp "$t/pic-shot.png" "$SHOT_PIC"; }
+run "$cli" config set "wallpaper=" > /dev/null
 command -v foot > /dev/null && {
     run foot sh > /dev/null 2>&1 &
     pids="$pids $!"
