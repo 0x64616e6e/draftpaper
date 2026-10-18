@@ -7,8 +7,9 @@
 // own. On the bottom layer, under every window; over a wallpaper, each line on a halo of the paper.
 //
 // Where: [sheet] load_at, a zone ("C1": 7 mm into it) or millimetres from the frame's corner ([12, 100]),
-// as dragging it leaves it; without one, in the bottom left, under the machine schedule. Up to 210 mm by
-// 72 mm, smaller where the sheet, the title block or the schedule leave less; not shown under 100 by 40.
+// as dragging it leaves it; without one, in the bottom left, under the machine schedule. Up to 210 mm across and a
+// zone of the sheet tall, smaller where the sheet, the title block or the schedule leave less; not shown
+// under 100 by 40.
 // All of it whole millimetres from the frame's corner (sheet.js). [sheet] load = false takes it away.
 import QtQuick
 import Quickshell
@@ -30,7 +31,9 @@ Item {
     readonly property var samples: shell.loadHistory
     readonly property int span: 120                    // samples across: ten minutes at one every 5 s
     readonly property int maxW: 210
-    readonly property int maxH: 72
+    // no taller than a zone of the sheet (whole millimetres), however much room there is: taller, it looked
+    // stretched
+    readonly property int maxH: out && out.zones ? Math.min(72, Math.floor(out.zones.height / mm + 1e-6)) : 44
     readonly property var frame: Sheet.frameMm(out)
     readonly property var titleMm: out && out.title && out.title.rect
         ? { x: Math.floor((out.title.rect.x - (out.frame.x - out.x)) / mm), y: Math.floor((out.title.rect.y - (out.frame.y - out.y)) / mm) } : null

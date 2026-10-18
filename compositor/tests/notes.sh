@@ -106,7 +106,7 @@ sleep 1.5
 shot "$t/notes.png"
 [ -n "${SHOT:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/notes.png"; cp "$t/notes.png" "$SHOT"; }
 fh=$(awk -v h="$(o .frame.height)" -v m="$mmL" 'BEGIN { print int(h / m + 1e-6) }')
-ymid=$(rowAt $((fh - 7 - 36))); x50=$(colAt 50)
+ymid=$(rowAt $((fh - 7 - 22))); x50=$(colAt 50)
 l50=$(lum "$x50" "$ymid"); l49=$(lum "$(colAt 49)" "$ymid"); l51=$(lum "$(colAt 51)" "$ymid")
 ok "the graph's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
 graph toggle load
