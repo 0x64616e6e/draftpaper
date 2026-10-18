@@ -1,3 +1,15 @@
+draftpaper (0.7.2) unstable; urgency=medium
+
+  * The graph is no taller than a zone of the sheet and by default fills
+    the bottom row of zones, top line to frame: within its zone.
+  * A graph or schedule placed where it does not fit on a display (a place
+    dragged to on a larger one) shows where it fits instead of not at all.
+  * The shell reads the memory, the CPU line and the backlight in place and
+    gets the network with `draftpaper readings`: about one process a second
+    instead of six.
+
+ -- 0x64616e6e <daniel@este.systems>  Sun, 18 Oct 2026 23:01:18 +0300
+
 draftpaper (0.7.1) unstable; urgency=medium
 
   * The revisions take their turn in the title block's column with the

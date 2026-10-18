@@ -3,7 +3,9 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.2 (2026-10-18)
+
+The graph within its zone, notes that show where they fit, and a quieter shell.
 
 - The graph is no taller than a zone of the sheet (it could reach 72 mm and looked stretched), and by
   default fills the bottom row of zones, from its top line to the frame's: within its zone.
