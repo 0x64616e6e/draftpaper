@@ -52,6 +52,9 @@ jobs:
       - name: Check (make check)
         run: make check
       - name: The package (dpkg-buildpackage)
+        # make check has just run: not again inside the package's build
+        env:
+          DEB_BUILD_OPTIONS: nocheck
         run: |
           dpkg-buildpackage -us -uc -b
           mkdir -p dist && cp ../draftpaper_*_amd64.deb dist/

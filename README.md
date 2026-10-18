@@ -1,5 +1,7 @@
 # Draftpaper
 
+[![CI](https://github.com/0x64616e6e/draftpaper/actions/workflows/ci.yml/badge.svg)](https://github.com/0x64616e6e/draftpaper/actions/workflows/ci.yml)
+
 A Wayland desktop drawn as a drafting sheet. Website: https://draftpaper.este.systems/, with a
 [theme generator](https://draftpaper.este.systems/schemes/) and a
 [wallpaper generator](https://draftpaper.este.systems/wallpapers/) (the sheet for any desktop).
