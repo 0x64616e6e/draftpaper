@@ -13,7 +13,9 @@ What changed in each release, newest first. The Debian package's own record, wit
   are lettered from the readings taken in its own process, `cli/` now building a library as well as a
   program so that nothing is started to ask. Two displays: 15 MB and three threads, against the shell's
   204 MB and 69. The compositor publishes where each parking cell is, rather than the sheet working it
-  out a second time. `make pixels` measures a rule a physical pixel wide at five scales — fractional scale
+  out a second time. The margins answer the pointer: a workspace shown, a window parked or called back,
+  the power profile taken to the next, with the pointer a hand over whatever answers and a mark under it.
+  `make pixels` measures a rule a physical pixel wide at five scales — fractional scale
   being what would sink the idea — and counts the ink in every cell. Built and tested, not installed:
   the shell still letters the sheet.
 - The revisions ask git only when the repository's head has moved. The shell polls them every four

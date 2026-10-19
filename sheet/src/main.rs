@@ -20,6 +20,10 @@ use std::collections::HashMap;
 
 use smithay_client_toolkit::{
     compositor::{CompositorHandler, CompositorState},
+    seat::{
+        pointer::{PointerEvent, PointerEventKind, PointerHandler, ThemeSpec, ThemedPointer},
+        Capability, SeatHandler, SeatState,
+    },
     delegate_registry,
     output::{OutputHandler, OutputState},
     registry::{ProvidesRegistryState, RegistryState},
@@ -32,7 +36,7 @@ use smithay_client_toolkit::{
 };
 use wayland_client::{
     globals::{registry_queue_init, GlobalList},
-    protocol::{wl_output, wl_shm, wl_surface},
+    protocol::{wl_output, wl_pointer, wl_seat, wl_shm, wl_surface},
     Connection, Dispatch, QueueHandle,
 };
 use wayland_protocols::wp::{
@@ -41,6 +45,10 @@ use wayland_protocols::wp::{
 };
 
 use sheet::Screen;
+use smithay_client_toolkit::reexports::csd_frame::CursorIcon;
+
+/// Linux's code for the left button, which is what a click on the sheet is.
+const BTN_LEFT: u32 = 0x110;
 
 /// Which margin a surface is, and how it lies along the sheet's edge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -116,7 +124,13 @@ struct Sheet {
     busy: Option<f64>,
     /// the workspaces (number, focused, shown, display) and what is parked on the one in view
     spaces: Vec<(u64, bool, bool, String)>,
-    parked: Vec<(usize, String)>,
+    parked: Vec<(usize, String, u64)>,
+    seats: SeatState,
+    pointer: Option<ThemedPointer>,
+    /// the surface that is showing a mark under the pointer, so it can be drawn plain again
+    /// what the pointer is over: the surface and where in it, so the lettering under it can answer
+    over: Option<(wl_surface::WlSurface, f64, f64)>,
+    marked: Option<wl_surface::WlSurface>,
     exit: bool,
 }
 
@@ -156,6 +170,10 @@ fn main() {
         busy: None,
         spaces: Vec::new(),
         parked: Vec::new(),
+        seats: SeatState::new(&globals, &qh),
+        pointer: None,
+        over: None,
+        marked: None,
         exit: false,
     };
     if state.scaling.is_none() {
@@ -298,11 +316,12 @@ impl Sheet {
             return;
         };
         let mut canvas = paint::Canvas::new(canvas, pw, ph);
+        let hover = self.over.as_ref().filter(|(o, _, _)| o == surface).map(|(_, x, y)| (*x, *y));
         if side == Side::Title {
-            self.letter_title(&mut canvas, &s, scale);
+            self.letter_title(&mut canvas, &s, scale, hover);
         } else if let Some(face) = self.face.as_mut() {
             let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
-            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked);
+            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked, hover);
             // DRAFTPAPER_SHEET_RULE: a rule a physical pixel wide, 50 mm from the frame's corner, which
             // tests/sheet.sh measures at every scale. It proves that the buffer is in physical pixels and
             // nothing is resampled — the one thing that would quietly spoil every word on the sheet — and
@@ -332,13 +351,20 @@ impl Sheet {
     /// The title block's cells, lettered as the shell lettered them (qml/TitleBlock.qml): the label 2 mm
     /// in and 1.2 mm down from the cell's corner, the reading 2 mm in and standing 1.6 mm above its foot.
     /// A reading too wide for its cell is lettered smaller before it is cut, as the shell does.
-    fn letter_title(&mut self, canvas: &mut paint::Canvas, s: &sheet::Screen, scale: f64) {
+    fn letter_title(&mut self, canvas: &mut paint::Canvas, s: &sheet::Screen, scale: f64, hover: Option<(f64, f64)>) {
         let (Some(block), Some(face)) = (s.title.as_ref(), self.face.as_mut()) else { return };
         let cells = title::cells(&self.theme, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy);
         // a millimetre of this display, in the physical pixels the buffer is in
         let mm = (s.mm * scale) as f32;
         let (ink, faint, alert) = (self.theme.ink, self.theme.faint(), self.theme.alert);
-        for (cell, at) in cells.iter().zip(&block.cells) {
+        // the cell under the pointer, where a click on it does something: a faint tint, as the shell's
+        let lit = hover.and_then(|(x, y)| title::under(block, x, y)).filter(|(_, live)| *live).map(|(i, _)| i);
+        for (i, (cell, at)) in cells.iter().zip(&block.cells).enumerate() {
+            if Some(i) == lit {
+                let tint = paint::Ink { a: 0.07, ..ink };
+                let (rx, ry) = ((((at.0 - block.rect.0) * scale) as i32), (((at.1 - block.rect.1) * scale) as i32));
+                canvas.fill(rx, ry, (at.2 * scale) as i32, (at.3 * scale) as i32, tint.premultiplied());
+            }
             // the cell's corner, from the block's own
             let (x, y) = (((at.0 - block.rect.0) * scale) as f32, ((at.1 - block.rect.1) * scale) as f32);
             let (w, h) = ((at.2 * scale) as f32, (at.3 * scale) as f32);
@@ -480,7 +506,7 @@ impl ProvidesRegistryState for Sheet {
     fn registry(&mut self) -> &mut RegistryState {
         &mut self.registry
     }
-    registry_handlers![OutputState];
+    registry_handlers![OutputState, SeatState];
 }
 
 // the scale a display shows a surface at, to the 120th (wp_fractional_scale_v1)
@@ -520,3 +546,127 @@ impl Dispatch<wp_viewport::WpViewport, ()> for Sheet {
 
 delegate_registry!(Sheet);
 smithay_client_toolkit::delegate_dispatch2!(Sheet);
+
+/// What a click on the sheet does.
+enum Act {
+    /// show a workspace
+    Workspace(u64),
+    /// bring a parked window back
+    Unpark(u64),
+    /// put the focused window in a cell of the margin
+    Park(usize, u64),
+    /// the next power profile
+    Profile,
+}
+
+impl Sheet {
+    /// The band the pointer is over, and where in it.
+    fn pointed(&self) -> Option<(usize, f64, f64)> {
+        let (surface, x, y) = self.over.as_ref()?;
+        let i = self.bands.iter().position(|b| b.layer.wl_surface() == surface)?;
+        Some((i, *x, *y))
+    }
+
+    /// What a click where the pointer is would do, if anything.
+    fn under_pointer(&self) -> Option<Act> {
+        let (i, x, y) = self.pointed()?;
+        let band = &self.bands[i];
+        let s = self.screens.get(&band.screen)?;
+        if band.side == Side::Title {
+            let block = s.title.as_ref()?;
+            let (_, live) = title::under(block, x, y)?;
+            return live.then_some(Act::Profile);
+        }
+        let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
+        match margins::under(s, band.side, x, y, &spaces, &self.parked)? {
+            margins::Spot::Workspace(n) => Some(Act::Workspace(n)),
+            margins::Spot::Cell { parked: Some(id), .. } => Some(Act::Unpark(id)),
+            margins::Spot::Cell { cell, parked: None } => Some(Act::Park(cell, s.workspace)),
+        }
+    }
+
+    /// Do it.
+    fn act(&mut self) {
+        match self.under_pointer() {
+            Some(Act::Workspace(n)) => sheet::action(&format!("workspace {n}")),
+            Some(Act::Unpark(id)) => sheet::action(&format!("unpark {id}")),
+            Some(Act::Park(cell, workspace)) => sheet::action(&format!("park_at {cell} {workspace}")),
+            Some(Act::Profile) => {
+                let now = self.readings.get("profile").and_then(serde_json::Value::as_str).unwrap_or("");
+                let next = title::next_profile(now);
+                if let Some(conn) = draftpaper::dbus::system() {
+                    draftpaper::dbus::set_power_profile(&conn, next);
+                }
+                self.reread_machine();
+            }
+            None => {}
+        }
+    }
+
+    /// Draw the mark under the pointer, and take it off whatever had it.
+    fn redraw_hover(&mut self) {
+        let now = self.pointed().map(|(i, _, _)| self.bands[i].layer.wl_surface().clone());
+        let was = self.marked.take();
+        self.marked = now.clone();
+        for surface in [was, now].into_iter().flatten() {
+            if let Some(b) = self.bands.iter_mut().find(|b| b.layer.wl_surface() == &surface) {
+                b.drawn = false;
+            }
+            self.draw(&surface);
+        }
+    }
+}
+
+impl SeatHandler for Sheet {
+    fn seat_state(&mut self) -> &mut SeatState {
+        &mut self.seats
+    }
+
+    fn new_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+
+    fn new_capability(&mut self, _: &Connection, qh: &QueueHandle<Self>, seat: wl_seat::WlSeat, capability: Capability) {
+        if capability == Capability::Pointer && self.pointer.is_none() {
+            self.pointer = self.seats.get_pointer_with_theme::<Self, ()>(qh, &seat, self.shm.wl_shm(), self.compositor.create_surface(qh), ThemeSpec::default()).ok();
+        }
+    }
+
+    fn remove_capability(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat, capability: Capability) {
+        if capability == Capability::Pointer {
+            self.pointer = None;
+        }
+    }
+
+    fn remove_seat(&mut self, _: &Connection, _: &QueueHandle<Self>, _: wl_seat::WlSeat) {}
+}
+
+impl PointerHandler for Sheet {
+    fn pointer_frame(&mut self, conn: &Connection, _: &QueueHandle<Self>, _: &wl_pointer::WlPointer, events: &[PointerEvent]) {
+        for event in events {
+            let (x, y) = event.position;
+            match event.kind {
+                PointerEventKind::Leave { .. } => {
+                    self.over = None;
+                    self.redraw_hover();
+                }
+                PointerEventKind::Enter { .. } | PointerEventKind::Motion { .. } => {
+                    let before = self.over.as_ref().map(|(s, _, _)| s.clone());
+                    self.over = Some((event.surface.clone(), x, y));
+                    // the pointer says what it is over: a hand where a click does something
+                    let hand = self.under_pointer().is_some();
+                    if let Some(pointer) = self.pointer.as_ref() {
+                        let icon = if hand { CursorIcon::Pointer } else { CursorIcon::Default };
+                        let _ = pointer.set_cursor(conn, icon);
+                    }
+                    if before.as_ref() != Some(&event.surface) || hand {
+                        self.redraw_hover();
+                    }
+                }
+                PointerEventKind::Press { button, .. } if button == BTN_LEFT => {
+                    self.over = Some((event.surface.clone(), x, y));
+                    self.act();
+                }
+                _ => {}
+            }
+        }
+    }
+}

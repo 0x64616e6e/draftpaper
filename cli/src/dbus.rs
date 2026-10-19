@@ -67,6 +67,21 @@ pub fn power_profile(conn: &Connection) -> String {
     String::new()
 }
 
+/// Put the machine on a power profile ("performance", "balanced", "power-saver"); false where the daemon
+/// is not there or will not have it.
+pub fn set_power_profile(conn: &Connection, profile: &str) -> bool {
+    for (dest, path, iface) in [
+        ("net.hadess.PowerProfiles", "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles"),
+        ("org.freedesktop.UPower.PowerProfiles", "/org/freedesktop/UPower/PowerProfiles", "org.freedesktop.UPower.PowerProfiles"),
+    ] {
+        let value = zbus::zvariant::Value::from(profile);
+        if conn.call_method(Some(dest), path, Some(PROPS), "Set", &(iface, "ActiveProfile", &value)).is_ok() {
+            return true;
+        }
+    }
+    false
+}
+
 /// The Wi-Fi in use (its strength 0..100 and its name) and the address of a connected wired device, from
 /// NetworkManager; both None without it.
 pub fn network(conn: &Connection) -> (Option<(u32, String)>, Option<String>) {

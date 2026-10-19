@@ -154,8 +154,9 @@ pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
         .unwrap_or_default()
 }
 
-/// Every window parked on `workspace`: which cell it is in, and what to letter up the margin.
-pub fn parked(workspace: u64) -> Vec<(usize, String)> {
+/// Every window parked on `workspace`: which cell it is in, what to letter up the margin, and the id to
+/// call it back by.
+pub fn parked(workspace: u64) -> Vec<(usize, String, u64)> {
     let Some(reply) = ask("{\"request\": \"windows\"}") else { return Vec::new() };
     reply
         .get("reply")
@@ -168,7 +169,7 @@ pub fn parked(workspace: u64) -> Vec<(usize, String)> {
                     let cell = w.get("cell")?.as_u64()? as usize;
                     let title = w.get("title").and_then(Value::as_str).filter(|t| !t.is_empty());
                     let name = title.or_else(|| w.get("app_id").and_then(Value::as_str)).unwrap_or("");
-                    Some((cell, name.to_string()))
+                    Some((cell, name.to_string(), w.get("id")?.as_u64()?))
                 })
                 .collect()
         })
@@ -186,6 +187,8 @@ pub struct Theme {
     pub drawn: String,
     /// the theme's own name, lettered at the foot of the sheet
     pub label: String,
+    /// the accent, for the mark under the pointer
+    pub accent: Ink,
 }
 
 impl Theme {
@@ -207,6 +210,7 @@ impl Theme {
             project: s("title", "project"),
             drawn: s("title", "drawn"),
             label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
+            accent: Ink::parse(v.get("accent").and_then(Value::as_str).unwrap_or("#b4701a"), 1.0),
         }
         .with_alpha(alpha)
     }
@@ -240,6 +244,12 @@ pub fn watch(say: std::sync::mpsc::Sender<()>) {
             return;
         }
     }
+}
+
+/// Do one of the compositor's own actions, as a key binding would (compositor/src/config.rs).
+pub fn action(what: &str) {
+    let request = serde_json::json!({ "request": "action", "action": what });
+    let _ = ask(&request.to_string());
 }
 
 /// Tell the compositor which stretches of the side margins carry lettering, so its hatching of a parked

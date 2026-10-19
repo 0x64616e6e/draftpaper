@@ -47,6 +47,25 @@ pub fn cells(theme: &crate::sheet::Theme, workspace: u64, now: std::time::System
     ]
 }
 
+/// Which cell of the title block is at `x`, `y` in its surface (its own logical pixels, from the block's
+/// corner), and whether a click on it does anything yet. The schedules and the graph are the shell's
+/// until stage 6; the profile is this client's now.
+pub fn under(block: &crate::sheet::Block, x: f64, y: f64) -> Option<(usize, bool)> {
+    let i = block.cells.iter().position(|c| {
+        let (cx, cy) = (c.0 - block.rect.0, c.1 - block.rect.1);
+        x >= cx && y >= cy && x < cx + c.2 && y < cy + c.3
+    })?;
+    // the profile's cell: the sixth, counting from the clock
+    Some((i, i == 6))
+}
+
+/// The next power profile after this one, as the title block's cell cycles them.
+pub fn next_profile(now: &str) -> &'static str {
+    const ORDER: [&str; 3] = ["power-saver", "balanced", "performance"];
+    let i = ORDER.iter().position(|p| *p == now).unwrap_or(ORDER.len() - 1);
+    ORDER[(i + 1) % ORDER.len()]
+}
+
 /// The clock, as the title block letters it: "Mon 19 Oct 2026" and "18:45", in the machine's own time
 /// zone (the system's, through localtime_r, so a change of zone or of summer time is followed).
 fn clock(now: std::time::SystemTime) -> (String, String) {
@@ -98,7 +117,27 @@ mod tests {
             mono: None,
             project: "signal".into(),
             drawn: "dann".into(),
+            label: "Soft Glow".into(),
+            accent: crate::paint::Ink::parse("#b4701a", 1.0),
         }
+    }
+
+    #[test]
+    fn the_profile_cell_cycles_through_them() {
+        assert_eq!(next_profile("power-saver"), "balanced");
+        assert_eq!(next_profile("balanced"), "performance");
+        assert_eq!(next_profile("performance"), "power-saver");
+        // nothing read yet, or a profile this machine does not have: start at the beginning
+        assert_eq!(next_profile(""), "power-saver");
+    }
+
+    #[test]
+    fn a_click_finds_the_cell_it_is_in() {
+        let block = crate::sheet::Block { rect: (100.0, 200.0, 300.0, 100.0), cells: vec![(100.0, 200.0, 150.0, 50.0), (250.0, 200.0, 150.0, 50.0)] };
+        assert_eq!(under(&block, 10.0, 10.0).map(|(i, _)| i), Some(0));
+        assert_eq!(under(&block, 160.0, 10.0).map(|(i, _)| i), Some(1));
+        // past the block: nothing
+        assert_eq!(under(&block, 400.0, 10.0), None);
     }
 
     #[test]

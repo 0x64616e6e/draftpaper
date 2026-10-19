@@ -49,7 +49,7 @@ impl Band {
 
 /// Letter one margin. `along` turns a place along the band and across it into the buffer's own physical
 /// pixels, the band having been drawn from its own corner.
-pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, workspace: u64, spaces: &[(u64, bool)], parked: &[(usize, String)]) {
+pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, workspace: u64, spaces: &[(u64, bool)], parked: &[(usize, String, u64)], hover: Option<(f64, f64)>) {
     let band = Band::of(s, side);
     let mm = (s.mm * scale) as f32;
     let px = ((s.margin * 0.5).min(3.2 * s.mm) * scale) as f32;
@@ -85,6 +85,16 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
         Side::Left | Side::Right => {
             // a letter at the head of every row, and the window parked there lettered up the margin
             let first = if side == Side::Left { 0 } else { band.zones as usize };
+            // the row under the pointer: a mark along the inner edge, as the shell marks it
+            if let Some(Spot::Cell { cell, .. }) = hover.and_then(|(x, y)| under(s, side, x, y, spaces, parked)) {
+                let k = (cell - first.min(cell)) as u32;
+                let (start, end) = band.zone(k.min(band.zones.saturating_sub(1)));
+                let top = ((start - band.offset + 6.0 * s.mm) * scale) as i32;
+                let foot = ((end - band.offset - 2.0 * s.mm) * scale) as i32;
+                let wide = (2.0 * scale).round().max(1.0) as i32;
+                let x = if side == Side::Left { (band.thick * scale) as i32 - wide } else { 0 };
+                canvas.fill(x, top, wide, (foot - top).max(0), theme.accent.premultiplied());
+            }
             for k in 0..band.zones {
                 let (start, end) = band.zone(k);
                 let head = (start - band.offset + 1.5 * s.mm) * scale;
@@ -93,7 +103,7 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 let across = (band.thick * scale) as f32 / 2.0 - w / 2.0;
                 face.draw(canvas, across, head as f32 + face.ascent(px * 0.8), &letter, px * 0.8, 0.0, soft.premultiplied());
                 // the title runs up the middle of the cell, clear of the letter at its head
-                let Some((_, title)) = parked.iter().find(|(c, _)| *c == first + k as usize) else { continue };
+                let Some((_, title, _)) = parked.iter().find(|(c, _, _)| *c == first + k as usize) else { continue };
                 let room = ((end - start) - 9.0 * s.mm) * scale;
                 let text = cut(face, title, px, room as f32);
                 let length = face.width(&text, px, 0.0);
@@ -107,13 +117,51 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
     let _ = workspace;
 }
 
+/// What sits under the pointer on a margin, and what a click on it does.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Spot {
+    /// a workspace along the top: shown when it is clicked
+    Workspace(u64),
+    /// a row of a side margin: the window parked there comes back, or the focused one goes in
+    Cell { cell: usize, parked: Option<u64> },
+}
+
+/// What is at `x`, `y` in a margin's surface (its own logical pixels, from its corner).
+pub fn under(s: &Screen, side: Side, x: f64, y: f64, spaces: &[(u64, bool)], parked: &[(usize, String, u64)]) -> Option<Spot> {
+    let band = Band::of(s, side);
+    match side {
+        Side::Top => {
+            // the workspaces share the first zone, a slot each
+            let (start, end) = band.zone(0);
+            let along = x + band.offset;
+            if along < start || along >= end || spaces.is_empty() {
+                return None;
+            }
+            let slot = (end - start) / spaces.len() as f64;
+            let i = ((along - start) / slot).floor() as usize;
+            spaces.get(i.min(spaces.len() - 1)).map(|(n, _)| Spot::Workspace(*n))
+        }
+        Side::Left | Side::Right => {
+            let along = y + band.offset;
+            let each = band.length / band.zones.max(1) as f64;
+            if along < band.offset || along >= band.offset + band.length {
+                return None;
+            }
+            let k = ((along - band.offset) / each).floor() as usize;
+            let cell = if side == Side::Left { k } else { band.zones as usize + k };
+            Some(Spot::Cell { cell, parked: parked.iter().find(|(c, _, _)| *c == cell).map(|(_, _, id)| *id) })
+        }
+        _ => None,
+    }
+}
+
 /// The stretches of the side margins this sheet letters: the zone letter at each cell's head, and the
 /// title of a window parked there. The compositor breaks its hatching around them (sheet::set_clear).
-pub fn clear_spans(s: &Screen, face: &mut Face, parked: &[(usize, String)]) -> (Vec<(f64, f64)>, Vec<(f64, f64)>) {
+pub fn clear_spans(s: &Screen, face: &mut Face, parked: &[(usize, String, u64)]) -> (Vec<(f64, f64)>, Vec<(f64, f64)>) {
     let band = Band::of(s, Side::Left);
     let px = ((s.margin * 0.5).min(3.2 * s.mm)) as f32;
     let (mut left, mut right) = (Vec::new(), Vec::new());
-    for (cell, title) in parked {
+    for (cell, title, _) in parked {
         let k = (*cell as u32) % band.zones.max(1);
         let (start, end) = band.zone(k);
         let side = if *cell < band.zones as usize { &mut left } else { &mut right };

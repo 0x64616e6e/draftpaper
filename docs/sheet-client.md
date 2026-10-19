@@ -1,6 +1,6 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stages 0 to 2 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
+Status: stages 0 to 3 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
 
 ## Why
 
@@ -162,8 +162,14 @@ workspace.
    polling. Two displays, one 4K: 16 MB, five threads, 0.1% of a core.
    Still the shell's: notifications, volume and brightness, the tray and Bluetooth — all of them what a
    daemon says, and all of them stage 4. The config's own `[[cell]]`s wait for that too.
-3. **Input.** Clicks and hover: workspace switching, parking and unparking, the title block's cells, the
-   cursor shapes. Verified with the compositor's own `msg pointer` and `msg button`, as the tests do now.
+3. **Input.** *(done, less what the schedules answer)* A click on a workspace along the top shows it; a
+   click on a row of a side margin calls back the window parked there, or puts the focused one in it; a
+   click on the title block's PROFILE cell takes the machine to the next power profile, over D-Bus rather
+   than by starting `busctl`. The pointer turns to a hand over anything that answers, the cell under it
+   takes the faint tint the shell gave it, and a row under it takes the accent mark along its inner edge.
+   The test works the pointer with the compositor's own `msg pointer` and `msg button`.
+   The title block's other clicks — a reading's graph, the equipment and process schedules — wait for the
+   drawings themselves in stage 6.
 4. **The services.** Audio, notifications, Bluetooth, and the tray or a decision not to have one.
 5. **The swap.** `draftpaper start` runs the client instead of Quickshell; the settings, launcher and
    rulers are started on demand and exit when closed. The session's service file changes with it.
