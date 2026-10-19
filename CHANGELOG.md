@@ -7,10 +7,13 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 - The sheet's own client (`sheet/`, docs/sheet-client.md): a Wayland client in Rust that draws the
   sheet's margins and letters its title block, on the processor into shared memory, with no drawing
-  context on the GPU. The face the theme names is found and rasterised in the client; the twelve cells
+  context on the GPU. It letters the margins too: the workspaces, the columns' numbers, a letter at the
+  head of every row with the title of a parked window running up the margin, the scale bar's figures and
+  the theme's name. The face the theme names is found and rasterised in the client; the twelve cells
   are lettered from the readings taken in its own process, `cli/` now building a library as well as a
   program so that nothing is started to ask. Two displays: 15 MB and three threads, against the shell's
-  204 MB and 69. `make pixels` measures a rule a physical pixel wide at five scales — fractional scale
+  204 MB and 69. The compositor publishes where each parking cell is, rather than the sheet working it
+  out a second time. `make pixels` measures a rule a physical pixel wide at five scales — fractional scale
   being what would sink the idea — and counts the ink in every cell. Built and tested, not installed:
   the shell still letters the sheet.
 - The revisions ask git only when the repository's head has moved. The shell polls them every four

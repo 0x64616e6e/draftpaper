@@ -11,6 +11,7 @@
 //! The geometry is the compositor's (sheet.rs); this client works out none of it.
 
 mod font;
+mod margins;
 mod paint;
 mod sheet;
 mod title;
@@ -43,7 +44,7 @@ use sheet::Screen;
 
 /// Which margin a surface is, and how it lies along the sheet's edge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Side {
+pub enum Side {
     Top,
     Bottom,
     Left,
@@ -66,7 +67,7 @@ impl Side {
         }
     }
 
-    fn vertical(self) -> bool {
+    pub fn vertical(self) -> bool {
         matches!(self, Side::Left | Side::Right)
     }
 
@@ -113,6 +114,9 @@ struct Sheet {
     readings: serde_json::Value,
     cpu: draftpaper::metrics::Cpu,
     busy: Option<f64>,
+    /// the workspaces (number, focused, shown, display) and what is parked on the one in view
+    spaces: Vec<(u64, bool, bool, String)>,
+    parked: Vec<(usize, String)>,
     exit: bool,
 }
 
@@ -150,6 +154,8 @@ fn main() {
         readings: serde_json::Value::Null,
         cpu: draftpaper::metrics::Cpu::new(),
         busy: None,
+        spaces: Vec::new(),
+        parked: Vec::new(),
         exit: false,
     };
     if state.scaling.is_none() {
@@ -160,6 +166,7 @@ fn main() {
     queue.roundtrip(&mut state).expect("the first round trip");
     state.reread(&qh);
     state.reread_machine();
+    state.reread_margins(&qh);
 
     // the machine is read again every five seconds, as the shell read it, which is also what moves the
     // clock in the title block
@@ -171,6 +178,21 @@ fn main() {
             calloop::timer::TimeoutAction::ToDuration(READ_EVERY)
         })
         .expect("the reading timer");
+    // the compositor says when a workspace is switched or a window parked, so the margins follow at once
+    let (say, heard) = std::sync::mpsc::channel();
+    std::thread::spawn(move || sheet::watch(say));
+    let (ping, pings) = calloop::channel::channel::<()>();
+    std::thread::spawn(move || {
+        while heard.recv().is_ok() {
+            if ping.send(()).is_err() {
+                return;
+            }
+        }
+    });
+    let qh2 = qh.clone();
+    handle
+        .insert_source(pings, move |_, _, state: &mut Sheet| state.reread_margins(&qh2))
+        .expect("the compositor's own word");
     calloop_wayland_source::WaylandSource::new(conn, queue).insert(handle).expect("the Wayland source");
     let _ = events.run(None, &mut state, |state| {
         state.exit |= state.bands.is_empty() && state.screens.is_empty();
@@ -278,15 +300,21 @@ impl Sheet {
         let mut canvas = paint::Canvas::new(canvas, pw, ph);
         if side == Side::Title {
             self.letter_title(&mut canvas, &s, scale);
-        } else {
-            // stage 0's rule, kept until the margins are lettered: 50 mm from the frame's corner, a
-            // physical pixel wide, which tests/sheet.sh measures at every scale
-            let along = (s.at(50.0, !side.vertical()) * scale).round() as i32 - if side.vertical() { (s.margin.ceil() * scale).round() as i32 } else { 0 };
-            let ink = self.theme.ink.premultiplied();
-            if side.vertical() {
-                canvas.fill(0, along, pw, 1, ink);
-            } else {
-                canvas.fill(along, 0, 1, ph, ink);
+        } else if let Some(face) = self.face.as_mut() {
+            let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
+            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked);
+            // DRAFTPAPER_SHEET_RULE: a rule a physical pixel wide, 50 mm from the frame's corner, which
+            // tests/sheet.sh measures at every scale. It proves that the buffer is in physical pixels and
+            // nothing is resampled — the one thing that would quietly spoil every word on the sheet — and
+            // it is drawn only when asked for, never on a sheet anyone is looking at.
+            if std::env::var_os("DRAFTPAPER_SHEET_RULE").is_some() {
+                let along = (s.at(50.0, !side.vertical()) * scale).round() as i32 - if side.vertical() { (s.margin.ceil() * scale).round() as i32 } else { 0 };
+                let ink = self.theme.ink.premultiplied();
+                if side.vertical() {
+                    canvas.fill(0, along, pw, 1, ink);
+                } else {
+                    canvas.fill(along, 0, 1, ph, ink);
+                }
             }
         }
         self.pool = Some(pool);
@@ -329,6 +357,26 @@ impl Sheet {
             }
             let colour = if cell.alert { alert } else { ink };
             face.draw(canvas, x + 2.0 * mm, y + h - 1.6 * mm, &cell.value, px.max(least), 0.0, colour.premultiplied());
+        }
+    }
+
+    /// The workspaces and the windows, read again: what the margins letter changes with them.
+    fn reread_margins(&mut self, qh: &QueueHandle<Self>) {
+        self.spaces = sheet::workspaces();
+        let shown: Vec<u64> = self.screens.values().map(|s| s.workspace).collect();
+        self.parked = shown.into_iter().flat_map(sheet::parked).collect();
+        self.reread(qh);
+        // the compositor hatches a parked cell, and breaks that hatching around what is lettered there
+        if let Some(face) = self.face.as_mut() {
+            for s in self.screens.values() {
+                let (left, right) = margins::clear_spans(s, face, &self.parked);
+                sheet::set_clear(&s.name, &left, &right);
+            }
+        }
+        let surfaces: Vec<wl_surface::WlSurface> =
+            self.bands.iter_mut().filter(|b| b.side != Side::Title).map(|b| { b.drawn = false; b.layer.wl_surface().clone() }).collect();
+        for surface in surfaces {
+            self.draw(&surface);
         }
     }
 

@@ -39,7 +39,7 @@ start() {
     env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
         DRAFTPAPER_CACHE="$t/.cache/draftpaper" "$repo/cli/target/release/draftpaper" apply > /dev/null 2>&1
     env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
-        DRAFTPAPER_CACHE="$t/.cache/draftpaper" "$client" > "$t/client.log" 2>&1 &
+        DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_SHEET_RULE=1 "$client" > "$t/client.log" 2>&1 &
     sheet=$!
     pids="$nest $sheet"
     i=0
@@ -138,6 +138,36 @@ while [ $i -lt 12 ]; do
 done
 ok "every cell carries its label" "$labelled" "12"
 ok "and eleven of the twelve a reading (the custom cell is empty here)" "$([ "$valued" -ge 11 ] && echo most || echo "$valued")" "most"
+ok "nothing said by the client" "$(grep -ci "error\|protocol" "$t/client.log")" "0"
+stop
+
+# the margins: the workspaces along the top, the columns numbered, a letter at the head of every row
+# down the sides, and the scale bar's figures and the theme's name along the foot
+start 1920x1200 1.5 6.4 4
+sc=1.5
+mm=$(o 0 .px_per_mm); mg=$(o 0 .margin); w=$(o 0 .width); h=$(o 0 .height); across=$(o 0 .zones.across); down=$(o 0 .zones.down)
+shots 1
+# ink in a stretch of a band, given in the display's logical pixels
+band() {
+    awk -v a="$1" -v b="$2" -v c="$3" -v d="$4" -v sc="$sc" 'BEGIN { printf "%d %d %d %d", a * sc, b * sc, c * sc, d * sc }'
+}
+inked() {
+    set -- $(band "$1" "$2" "$3" "$4")
+    "$check" "$t/shot-headless.png" "$sc" "$mm" "$mg" ink "$1" "$2" "$3" "$4"
+}
+# zone k of the top band, between the frame's corners
+zone() { awk -v k="$1" -v w="$w" -v mg="$mg" -v n="$across" 'BEGIN { z = (w - 2 * mg) / n; printf "%f %f", mg + k * z, mg + (k + 1) * z }'; }
+set -- $(zone 0); first_a=$1; first_b=$2
+set -- $(zone 1); second_a=$1; second_b=$2
+ok "the workspace is lettered in the top margin's first zone" "$([ "$(inked "$first_a" 0 "$first_b" "$mg")" -gt 20 ] && echo lettered || echo bare)" "lettered"
+ok "and the next zone carries its column's number" "$([ "$(inked "$second_a" 0 "$second_b" "$mg")" -gt 20 ] && echo numbered || echo bare)" "numbered"
+# the left margin's first row: its letter sits at the head of the cell
+ok "a letter at the head of the first row" "$([ "$(inked 0 "$mg" "$mg" "$(awk -v m="$mg" -v mm="$mm" 'BEGIN { print m + 8 * mm }')")" -gt 20 ] && echo lettered || echo bare)" "lettered"
+ok "and the right margin's too" "$([ "$(inked "$(awk -v w="$w" -v m="$mg" 'BEGIN { print w - m }')" "$mg" "$w" "$(awk -v m="$mg" -v mm="$mm" 'BEGIN { print m + 8 * mm }')")" -gt 20 ] && echo lettered || echo bare)" "lettered"
+# the foot: the scale bar's figures, and the theme's name in the last zone
+set -- $(zone $((across - 1))); last_a=$1; last_b=$2
+ok "the theme's name along the foot" "$([ "$(inked "$last_a" "$(awk -v h="$h" -v m="$mg" 'BEGIN { print h - m }')" "$last_b" "$h")" -gt 20 ] && echo named || echo bare)" "named"
+ok "the scale bar's figures over its rules" "$(awk -v x="$(o 0 .scale_bar.text.y)" 'BEGIN { print (x > 0) ? "placed" : "none" }')" "placed"
 ok "nothing said by the client" "$(grep -ci "error\|protocol" "$t/client.log")" "0"
 stop
 

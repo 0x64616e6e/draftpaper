@@ -1,6 +1,6 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stages 0 and 1 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
+Status: stages 0 to 2 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
 
 ## Why
 
@@ -152,9 +152,16 @@ workspace.
    `tests/sheet.sh` counts the ink in each cell's label and reading, against a floor that tells lettering
    from the rules that edge the cells. Two displays: 15 MB, three threads, 0.1% of a core — the last for
    reading the machine every five seconds, as the shell did.
-2. **The margins.** Workspaces, notifications, zone letters, parked titles, the scale bar's figures, the
-   column numbers, the config's cells, the theme's name. The existing `pixels.sh`, `zones.sh`, `scale.sh`,
-   `text.sh` and `displays.sh` cover most of this already.
+2. **The margins.** *(done, less what the daemons say)* The workspaces along the top, the columns
+   numbered from the left, a letter at the head of every row down the sides with the title of whatever is
+   parked there running up the margin, and along the foot the scale bar's figures and the theme's name.
+   The compositor now publishes where each parking cell is (`parking`), rather than the client working it
+   out a second time — it already knew, since it puts windows there. The client tells it back which
+   stretches carry lettering, so the hatching breaks around the words as it does for the shell. The
+   margins follow a workspace switch at once: the client subscribes to the compositor rather than
+   polling. Two displays, one 4K: 16 MB, five threads, 0.1% of a core.
+   Still the shell's: notifications, volume and brightness, the tray and Bluetooth — all of them what a
+   daemon says, and all of them stage 4. The config's own `[[cell]]`s wait for that too.
 3. **Input.** Clicks and hover: workspace switching, parking and unparking, the title block's cells, the
    cursor shapes. Verified with the compositor's own `msg pointer` and `msg button`, as the tests do now.
 4. **The services.** Audio, notifications, Bluetooth, and the tray or a decision not to have one.

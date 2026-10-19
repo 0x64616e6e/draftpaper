@@ -94,6 +94,30 @@ impl Face {
         pen
     }
 
+    /// The same, read upwards: the lettering turned a quarter turn against the clock, as a drawing
+    /// letters the sides of its frame. `foot` is where the first character sits, and the pen climbs.
+    pub fn draw_up(&mut self, canvas: &mut Canvas, x: f32, foot: f32, text: &str, px: f32, spacing: f32, colour: u32) {
+        let mut pen = foot;
+        for ch in text.chars() {
+            if let Some(g) = self.glyph(ch, px) {
+                let (left, top, w, h) = (g.left, g.top, g.width, g.height);
+                for row in 0..h {
+                    for col in 0..w {
+                        let cover = g.coverage[row * w + col];
+                        if cover > 0 {
+                            // a quarter turn against the clock about the pen: what was across becomes up
+                            let at = (x.round() as i32 + row as i32 - top, pen.round() as i32 - left - col as i32);
+                            canvas.blend(at.0, at.1, colour, cover);
+                        }
+                    }
+                }
+                pen -= g.advance + spacing;
+            } else {
+                pen -= px * 0.6 + spacing;
+            }
+        }
+    }
+
     /// The glyph for a character, rasterised once and kept. The first face that has it wins; a character
     /// no face has is left out rather than drawn as a box.
     fn glyph(&mut self, ch: char, px: f32) -> Option<&Glyph> {

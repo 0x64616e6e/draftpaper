@@ -31,6 +31,24 @@ pub struct Screen {
     pub title: Option<Block>,
     /// the workspace this display shows
     pub workspace: u64,
+    /// the zones the margins are ticked into
+    pub across: u32,
+    pub down: u32,
+    /// the parking cells, the left margin's from the top then the right's
+    pub parking: Vec<(f64, f64, f64, f64)>,
+    /// the scale bar's rules and the rows left above them for its figures
+    pub bar: Option<Bar>,
+}
+
+/// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
+/// the figures go in. All from the display's corner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Bar {
+    pub marks: Vec<(f64, u32)>,
+    pub text_top: f64,
+    pub text_height: f64,
+    pub measured: bool,
+    pub zone: (f64, f64, f64, f64),
 }
 
 /// The title block: where it is, and where each of its cells is, all from the display's corner.
@@ -70,6 +88,14 @@ pub fn screens() -> Vec<Screen> {
                 frame: (f("x")? - n("x")?, f("y")? - n("y")?, f("width")?, f("height")?),
                 title: block(o.get("title"), n("x")?, n("y")?),
                 workspace: o.get("workspace").and_then(Value::as_u64).unwrap_or(1),
+                across: o.get("zones").and_then(|z| z.get("across")).and_then(Value::as_u64).unwrap_or(6) as u32,
+                down: o.get("zones").and_then(|z| z.get("down")).and_then(Value::as_u64).unwrap_or(4) as u32,
+                parking: o
+                    .get("parking")
+                    .and_then(Value::as_array)
+                    .map(|a| a.iter().filter_map(|r| Some((r.get("x")?.as_f64()?, r.get("y")?.as_f64()?, r.get("width")?.as_f64()?, r.get("height")?.as_f64()?))).collect())
+                    .unwrap_or_default(),
+                bar: bar(o.get("scale_bar"), n("x")?, n("y")?),
             })
         })
         .collect()
@@ -87,6 +113,68 @@ fn block(value: Option<&Value>, ox: f64, oy: f64) -> Option<Block> {
     (!cells.is_empty()).then_some(Block { rect: whole, cells })
 }
 
+/// The scale bar, moved to the display's own corner; None where the display reports no size and nothing
+/// on the sheet is to scale.
+fn bar(value: Option<&Value>, ox: f64, oy: f64) -> Option<Bar> {
+    let v = value?;
+    let zone = v.get("zone")?;
+    let g = |r: &Value, k: &str| r.get(k)?.as_f64();
+    let marks = v
+        .get("marks")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|m| Some((m.get("x")?.as_f64()? - ox, m.get("mm")?.as_u64()? as u32))).collect())
+        .unwrap_or_default();
+    Some(Bar {
+        marks,
+        text_top: v.get("text").and_then(|t| g(t, "y")).unwrap_or(0.0) - oy,
+        text_height: v.get("text").and_then(|t| g(t, "height")).unwrap_or(0.0),
+        measured: v.get("measured").and_then(Value::as_bool).unwrap_or(false),
+        zone: (g(zone, "x")? - ox, g(zone, "y")? - oy, g(zone, "width")?, g(zone, "height")?),
+    })
+}
+
+/// The workspaces of one display, and the windows parked on the one it shows.
+pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
+    let Some(reply) = ask("{\"request\": \"workspaces\"}") else { return Vec::new() };
+    reply
+        .get("reply")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(|w| {
+                    Some((
+                        w.get("number")?.as_u64()?,
+                        w.get("focused")?.as_bool()?,
+                        w.get("shown")?.as_bool()?,
+                        w.get("output")?.as_str()?.to_string(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Every window parked on `workspace`: which cell it is in, and what to letter up the margin.
+pub fn parked(workspace: u64) -> Vec<(usize, String)> {
+    let Some(reply) = ask("{\"request\": \"windows\"}") else { return Vec::new() };
+    reply
+        .get("reply")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter(|w| w.get("parked").and_then(Value::as_bool).unwrap_or(false))
+                .filter(|w| w.get("workspace").and_then(Value::as_u64) == Some(workspace))
+                .filter_map(|w| {
+                    let cell = w.get("cell")?.as_u64()? as usize;
+                    let title = w.get("title").and_then(Value::as_str).filter(|t| !t.is_empty());
+                    let name = title.or_else(|| w.get("app_id").and_then(Value::as_str)).unwrap_or("");
+                    Some((cell, name.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The theme the sheet is lettered in: what the shell reads from the same file (qml/Theme.qml).
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -96,6 +184,8 @@ pub struct Theme {
     pub mono: Option<String>,
     pub project: String,
     pub drawn: String,
+    /// the theme's own name, lettered at the foot of the sheet
+    pub label: String,
 }
 
 impl Theme {
@@ -116,6 +206,7 @@ impl Theme {
             mono: Some(s("text", "monospace")).filter(|m| !m.is_empty()),
             project: s("title", "project"),
             drawn: s("title", "drawn"),
+            label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
         }
         .with_alpha(alpha)
     }
@@ -132,6 +223,32 @@ impl Theme {
     pub fn faint(&self) -> Ink {
         Ink { a: (self.ink.a * 0.72).min(1.0), ..self.ink }
     }
+}
+
+/// Watch the compositor and say when the sheet, the workspaces or the windows change, so the margins
+/// follow a workspace switch at once rather than at the next reading. Ends quietly where the socket does.
+pub fn watch(say: std::sync::mpsc::Sender<()>) {
+    let Some(path) = std::env::var_os("DRAFTPAPER_SOCKET") else { return };
+    let Ok(mut socket) = UnixStream::connect(path) else { return };
+    if socket.write_all(b"{\"request\": \"subscribe\", \"events\": [\"outputs\", \"workspaces\", \"windows\"]}\n").is_err() {
+        return;
+    }
+    for line in BufReader::new(socket).lines().map_while(Result::ok) {
+        // which of them changed does not matter: the sheet is read again whole, which is a few
+        // small reads of a socket
+        if line.contains("\"event\"") && say.send(()).is_err() {
+            return;
+        }
+    }
+}
+
+/// Tell the compositor which stretches of the side margins carry lettering, so its hatching of a parked
+/// cell breaks around the words, as a drawing's hatch does. Spans are along the margin, in the display's
+/// logical pixels.
+pub fn set_clear(output: &str, left: &[(f64, f64)], right: &[(f64, f64)]) {
+    let list = |spans: &[(f64, f64)]| spans.iter().map(|(a, b)| serde_json::json!([a, b])).collect::<Vec<_>>();
+    let request = serde_json::json!({ "request": "sheet", "output": output, "clear": { "left": list(left), "right": list(right) } });
+    let _ = ask(&request.to_string());
 }
 
 /// One request on the compositor's socket, one reply.
@@ -152,7 +269,7 @@ mod tests {
     use super::*;
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1 }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None }
     }
 
     #[test]

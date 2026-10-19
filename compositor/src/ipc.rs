@@ -348,6 +348,14 @@ impl Draftpaper {
                         "zones": { "across": s.grid.zones.0, "down": s.grid.zones.1, "width": s.grid.zone.0, "height": s.grid.zone.1 },
                         // parking cells: down the left margin, then the right, one per zone
                         "cells": self.cells(i),
+                        // where each of those cells is, in the display's own logical pixels: the left
+                        // margin's from the top, then the right's (parking.rs puts windows in them, and
+                        // animation.rs flies them there, so these are the places themselves rather than a
+                        // second working-out). The sheet's client letters the titles into them.
+                        "parking": (0..self.cells(i))
+                            .filter_map(|c| self.cell_rect(i, c))
+                            .map(|r| json!({ "x": r.loc.x - g.loc.x, "y": r.loc.y - g.loc.y, "width": r.size.w, "height": r.size.h }))
+                            .collect::<Vec<Value>>(),
                         // with ambient margins (wallpaper.rs), the ink their lettering reads in
                         "margin_ink": margin_ink(&s.output),
                         // the title block and its cells (title.rs), lettered by the shell: inside their rules
