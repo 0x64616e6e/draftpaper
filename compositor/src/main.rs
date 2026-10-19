@@ -137,7 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.handle().insert_source(
         smithay::reexports::calloop::timer::Timer::from_duration(std::time::Duration::from_secs(2)),
         |_, _, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             data.reload_config();
             smithay::reexports::calloop::timer::TimeoutAction::ToDuration(std::time::Duration::from_secs(2))
         },
@@ -149,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.handle().insert_source(
         Signals::new(&[Signal::SIGTERM, Signal::SIGINT, Signal::SIGHUP, Signal::SIGUSR1])?,
         |event, _, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             match event.signal() {
                 Signal::SIGUSR1 => crate::tty::screenshot(data),
                 _ => data.loop_signal.stop(),
@@ -161,7 +161,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // must have them blocked), and the session read every so often to be saved
     data.session_restore();
     event_loop.handle().insert_source(smithay::reexports::calloop::timer::Timer::from_duration(crate::session::PERIOD), |_, _, data| {
-        data.ipc.dirty = true;
+        data.touched = true;
         data.session_tick();
         smithay::reexports::calloop::timer::TimeoutAction::ToDuration(crate::session::PERIOD)
     })?;
@@ -187,7 +187,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    event_loop.run(None, &mut data, move |data| data.ipc_refresh())?;
+    // after each turn: if it may have changed something, the shell is told and the displays draw again
+    event_loop.run(None, &mut data, move |data| {
+        if std::mem::take(&mut data.touched) {
+            data.ipc.dirty = true;
+            crate::tty::wake(data);
+            crate::headless::wake(data);
+        }
+        data.ipc_refresh();
+    })?;
     // the last frame stays on screen for the next compositor
     handoff::leave(&mut event_loop, &mut data);
     data.stop_ipc();

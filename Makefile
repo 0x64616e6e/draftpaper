@@ -79,6 +79,7 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/greeter.sh
 	compositor/tests/lock.sh
 	compositor/tests/session.sh
+	compositor/tests/idle.sh
 
 # the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
 screenshots: $(COMPOSITOR) $(CLI)

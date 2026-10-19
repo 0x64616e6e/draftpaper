@@ -83,7 +83,15 @@ pub struct TtyData {
     /// a frame was refused with a client's buffer on a display plane (Firefox's decoded video on Intel):
     /// from then on everything is composed by the GPU, only the pointer on its own plane
     composite: bool,
+    /// per crtc, idle (its last frame unchanged): the timer that looks again (IDLE), and when it last drew;
+    /// wake() brings it forward
+    idle: HashMap<crtc::Handle, smithay::reexports::calloop::RegistrationToken>,
+    last: HashMap<crtc::Handle, std::time::Instant>,
 }
+
+/// How long an idle output waits before it looks again of itself: anything that changes the picture wakes it
+/// sooner (wake); this is only a safety net for a change nothing announced.
+const IDLE: Duration = Duration::from_secs(1);
 
 impl TtyData {
     /// Whether the renderer takes a client's dmabuf (linux-dmabuf's import check).
@@ -168,12 +176,12 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
 
     data.session = Some(session.clone());
     data.tty = true;
-    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false, drawn: Default::default(), composite: false });
+    data.tty_data = Some(TtyData { session, renderer, manager, node, outputs: HashMap::new(), cursor: Cursor::load(), libinput: libinput.clone(), devices: Vec::new(), disabled: Default::default(), reset: false, drawn: Default::default(), composite: false, idle: HashMap::new(), last: HashMap::new() });
 
     let handle = event_loop.handle();
     handle
         .insert_source(LibinputInputBackend::new(libinput), |mut event, _, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             if let smithay::backend::input::InputEvent::DeviceAdded { device } = &mut event {
                 let input = data.config.input.clone();
                 if let Some(tty) = data.tty_data.as_mut() {
@@ -197,7 +205,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
         .map_err(|e| TtyError::Device(e.to_string()))?;
     handle
         .insert_source(session_notifier, |event, _, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             let Some(tty) = data.tty_data.as_mut() else { return };
             match event {
                 SessionEvent::PauseSession => {
@@ -225,7 +233,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     let udev = UdevBackend::new(&seat).map_err(err("udev"))?;
     handle
         .insert_source(udev, |event, _, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             if let UdevEvent::Changed { device_id } = event {
                 if data.tty_data.as_ref().is_some_and(|t| t.node.dev_id() == device_id) {
                     scan_outputs(data);
@@ -494,6 +502,13 @@ fn scan_with(data: &mut Draftpaper, tty: &mut TtyData) -> Vec<crtc::Handle> {
 
 /// Render one output; on an unchanged frame try again a refresh later.
 fn render(data: &mut Draftpaper, crtc: crtc::Handle) {
+    // drawing now: an idle timer for it goes
+    if let Some(token) = data.tty_data.as_mut().and_then(|t| t.idle.remove(&crtc)) {
+        data.loop_handle.remove(token);
+    }
+    if let Some(t) = data.tty_data.as_mut() {
+        t.last.insert(crtc, std::time::Instant::now());
+    }
     data.anim.prune(std::time::Instant::now());
     if !data.screencopies.is_empty() {
         if let Some(mut tty) = data.tty_data.take() {
@@ -526,6 +541,7 @@ fn render_with(data: &mut Draftpaper, tty: &mut TtyData, crtc: crtc::Handle) -> 
     let queued = match surface.render_frame(&mut tty.renderer, &elements, [0.1, 0.1, 0.1, 1.0], flags) {
         Ok(result) if !result.is_empty => match surface.queue_frame(()) {
             Ok(()) => {
+                *data.frames.entry(output.name()).or_default() += 1;
                 if tty.drawn.insert(crtc) {
                     eprintln!("draftpaper: {}: first frame after {} ms", output.name(), data.start_time.elapsed().as_millis());
                 }
@@ -562,14 +578,51 @@ fn after_frame(data: &mut Draftpaper, output: &smithay::output::Output, queued: 
     data.popups.cleanup();
     let _ = data.display_handle.flush_clients();
 
+    // nothing changed: idle, until something wakes it (wake), or IDLE from now. It looked again every refresh,
+    // forever: on an idle desktop most of the compositor's time, and the GPU woken 60 times a second
     if !queued {
-        let refresh = output.current_mode().map(|m| m.refresh).unwrap_or(60_000).max(1);
-        let delay = Duration::from_micros(1_000_000_000 / refresh as u64);
-        let handle: LoopHandle<'static, Draftpaper> = data.loop_handle.clone();
-        let _ = handle.insert_source(Timer::from_duration(delay), move |_, _, data| {
-            render(data, crtc);
-            TimeoutAction::Drop
-        });
+        idle_after(data, crtc, IDLE);
+    }
+}
+
+/// Draw `crtc` again `delay` from now, unless it is drawn before (render takes the timer away).
+fn idle_after(data: &mut Draftpaper, crtc: crtc::Handle, delay: Duration) {
+    let handle: LoopHandle<'static, Draftpaper> = data.loop_handle.clone();
+    let Ok(token) = handle.insert_source(Timer::from_duration(delay), move |_, _, data| {
+        // this timer is done: out of the map before render would remove it while it runs
+        if let Some(t) = data.tty_data.as_mut() {
+            t.idle.remove(&crtc);
+        }
+        render(data, crtc);
+        TimeoutAction::Drop
+    }) else {
+        return;
+    };
+    if let Some(old) = data.tty_data.as_mut().and_then(|t| t.idle.insert(crtc, token)) {
+        data.loop_handle.remove(old);
+    }
+}
+
+/// Something may have changed the picture (a client's request, input, the shell, a display): every idle
+/// output draws again, no sooner than a refresh after its last frame, so a client that asks for frame
+/// after frame gets them at the display's rate and no faster. An output waiting for its frame to be shown
+/// is left to its vblank, as before.
+pub fn wake(data: &mut Draftpaper) {
+    let Some(tty) = data.tty_data.as_ref() else { return };
+    let now = std::time::Instant::now();
+    let due: Vec<(crtc::Handle, Duration)> = tty
+        .idle
+        .keys()
+        .filter_map(|crtc| {
+            let (output, _, _) = tty.outputs.get(crtc)?;
+            let refresh = output.current_mode().map(|m| m.refresh).unwrap_or(60_000).max(1);
+            let frame = Duration::from_micros(1_000_000_000 / refresh as u64);
+            let next = tty.last.get(crtc).map(|t| *t + frame).unwrap_or(now);
+            Some((*crtc, next.saturating_duration_since(now)))
+        })
+        .collect();
+    for (crtc, delay) in due {
+        idle_after(data, crtc, delay);
     }
 }
 

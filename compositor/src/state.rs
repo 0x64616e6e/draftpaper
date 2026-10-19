@@ -59,6 +59,12 @@ pub struct Draftpaper {
     pub pointer_raw: Option<smithay::utils::Point<f64, smithay::utils::Logical>>,
     /// the displays are off (DPMS; tty::set_power)
     pub screens_off: bool,
+    /// this turn of the event loop may have changed something: set by every source that can (a client's
+    /// request, input, an IPC request, a display, the config, Xwayland, a signal, key repeat), not by a
+    /// frame; after the turn the shell is told what changed (ipc_refresh) and the displays wake (tty::wake)
+    pub touched: bool,
+    /// frames drawn with something changed, per output (`msg frames`: tests check an idle desktop draws none)
+    pub frames: std::collections::HashMap<String, u64>,
     /// the lock object of the locker holding the lock (handlers/lock_idle.rs)
     pub lock_holder: Option<smithay::reexports::wayland_protocols::ext::session_lock::v1::server::ext_session_lock_v1::ExtSessionLockV1>,
     /// lock surfaces by output name
@@ -202,6 +208,8 @@ impl Draftpaper {
             rulers: None,
             pointer_raw: None,
             screens_off: false,
+            touched: true,
+            frames: Default::default(),
             lock_holder: None,
             lock_surfaces: Default::default(),
             inhibitors: Vec::new(),
@@ -253,7 +261,7 @@ impl Draftpaper {
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
-                state.ipc.dirty = true;
+                state.touched = true;
                 // Inside the callback, you should insert the client into the display.
                 //
                 // You may also associate some data with the client when inserting the client.
@@ -269,7 +277,7 @@ impl Draftpaper {
             .insert_source(
                 Generic::new(display, Interest::READ, Mode::Level),
                 |_, display, state| {
-                    state.ipc.dirty = true;
+                    state.touched = true;
                     // Safety: we don't drop the display
                     unsafe {
                         display.get_mut().dispatch_clients(state).unwrap();

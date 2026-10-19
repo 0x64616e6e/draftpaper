@@ -26,7 +26,15 @@ use crate::{render::{attach_sheet, output_elements}, theme::Theme, Draftpaper};
 pub struct Headless {
     pub renderer: GlesRenderer,
     outputs: Vec<(Output, Option<(GlesTexture, (i32, i32), OutputDamageTracker)>)>,
+    /// the frame timer, and whether it is idle (the last frame unchanged: IDLE until woken)
+    timer: Option<smithay::reexports::calloop::RegistrationToken>,
+    idle: bool,
+    last: Option<std::time::Instant>,
 }
+
+/// A frame every 16 ms while something changes; idle, a look every second (a safety net), as tty.rs.
+const FRAME: std::time::Duration = std::time::Duration::from_millis(16);
+const IDLE: std::time::Duration = std::time::Duration::from_secs(1);
 
 impl Headless {
     pub fn import_dmabuf(&mut self, dmabuf: &smithay::backend::allocator::dmabuf::Dmabuf) -> bool {
@@ -43,7 +51,7 @@ fn render_node() -> Option<std::path::PathBuf> {
 
 /// `sizes`: one output each, left to right in that order, their tops level (the first named "headless", the
 /// next "headless-2" and so on); DRAFTPAPER_MM a density for all, or one per output ("6.4,4.3").
-pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpaper, sizes: &[(i32, i32)], scale: f64) -> Result<(), Box<dyn std::error::Error>> {
+pub fn init_headless(_event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draftpaper, sizes: &[(i32, i32)], scale: f64) -> Result<(), Box<dyn std::error::Error>> {
     let path = render_node().ok_or("no render node in /dev/dri")?;
     let file = std::fs::OpenOptions::new().read(true).write(true).open(&path)?;
     let node = DrmNode::from_path(&path)?;
@@ -102,24 +110,26 @@ pub fn init_headless(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut
         }
         outputs.push((output, None));
     }
-    data.headless = Some(Headless { renderer, outputs });
+    data.headless = Some(Headless { renderer, outputs, timer: None, idle: false, last: None });
     crate::gamma::refresh_all(data);
     std::env::set_var("WAYLAND_DISPLAY", &data.socket_name);
 
-    // a frame every 16 ms, drawn offscreen where something changed
-    event_loop.handle().insert_source(Timer::immediate(), |_, _, data| {
-        frame(data);
-        TimeoutAction::ToDuration(std::time::Duration::from_millis(16))
-    })?;
+    // frames, drawn offscreen where something changed: every 16 ms while they change, idle else (wake)
+    schedule(data, std::time::Duration::ZERO);
     Ok(())
 }
 
-fn frame(data: &mut Draftpaper) {
-    let Some(mut h) = data.headless.take() else { return };
+/// Draw every output; whether any of them changed.
+fn frame(data: &mut Draftpaper) -> bool {
+    let Some(mut h) = data.headless.take() else { return false };
+    let mut changed = false;
     data.anim.prune(std::time::Instant::now());
     for (output, target) in h.outputs.iter_mut() {
         let size = crate::render::mode_size(output);
+        // the texture kept from the last frame: its age is 1 (only what changed is drawn); a new one, 0
+        let mut age = 1;
         if target.as_ref().is_none_or(|t| t.1 != size) {
+            age = 0;
             match h.renderer.create_buffer(Fourcc::Abgr8888, (size.0, size.1).into()) {
                 Ok(texture) => *target = Some((texture, size, OutputDamageTracker::from_output(output))),
                 Err(e) => eprintln!("draftpaper: headless target: {e:?}"),
@@ -128,7 +138,12 @@ fn frame(data: &mut Draftpaper) {
         let elements = output_elements(data, &mut h.renderer, output, None);
         if let Some((texture, _, damage)) = target.as_mut() {
             if let Ok(mut fb) = h.renderer.bind(texture) {
-                let _ = damage.render_output(&mut h.renderer, &mut fb, 0, &elements, [0.1, 0.1, 0.1, 1.0]);
+                if let Ok(r) = damage.render_output(&mut h.renderer, &mut fb, age, &elements, [0.1, 0.1, 0.1, 1.0]) {
+                    if r.damage.is_some_and(|d| !d.is_empty()) {
+                        changed = true;
+                        *data.frames.entry(output.name()).or_default() += 1;
+                    }
+                }
             }
         }
     }
@@ -150,6 +165,35 @@ fn frame(data: &mut Draftpaper) {
     data.popups.cleanup();
     let _ = data.display_handle.flush_clients();
     data.headless = Some(h);
+    changed
+}
+
+/// The next frame `delay` from now, then every FRAME while frames change, IDLE once one does not.
+fn schedule(data: &mut Draftpaper, delay: std::time::Duration) {
+    let handle = data.loop_handle.clone();
+    let token = handle.insert_source(Timer::from_duration(delay), |_, _, data| {
+        let changed = frame(data);
+        let Some(h) = data.headless.as_mut() else { return TimeoutAction::Drop };
+        h.last = Some(std::time::Instant::now());
+        h.idle = !changed;
+        TimeoutAction::ToDuration(if changed { FRAME } else { IDLE })
+    });
+    if let (Some(h), Ok(token)) = (data.headless.as_mut(), token) {
+        if let Some(old) = h.timer.replace(token) {
+            data.loop_handle.remove(old);
+        }
+        h.idle = false;
+    }
+}
+
+/// Something may have changed the picture: an idle headless session draws again, a FRAME after its last.
+pub fn wake(data: &mut Draftpaper) {
+    let Some(h) = data.headless.as_ref() else { return };
+    if !h.idle {
+        return;
+    }
+    let next = h.last.map(|t| (t + FRAME).saturating_duration_since(std::time::Instant::now())).unwrap_or_default();
+    schedule(data, next);
 }
 
 /// The output as drawn now, to DIR/last-<output>.png (DRAFTPAPER_LAST_FRAME, handoff.rs).

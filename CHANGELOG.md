@@ -3,6 +3,15 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- An idle desktop costs almost nothing: the compositor drew again every refresh whether anything had
+  changed or not (and rebuilt what it tells the shell after each), about 5% of a core and the GPU woken 60
+  times a second with nothing moving. It now draws when something may have changed (a client, input, the
+  shell, a display, the config), never faster than the display's refresh, and otherwise looks once a
+  second. Idle, headless with two displays and the shell: 0.15% of a core, 4 wakeups a second.
+  `draftpaper-compositor msg frames` counts the frames drawn; `make pixels` checks an idle desktop.
+
 ## 0.7.4 (2026-10-19)
 
 The network and the disks on the graph, the graph beside the title block on every display, and Firefox's

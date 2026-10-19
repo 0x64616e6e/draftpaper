@@ -69,7 +69,7 @@ impl Draftpaper {
         };
         let handle = self.loop_handle.clone();
         let _ = self.loop_handle.insert_source(xwayland, move |event, _, data| {
-        data.ipc.dirty = true;
+        data.touched = true;
         match event {
             XWaylandEvent::Ready { x11_socket, display_number } => match X11Wm::start_wm(handle.clone(), x11_socket, client.clone()) {
                 Ok(wm) => {

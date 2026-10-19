@@ -290,7 +290,7 @@ impl Draftpaper {
         self.key_repeat = self
             .loop_handle
             .insert_source(Timer::from_duration(delay), move |_, _, data| {
-                data.ipc.dirty = true;
+                data.touched = true;
                 data.act(action.clone());
                 TimeoutAction::ToDuration(every)
             })

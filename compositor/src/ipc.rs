@@ -4,6 +4,7 @@
 //!
 //!   {"request": "version" | "outputs" | "workspaces" | "windows"}
 //!   {"request": "action", "action": "workspace 3"}        any binding action (config.rs)
+//!   {"request": "frames"}                                frames drawn with a change, per output
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
 //!   {"request": "sheet", "output": "eDP-1", "merged": {"top": [[7, 9]]}}   cells the shell merged
 //!   {"request": "sheet", "output": "eDP-1", "clear": {"left": [[40, 52]]}}  side spans it letters
@@ -58,9 +59,8 @@ pub struct Ipc {
     /// the state last sent, per kind
     last: HashMap<&'static str, Value>,
     flush_pending: bool,
-    /// something may have changed since the last refresh: set by every source that changes the state (a
-    /// client's request, input, a request here, a display coming or going, the config); not by a frame
-    /// drawn or retried, so an idle desktop builds nothing (ipc_refresh)
+    /// something may have changed since the last refresh (set after a turn that touched the state, main.rs);
+    /// not by a frame drawn or retried, so an idle desktop builds nothing (ipc_refresh)
     pub dirty: bool,
 }
 
@@ -92,7 +92,7 @@ impl Draftpaper {
         std::env::remove_var("SWAYSOCK");
         self.ipc.path = Some(path);
         let _ = self.loop_handle.insert_source(Generic::new(listener, Interest::READ, Mode::Level), |_, listener, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             while let Ok((stream, _)) = listener.accept() {
                 data.ipc_accept(stream);
             }
@@ -106,7 +106,7 @@ impl Draftpaper {
         self.ipc.next += 1;
         self.ipc.clients.insert(id, Client { stream: writer, input: Vec::new(), output: Vec::new(), events: HashSet::new() });
         let _ = self.loop_handle.insert_source(Generic::new(stream, Interest::READ, Mode::Level), move |_, stream, data| {
-            data.ipc.dirty = true;
+            data.touched = true;
             let mut buf = [0u8; 4096];
             loop {
                 // SAFETY of `get_mut`: reading does not close or replace the fd the source watches
@@ -176,6 +176,8 @@ impl Draftpaper {
             "outputs" => Ok(self.ipc_outputs()),
             "workspaces" => Ok(self.ipc_workspaces()),
             "windows" => Ok(self.ipc_windows()),
+            // frames drawn with a change, per output, since the start (an idle desktop draws none)
+            "frames" => Ok(json!(self.frames)),
             // the login screen runs nothing and keeps its sheet as the session will first draw it
             "action" | "sheet" if self.greeter => Err("not on the login screen".into()),
             // {"request": "blur", "mm": 6}: the sheet behind the overlay and top layers blurred (the login card)
@@ -598,10 +600,10 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|pointer|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|frames|pointer|subscribe KIND...|ACTION");
             return 2;
         }
-        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma")) => {
+        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames")) => {
             json!({ "request": if r == "focused-output" { "outputs" } else { r } })
         }
         // where the pointer is; with X Y, the action that puts it there
