@@ -17,7 +17,7 @@ Item {
     id: sched
     required property var shell
     required property var edge
-    property var other: null              // the plotted load (LoadGraph.qml): never on top of it
+    property var other: null              // the plotted load (LoadGraph.qml): never on top of it (rows stop above it)
     property bool wanted: false           // this one is the schedule shown, on this screen
     property string title: ""
     property string meta: ""
@@ -82,8 +82,14 @@ Item {
         return Math.max(0, Math.min(112, right - xMm))
     }
     // up to the title block, `gap` clear (the revisions take their turn in this place, never above the
-    // title block); elsewhere to the frame, 2 mm clear
-    readonly property int roomMm: column ? Math.floor((titleRect.y - y0) / mm) - gap : Math.floor(frame.h - 2 - yMm)
+    // title block); elsewhere to the frame, 2 mm clear, or to the graph (4 mm clear) where it is out below
+    readonly property int roomMm: column ? Math.floor((titleRect.y - y0) / mm) - gap : Math.floor(limit(xMm) - yMm)
+    // how far down a schedule at x (mm) may reach: the graph's top line, 4 mm clear, where it is out under
+    // it (its place is the title block's, LoadGraph.qml), else the frame's, 2 mm clear
+    function limit(x) {
+        if (other && other.shown && x < other.xMm + other.wMm + 4 && other.xMm < x + 112 + 4) return other.yMm - 4
+        return frame.h - 2
+    }
 
     // each row's top and height in whole millimetres: the heading 7 (more, below), the columns' heads 5, a
     // row 6 (9 with a note); the rows that fit. One with more rows than fit fills its place: the millimetres
@@ -113,8 +119,8 @@ Item {
     function clear(x, y) {
         if (x < 2 || y < 2 || x + 70 > frame.w - 2 || y + hMm > frame.h - 2) return false
         if (titleMm && x + 70 > titleMm.x - 6 && y + hMm > titleMm.y - 2) return false
-        if (other && other.shown && x < other.xMm + other.wMm + 4 && other.xMm < x + 112 + 4
-            && y < other.yMm + other.hMm + 4 && other.yMm < y + hMm + 4) return false
+        // its heading and a row above the graph: the rows that do not fit stay off
+        if (y + 18 > limit(x)) return false
         return true
     }
     // the columns' left edges, in millimetres from the schedule's

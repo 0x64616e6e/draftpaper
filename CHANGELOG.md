@@ -10,6 +10,11 @@ What changed in each release, newest first. The Debian package's own record, wit
   logarithmic scale from 1 kB/s (bytes to gigabytes a second). Counted on the machine's own interfaces and
   disks only (not lo, bridges, VPN tunnels, containers, partitions or zvols). A store kept by 0.7.3 goes on.
 - A schedule's row can do something: tinted under the pointer, clicked without dragging the schedule.
+- The graph's place is worked out on each display, as the title block's is: level with the title block
+  (its top line to the frame's) and across from the frame's left line to it, 6 mm clear of either. It is no
+  longer dragged, and `[sheet] load_at` and the settings' GRAPH pages are gone: a place set in millimetres
+  put it mid-sheet, across two rows of zones, on the 4K display. A schedule placed above it keeps its rows
+  above it.
 
 ## 0.7.3 (2026-10-19)
 

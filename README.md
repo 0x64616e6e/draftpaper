@@ -202,8 +202,8 @@ monospace = "IBM Plex Mono" #   GTK's and Qt's fixed font, Alacritty (its size; 
 mono_size = 11             #   wins), foot, Emacs, the sheet's lettering; taken out: the fonts as they were
 
 [sheet]                    # the notes on the sheet (#49): Mod+i brings the schedules in turn, a click on a
-schedule_at = [10, 10]     #   reading's cell its graph; where: [x, y] mm from the frame's corner, or a zone
-load_at = "C1"             #   ("C1": 7 mm into it), as dragging one leaves it; load_at left out: bottom left
+schedule_at = [10, 10]     #   reading's cell its graph (beside the title block); where the schedule goes: [x, y]
+                           #   mm from the frame's corner, or a zone ("C1": 7 mm in), as dragging it leaves it
 
 [rulers]                   # see Rulers; the settings' Rulers page
 step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)

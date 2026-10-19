@@ -418,7 +418,7 @@ ShellRoot {
                 wanted: (root.schedule === "revisions" && root.scheduleOn === edge.screen.name)
                     || (root.schedule === "" && theme.title.revisions === true && !!edge.output && edge.output.focused)
             }
-            LoadGraph { id: load; shell: root; edge: edge; other: procs.shown ? procs : revs.shown ? revs : equip; domain: root.graphOn === edge.screen.name ? root.graph : "" }
+            LoadGraph { id: load; shell: root; edge: edge; domain: root.graphOn === edge.screen.name ? root.graph : "" }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

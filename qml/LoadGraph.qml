@@ -11,10 +11,9 @@
 // runtime directory is read in place, every 5 s while the graph is out: no process of its own. On the
 // bottom layer, under every window; over a wallpaper, each line on a halo of the paper.
 //
-// Where: [sheet] load_at, a zone ("C1": 7 mm into it) or millimetres from the frame's corner ([12, 100]),
-// as dragging it leaves it; without one, in the bottom left, under the machine schedule. Up to 210 mm across and a
-// zone of the sheet tall, smaller where the sheet, the title block or the schedule leave less; not shown
-// under 100 by 40.
+// Where: on each display, level with its title block (from the title block's top line to the frame's) and
+// across from the frame's left line to the title block, 6 mm clear of either, as the title block is worked out
+// for each; not shown under 60 by 20 mm.
 // All of it whole millimetres from the frame's corner (sheet.js). [sheet] load = false takes it away.
 import QtQuick
 import Quickshell
@@ -25,7 +24,6 @@ Item {
     id: graph
     required property var shell
     required property var edge
-    required property var other           // the machine schedule (MachineSchedule.qml): never on top of it
 
     readonly property var theme: shell.theme
     readonly property var out: edge.output
@@ -33,7 +31,6 @@ Item {
     readonly property real dpr: edge.dpr
     readonly property color ink: theme.ink
     readonly property color alert: theme.alert
-    readonly property int maxW: 210
 
     // ---- the readings: the keeper's file, read while the graph is out ----
     Watch {
@@ -78,65 +75,22 @@ Item {
         for (const s of series) o[s.key] = points(s.key)
         return o
     }
-    // no taller than a zone of the sheet (whole millimetres), however much room there is: taller, it looked
-    // stretched
-    readonly property int maxH: out && out.zones ? Math.min(72, Math.floor(out.zones.height / mm + 1e-6)) : 44
+    // ---- where and how large: whole millimetres from the frame's corner, worked out on each display as the
+    // title block is: level with the title block (its top line to the frame's), across from the frame's left
+    // line to the title block, `gap` clear of either ----
+    readonly property int gap: 6
     readonly property var frame: Sheet.frameMm(out)
     readonly property var titleMm: out && out.title && out.title.rect
-        ? { x: Math.floor((out.title.rect.x - (out.frame.x - out.x)) / mm), y: Math.floor((out.title.rect.y - (out.frame.y - out.y)) / mm) } : null
-    readonly property bool scheduleUp: other.shown
-
-    // ---- where and how large: whole millimetres from the frame's corner ----
-    readonly property var place: {
-        // where config.toml puts it (a zone, or millimetres a drag left: on every display), where it fits on
-        // this one: a place that fits on the 4K display may leave too little on the panel
-        const at = theme.sheet.load_at
-        const set = Array.isArray(at) && at.length === 2 ? { x: Math.round(at[0]), y: Math.round(at[1]) } : Sheet.zoneCorner(out, at, 7)
-        if (set && clear(set.x, set.y)) return set
-        // else the first clear of the bottom left (the bottom row of zones, from the first whole millimetre under
-        // its top line down to the frame's: within its zone), beside the schedule, under it, the top left
-        const low = out && out.zones ? Math.ceil(out.zones.height * (out.zones.down - 1) / mm - 1e-6) : frame.h - maxH
-        const tries = [{ x: 7, y: low }]
-        if (scheduleUp) tries.push({ x: other.xMm + other.wMm + 8, y: low }, { x: 7, y: other.yMm + other.hMm + 8 })
-        tries.push({ x: 7, y: 7 })
-        return tries.find(p => clear(p.x, p.y)) || tries[0]
-    }
-    property var dragged: null
-    readonly property int xMm: (dragged || place).x
-    readonly property int yMm: (dragged || place).y
-    // the room it has from (x, y), up to maxW by maxH: inside the frame (2 mm, 7 at the bottom), giving way
-    // to the title block (6 mm clear beside it, 2 above it) and the schedule (4 mm clear), along whichever
-    // edge keeps more of it
-    function room(x, y) {
-        // down to the frame's line: its squares fade to nothing before it
-        let right = frame.w - 2, bottom = frame.h
-        const obstacles = []
-        if (titleMm) obstacles.push({ x: titleMm.x - 6, y: titleMm.y - 2, r: frame.w, b: frame.h })
-        if (scheduleUp) obstacles.push({ x: other.xMm - 4, y: other.yMm - 4, r: other.xMm + other.wMm + 4, b: other.yMm + other.hMm + 4 })
-        for (const o of obstacles) {
-            const r = Math.min(right, x + maxW), b = Math.min(bottom, y + maxH)
-            if (o.r <= x || o.x >= r || o.b <= y || o.y >= b) continue
-            const across = o.x > x ? (o.x - x) * (b - y) : -1, down = o.y > y ? (r - x) * (o.y - y) : -1
-            if (across < 0 && down < 0) return { w: 0, h: 0 }
-            if (across >= down) right = Math.min(right, o.x)
-            else bottom = Math.min(bottom, o.y)
-        }
-        return { w: Math.min(maxW, right - x), h: Math.min(maxH, bottom - y) }
-    }
-    readonly property var size: room(xMm, yMm)
-    readonly property int wMm: Math.max(0, size.w)
-    readonly property int hMm: Math.max(0, size.h)
-    // a place for it: inside the frame, with room enough (100 by 40 mm) clear of everything else
-    function clear(x, y) {
-        if (x < 2 || y < 2) return false
-        const r = room(x, y)
-        return r.w >= 100 && r.h >= 40
-    }
+        ? { x: Math.floor((out.title.rect.x - (out.frame.x - out.x)) / mm + 1e-6), y: Math.ceil((out.title.rect.y - (out.frame.y - out.y)) / mm - 1e-6) } : null
+    readonly property int xMm: gap
+    readonly property int yMm: titleMm ? titleMm.y : frame.h - 36
+    readonly property int wMm: Math.max(0, (titleMm ? titleMm.x : frame.w) - gap - xMm)
+    readonly property int hMm: Math.max(0, frame.h - yMm)
 
     // which readings: "load", "temperature", "power", "battery", "network" (a click on their cell in the title
     // block), "disk" (the equipment schedule's STORAGE row), or none
     property string domain: ""
-    readonly property bool shown: domain !== "" && !!out && wMm >= 100 && hMm >= 40
+    readonly property bool shown: domain !== "" && !!out && wMm >= 60 && hMm >= 20
     property real fade: shown ? 1 : 0
     Behavior on fade { enabled: graph.theme.animations; NumberAnimation { duration: 240; easing.type: Easing.InOutQuad } }
     property string drawn: ""                          // the domain drawn, kept while it fades out
@@ -386,25 +340,5 @@ Item {
             }
         }
 
-        // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-            property point from
-            property var start: null
-            onPressed: e => { from = mapToGlobal(e.x, e.y); start = { x: graph.xMm, y: graph.yMm }; keep.stop(); graph.dragged = start }
-            onPositionChanged: e => {
-                if (!pressed || !start) return
-                const p = mapToGlobal(e.x, e.y)
-                const x = start.x + Math.round((p.x - from.x) / graph.mm), y = start.y + Math.round((p.y - from.y) / graph.mm)
-                if (graph.clear(x, y)) graph.dragged = { x: x, y: y }
-            }
-            onReleased: {
-                const d = graph.dragged
-                if (d && start && (d.x !== start.x || d.y !== start.y)) graph.shell.setConfig(["sheet.load_at=[" + d.x + ", " + d.y + "]"])
-                keep.restart()
-            }
-        }
-        Timer { id: keep; interval: 1500; onTriggered: graph.dragged = null }
     }
 }

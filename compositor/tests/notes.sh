@@ -5,8 +5,8 @@
 # equipment, in the title block's column from the top, its rules on their pixels; the processes; neither.
 # A reading's graph comes and goes with its cell (load, temperature, power, network; the disks from the
 # equipment's STORAGE row), its heavy line on the sheet's 50 mm. Zone B2 and a drag move
-# the schedule, a whole millimetre at a time, kept in config.toml; a place that leaves the graph no room (as
-# one dragged on a larger display) gives way to its own. Over a wallpaper still there. SHOT=FILE keeps a
+# the schedule, a whole millimetre at a time, kept in config.toml; the graph level with the title block,
+# across to it. Over a wallpaper still there. SHOT=FILE keeps a
 # screenshot of the equipment and the load (SHOT_PROC, SHOT_NET, SHOT_DISK: of those graphs; KEPT=FILE: from
 # that store).
 set -u
@@ -113,12 +113,13 @@ sleep 1.5
 shot "$t/notes.png"
 [ -n "${SHOT:-}" ] && { sleep "${SHOT_AFTER:-0}"; shot "$t/notes.png"; cp "$t/notes.png" "$SHOT"; }
 fh=$(awk -v h="$(o .frame.height)" -v m="$mmL" 'BEGIN { print int(h / m + 1e-6) }')
-zt=$(awk -v z="$(o .zones.height)" -v n="$(o .zones.down)" -v m="$mmL" 'BEGIN { v = z * (n - 1) / m; c = int(v); if (c < v - 1e-6) c++; print c }')
+# the graph level with the title block: from its top line (the first whole millimetre) to the frame's
+zt=$(awk -v y="$(o .title.rect.y)" -v f="$fyL" -v m="$mmL" 'BEGIN { v = (y - f) / m; c = int(v); if (c < v - 1e-6) c++; print c }')
 ymid=$(rowAt $(( (zt + fh) / 2 ))); x50=$(colAt 50)
 l50=$(lum "$x50" "$ymid"); l49=$(lum "$(colAt 49)" "$ymid"); l51=$(lum "$(colAt 51)" "$ymid")
 ok "the graph's heavy line on the sheet's 50 mm, the 49 and 51 mm lines light" "$([ "$l50" -lt $((l49 - 6)) ] && [ "$l50" -lt $((l51 - 6)) ] && echo on || echo "off: $l49 $l50 $l51")" "on"
 yabove=$(rowAt $((zt - 1))); a50=$(lum "$x50" "$yabove"); a49=$(lum "$(colAt 49)" "$yabove")
-ok "and nothing of it above its zone" "$([ "$a50" -ge $((a49 - 3)) ] && echo within || echo "a line: $a49 $a50")" "within"
+ok "and nothing of it above the title block's top line" "$([ "$a50" -ge $((a49 - 3)) ] && echo within || echo "a line: $a49 $a50")" "within"
 graph toggle load
 ok "again: away" "$(waitlayers load 0)" "0"
 graph toggle temperature
@@ -171,10 +172,6 @@ sleep 1.5
 shot "$t/notes.png"
 ok "and drawn there, on its millimetre" "$(rule $((zx + 19)) $((zy + 25)))" "exact"
 ok "the graph still up, out of its way" "$(layers load)" "1"
-# a place for the graph that leaves it too little height here (40 mm at least): it shows where it fits
-run "$cli" config set 'sheet.load_at=[10, '"$((fh - 7 - 30))"']' > /dev/null
-sleep 2.5
-ok "a place with no room for it here: the graph shown where it fits" "$(layers load)" "1"
 # over a wallpaper: both still there (on the paper's halo)
 magick -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png" 2> /dev/null || convert -size 1920x1200 gradient:"#8C9AA8"-"#4A463E" "$t/pic.png"
 run "$cli" config set "wallpaper=$t/pic.png" > /dev/null
