@@ -120,6 +120,7 @@ mod tests {
             label: "Soft Glow".into(),
             accent: crate::paint::Ink::parse("#b4701a", 1.0),
             paper: crate::paint::Ink::parse("#ffffff", 1.0),
+            ink_alpha: 1.0,
         }
     }
 

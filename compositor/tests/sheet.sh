@@ -19,6 +19,10 @@ margin = 6
 [title]
 project = "signal"
 drawn = "drafter"
+[sheet]
+# the whole test letters the sheet with its own client; the swap below checks that `draftpaper start`
+# honours this, and that the settings still find a Quickshell of their own
+lettering = "client"
 TOML
 pids=
 trap 'kill $pids 2>/dev/null; rm -rf "$t"' EXIT INT TERM
@@ -118,6 +122,8 @@ ok "the first display's rule" "$(sharp "$t/shot-headless.png" "$x" 12 1 0)" "sha
 x2=$(ruleAt "$fx2" "$ox2" "$mm2" "$sc")
 ok "the second's, at its own millimetre" "$(sharp "$t/shot-headless-2.png" "$x2" 12 1 0)" "sharp"
 ok "and they are not the same place" "$([ "$x" != "$x2" ] && echo differ || echo "both $x")" "differ"
+# a schedule's place on a display whose corner is not the layout's is settled by the client's own tests
+# (sheet/src/sheet.rs): the schedule goes to the screen in use, and nothing here can change which that is.
 stop
 
 # the title block: twelve cells, each with its label lettered and its reading under it
@@ -257,14 +263,22 @@ shots 1
 ok "the volume said while it is fresh" "$([ "$(inked "$vol_a" 0 "$vol_b" "$mg")" -gt $((before + 20)) ] && echo said || echo quiet)" "said"
 stop
 
+# two displays: a schedule is carried by the one it was called up on, and the other stays bare
+start 1920x1200,2560x1440 1.5 6.4,5.0 8
+run2() {
+    env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
+        DRAFTPAPER_ROOT="$repo" DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" "$@"
+}
+run2 "$repo/cli/target/release/draftpaper" schedule equipment > /dev/null 2>&1
+sleep 2
+carried() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r ".[$1].layers | map(select(. == \"draftpaper-schedule\")) | length"; }
+ok "the display it was called up on carries it" "$(carried 0)" "1"
+ok "and the other does not" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[1].schedule')" ""
+run2 "$repo/cli/target/release/draftpaper" schedule hide > /dev/null 2>&1
+stop
+
 # the swap: `draftpaper start` letters the sheet with its own client where the config says so, and the
 # settings are still Quickshell's, started for them and gone once closed
-cat > "$t/.config/draftpaper/config.toml" <<'TOML'
-theme = "softglow"
-margin = 6
-[sheet]
-lettering = "client"
-TOML
 start 1920x1200 1.5 6.4 4
 run() {
     env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \

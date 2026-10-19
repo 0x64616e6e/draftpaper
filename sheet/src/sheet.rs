@@ -73,7 +73,15 @@ impl Screen {
 /// Every display's sheet, asked of the compositor; empty where it cannot be reached.
 pub fn screens() -> Vec<Screen> {
     let Some(reply) = request_reply("{\"request\": \"outputs\"}") else { return Vec::new() };
-    let Some(outputs) = reply.get("reply").and_then(Value::as_array) else { return Vec::new() };
+    parse(reply.get("reply").unwrap_or(&Value::Null))
+}
+
+/// The compositor's answer, read. The frame and the zones are given from the whole layout's corner, and
+/// the title block, the scale bar and the parking cells from each display's own: a display whose corner
+/// is not the layout's shows up the difference, and taking one for the other put everything placed by
+/// the title block off the left edge of every display but the first.
+pub fn parse(outputs: &Value) -> Vec<Screen> {
+    let Some(outputs) = outputs.as_array() else { return Vec::new() };
     outputs
         .iter()
         .filter_map(|o| {
@@ -89,7 +97,9 @@ pub fn screens() -> Vec<Screen> {
                 margin: n("margin")?,
                 // the frame is given from the layout's corner; the sheet is drawn from the display's
                 frame: (f("x")? - n("x")?, f("y")? - n("y")?, f("width")?, f("height")?),
-                title: block(o.get("title"), n("x")?, n("y")?),
+                // the title block and the scale bar come already measured from this display's own corner
+                // (compositor/src/ipc.rs); only the frame and the zones are given from the whole layout's
+                title: block(o.get("title")),
                 workspace: o.get("workspace").and_then(Value::as_u64).unwrap_or(1),
                 across: o.get("zones").and_then(|z| z.get("across")).and_then(Value::as_u64).unwrap_or(6) as u32,
                 down: o.get("zones").and_then(|z| z.get("down")).and_then(Value::as_u64).unwrap_or(4) as u32,
@@ -98,7 +108,7 @@ pub fn screens() -> Vec<Screen> {
                     .and_then(Value::as_array)
                     .map(|a| a.iter().filter_map(|r| Some((r.get("x")?.as_f64()?, r.get("y")?.as_f64()?, r.get("width")?.as_f64()?, r.get("height")?.as_f64()?))).collect())
                     .unwrap_or_default(),
-                bar: bar(o.get("scale_bar"), n("x")?, n("y")?),
+                bar: bar(o.get("scale_bar")),
                 schedule: o.get("schedule").and_then(Value::as_str).unwrap_or("").to_string(),
                 graph: o.get("graph").and_then(Value::as_str).unwrap_or("").to_string(),
             })
@@ -106,12 +116,12 @@ pub fn screens() -> Vec<Screen> {
         .collect()
 }
 
-/// The title block as the compositor measured it, moved to the display's own corner.
-fn block(value: Option<&Value>, ox: f64, oy: f64) -> Option<Block> {
+/// The title block as the compositor measured it, from this display's own corner.
+fn block(value: Option<&Value>) -> Option<Block> {
     let v = value?;
     let rect = |r: &Value| {
         let g = |k: &str| r.get(k)?.as_f64();
-        Some((g("x")? - ox, g("y")? - oy, g("width")?, g("height")?))
+        Some((g("x")?, g("y")?, g("width")?, g("height")?))
     };
     let cells: Vec<(f64, f64, f64, f64)> = v.get("cells")?.as_array()?.iter().filter_map(rect).collect();
     let whole = rect(v.get("rect")?)?;
@@ -120,21 +130,21 @@ fn block(value: Option<&Value>, ox: f64, oy: f64) -> Option<Block> {
 
 /// The scale bar, moved to the display's own corner; None where the display reports no size and nothing
 /// on the sheet is to scale.
-fn bar(value: Option<&Value>, ox: f64, oy: f64) -> Option<Bar> {
+fn bar(value: Option<&Value>) -> Option<Bar> {
     let v = value?;
     let zone = v.get("zone")?;
     let g = |r: &Value, k: &str| r.get(k)?.as_f64();
     let marks = v
         .get("marks")
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|m| Some((m.get("x")?.as_f64()? - ox, m.get("mm")?.as_u64()? as u32))).collect())
+        .map(|a| a.iter().filter_map(|m| Some((m.get("x")?.as_f64()?, m.get("mm")?.as_u64()? as u32))).collect())
         .unwrap_or_default();
     Some(Bar {
         marks,
-        text_top: v.get("text").and_then(|t| g(t, "y")).unwrap_or(0.0) - oy,
+        text_top: v.get("text").and_then(|t| g(t, "y")).unwrap_or(0.0),
         text_height: v.get("text").and_then(|t| g(t, "height")).unwrap_or(0.0),
         measured: v.get("measured").and_then(Value::as_bool).unwrap_or(false),
-        zone: (g(zone, "x")? - ox, g(zone, "y")? - oy, g(zone, "width")?, g(zone, "height")?),
+        zone: (g(zone, "x")?, g(zone, "y")?, g(zone, "width")?, g(zone, "height")?),
     })
 }
 
@@ -196,6 +206,9 @@ pub struct Theme {
     pub accent: Ink,
     /// the paper, for the lettering a drawing breaks its lines to make room for
     pub paper: Ink,
+    /// how strongly the theme sets ink on paper: what is lettered is lettered in full, and only the
+    /// labels, the rules and the ticks are softened by it (qml/TitleBlock.qml)
+    pub ink_alpha: f32,
 }
 
 impl Theme {
@@ -219,21 +232,19 @@ impl Theme {
             label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
             accent: Ink::parse(v.get("accent").and_then(Value::as_str).unwrap_or("#b4701a"), 1.0),
             paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),
+            ink_alpha: alpha,
         }
-        .with_alpha(alpha)
     }
 
-    fn with_alpha(mut self, alpha: f32) -> Theme {
-        // as the title block mixes them (qml/TitleBlock.qml): the readings nearly full strength, their
-        // labels fainter, and never quite invisible however pale the theme
-        self.ink.a = (0.85 * alpha + 0.1).min(1.0);
-        self.alert.a = self.ink.a;
-        self
-    }
-
-    /// The ink a label is lettered in: fainter than the reading it names.
+    /// The ink a label is lettered in: fainter than the reading it names, and never quite invisible
+    /// however pale the theme (qml/TitleBlock.qml's `faint`).
     pub fn faint(&self) -> Ink {
-        Ink { a: (self.ink.a * 0.72).min(1.0), ..self.ink }
+        Ink { a: (0.6 * self.ink_alpha + 0.1).min(1.0), ..self.ink }
+    }
+
+    /// The ink a rule is drawn in, between the two.
+    pub fn line(&self) -> Ink {
+        Ink { a: (0.85 * self.ink_alpha + 0.1).min(1.0), ..self.ink }
     }
 }
 
@@ -323,6 +334,56 @@ fn request_reply(request: &str) -> Option<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two displays side by side, as the compositor answers: the second's corner is not the layout's.
+    fn two() -> Value {
+        serde_json::json!([
+            {
+                "name": "one", "x": 0, "y": 0, "width": 1280, "height": 800, "scale": 1.5, "px_per_mm": 4.3, "margin": 26.0,
+                "frame": { "x": 26.0, "y": 26.0, "width": 1228.0, "height": 748.0 },
+                "zones": { "across": 6, "down": 4 }, "workspace": 1,
+                "title": { "rect": { "x": 700.0, "y": 600.0, "width": 540.0, "height": 150.0 }, "cells": [{ "x": 700.0, "y": 600.0, "width": 100.0, "height": 60.0 }] },
+                "scale_bar": { "zone": { "x": 900.0, "y": 760.0, "width": 200.0, "height": 26.0 }, "marks": [{ "x": 910.0, "mm": 0 }], "text": { "y": 752.0, "height": 10.0 }, "measured": true },
+                "parking": [{ "x": 0.0, "y": 26.0, "width": 26.0, "height": 187.0 }]
+            },
+            {
+                "name": "two", "x": 1280, "y": 0, "width": 1706, "height": 960, "scale": 1.5, "px_per_mm": 3.5, "margin": 21.0,
+                "frame": { "x": 1301.0, "y": 21.0, "width": 1664.0, "height": 918.0 },
+                "zones": { "across": 8, "down": 5 }, "workspace": 2,
+                "title": { "rect": { "x": 1150.0, "y": 780.0, "width": 535.0, "height": 150.0 }, "cells": [{ "x": 1150.0, "y": 780.0, "width": 100.0, "height": 60.0 }] },
+                "scale_bar": { "zone": { "x": 1400.0, "y": 920.0, "width": 200.0, "height": 21.0 }, "marks": [{ "x": 1410.0, "mm": 0 }], "text": { "y": 912.0, "height": 10.0 }, "measured": true },
+                "parking": [{ "x": 0.0, "y": 21.0, "width": 21.0, "height": 180.0 }]
+            }
+        ])
+    }
+
+    #[test]
+    fn the_frame_is_moved_to_its_display_and_the_title_block_is_left_alone() {
+        let screens = parse(&two());
+        assert_eq!(screens.len(), 2);
+        // the frame comes from the whole layout's corner, so it is moved to the display's
+        assert_eq!(screens[0].frame.0, 26.0);
+        assert_eq!(screens[1].frame.0, 21.0, "the second display's frame was not brought to its own corner");
+        // the title block already comes from the display's own corner: moving it again put the schedule
+        // and the graph off the left edge of every display but the first
+        let block = screens[1].title.as_ref().expect("a title block");
+        assert_eq!(block.rect.0, 1150.0, "the second display's title block was moved twice");
+        assert_eq!(block.cells[0].0, 1150.0);
+        assert!(block.rect.0 > 0.0 && block.rect.0 < screens[1].width, "its title block is off the display");
+        // and so does the scale bar
+        let bar = screens[1].bar.as_ref().expect("a scale bar");
+        assert_eq!(bar.marks[0].0, 1410.0, "the second display's scale bar was moved twice");
+        assert!(bar.zone.0 > 0.0 && bar.zone.0 < screens[1].width);
+    }
+
+    #[test]
+    fn each_display_keeps_its_own_measure() {
+        let screens = parse(&two());
+        assert_eq!((screens[0].across, screens[0].down), (6, 4));
+        assert_eq!((screens[1].across, screens[1].down), (8, 5));
+        assert_eq!(screens[1].workspace, 2);
+        assert_eq!(screens[1].parking.len(), 1);
+    }
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
         Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new() }

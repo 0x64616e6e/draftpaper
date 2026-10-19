@@ -235,7 +235,8 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, domain: Domain, r: &Readings, 
     let px = |v: f64| (v * s.mm * scale) as f32;
     let (wide, high) = (px(at.width), px(at.height));
     let ink = theme.ink;
-    let faint = Ink { a: (ink.a * 0.35).min(1.0), ..ink };
+    // the period ticks, as the shell dotted them
+    let faint = Ink { a: 0.55, ..ink };
     let hair = 1.0f32.max((scale as f32).round());
 
     // the squares: a millimetre each, every tenth heavier, counted from the frame's corner as the

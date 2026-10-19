@@ -149,7 +149,7 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
     let px = |v: f64| (v * s.mm * scale) as f32;
     let ink = theme.ink;
     let faint = theme.faint();
-    let rule = Ink { a: (ink.a * 0.55).min(1.0), ..ink };
+    let rule = theme.line();
     let hair = 1.0f32.max((scale as f32).round());
     let heavy = (0.35 * mm).round().max(2.0);
     let wide = px(at.width);

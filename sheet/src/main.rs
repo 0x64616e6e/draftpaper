@@ -335,7 +335,7 @@ impl Sheet {
             // pixels, rounded up so nothing of the paper shows through between the band and the frame.
             let thick = s.margin.ceil().max(1.0) as u32;
             if band.side == Side::Graph {
-                let (plotting, Some(s)) = (self.plotting, self.screens.get(&band.screen)) else {
+                let (plotting, Some(s)) = (self.plotting, self.screens.get(&band.screen).filter(|s| !s.graph.is_empty())) else {
                     band.layer.set_size(1, 1);
                     band.layer.commit();
                     continue;
@@ -352,7 +352,7 @@ impl Sheet {
                 continue;
             }
             if band.side == Side::Schedule {
-                let (Some(what), Some(s)) = (self.schedule.as_ref(), self.screens.get(&band.screen)) else {
+                let (Some(what), Some(s)) = (self.schedule.as_ref(), self.screens.get(&band.screen).filter(|s| !s.schedule.is_empty())) else {
                     band.layer.set_size(1, 1);
                     band.layer.commit();
                     continue;
@@ -414,13 +414,17 @@ impl Sheet {
         let mut canvas = paint::Canvas::new(canvas, pw, ph);
         let hover = self.over.as_ref().filter(|(o, _, _)| o == surface).map(|(_, x, y)| (*x, *y));
         if side == Side::Graph {
-            if let (Some(face), Some(at)) = (self.face.as_mut(), graph::place(&s)) {
+            if s.graph.is_empty() {
+                // not this display's: the compositor says which carries it
+            } else if let (Some(face), Some(at)) = (self.face.as_mut(), graph::place(&s)) {
                 if let Some(r) = self.readings_over_time.as_ref() {
                     graph::draw(&mut canvas, face, self.plotting, r, &at, &s, &self.theme, scale);
                 }
             }
         } else if side == Side::Schedule {
-            if let (Some(what), Some(face)) = (self.schedule.as_ref(), self.face.as_mut()) {
+            if s.schedule.is_empty() {
+                // not this display's
+            } else if let (Some(what), Some(face)) = (self.schedule.as_ref(), self.face.as_mut()) {
                 if let Some(at) = what.place(&s) {
                     schedule::draw(&mut canvas, face, what, &at, &s, &self.theme, scale, None);
                 }
