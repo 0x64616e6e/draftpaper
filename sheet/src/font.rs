@@ -24,7 +24,12 @@ struct Glyph {
 }
 
 pub struct Face {
-    faces: Vec<fontdue::Font>,
+    /// the faces read so far: the first is the sheet's own, the rest are read only when a character
+    /// turns up that none before them has. Reading one is not cheap — a Nerd Font holds some ten
+    /// thousand glyphs, and all of them are laid out as it is read — and a sheet of words rarely needs
+    /// more than the first.
+    read: Vec<fontdue::Font>,
+    waiting: Vec<(std::path::PathBuf, u32)>,
     /// by character and by size, in sixty-fourths of a pixel so a size is a whole number
     glyphs: HashMap<(char, u32), Option<Glyph>>,
 }
@@ -34,7 +39,7 @@ impl Face {
     pub fn load(wanted: Option<&str>) -> Option<Face> {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
-        let mut faces = Vec::new();
+        let mut waiting: Vec<(std::path::PathBuf, u32)> = Vec::new();
         // the family the theme names first, then the sheet's own, then what Debian always has; a Nerd
         // Font last, for the glyphs before the readings
         let mut families: Vec<String> = wanted.into_iter().map(str::to_string).collect();
@@ -47,12 +52,30 @@ impl Face {
             if !db.face(id).is_some_and(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(&family))) {
                 continue;
             }
-            let loaded = db.with_face_data(id, |data, index| fontdue::Font::from_bytes(data, fontdue::FontSettings { collection_index: index, ..Default::default() }).ok());
-            if let Some(Some(font)) = loaded {
-                faces.push(font);
+            if let Some(fontdb::Source::File(path)) = db.face(id).map(|f| f.source.clone()) {
+                let index = db.face(id).map(|f| f.index).unwrap_or(0);
+                if !waiting.iter().any(|(p, i)| p == &path && *i == index) {
+                    waiting.push((path, index));
+                }
             }
         }
-        (!faces.is_empty()).then_some(Face { faces, glyphs: HashMap::new() })
+        let mut face = Face { read: Vec::new(), waiting, glyphs: HashMap::new() };
+        // the sheet's own face is read at once: without it there is nothing to letter with
+        face.read_another();
+        (!face.read.is_empty()).then_some(face)
+    }
+
+    /// Read the next face waiting, if any; whether there was one.
+    fn read_another(&mut self) -> bool {
+        while !self.waiting.is_empty() {
+            let (path, index) = self.waiting.remove(0);
+            let Ok(data) = std::fs::read(&path) else { continue };
+            if let Ok(font) = fontdue::Font::from_bytes(data.as_slice(), fontdue::FontSettings { collection_index: index, ..Default::default() }) {
+                self.read.push(font);
+                return true;
+            }
+        }
+        false
     }
 
     /// How far the pen moves for one character at this size, letter spacing aside.
@@ -67,7 +90,7 @@ impl Face {
 
     /// Where the baseline sits under the top of a line, and how tall the line is.
     pub fn ascent(&self, px: f32) -> f32 {
-        self.faces.first().and_then(|f| f.horizontal_line_metrics(px)).map(|m| m.ascent).unwrap_or(px * 0.8)
+        self.read.first().and_then(|f| f.horizontal_line_metrics(px)).map(|m| m.ascent).unwrap_or(px * 0.8)
     }
 
     /// Letter `text` with its baseline at `y`, starting at `x`, in `colour` (which carries its own
@@ -123,7 +146,9 @@ impl Face {
     fn glyph(&mut self, ch: char, px: f32) -> Option<&Glyph> {
         let key = (ch, (px * 64.0).round() as u32);
         if !self.glyphs.contains_key(&key) {
-            let made = self.faces.iter().find(|f| f.lookup_glyph_index(ch) != 0 || ch == ' ').map(|font| {
+            // a character none of the faces read so far has: read the next one waiting and look again
+            while !self.read.iter().any(|f| f.lookup_glyph_index(ch) != 0) && ch != ' ' && self.read_another() {}
+            let made = self.read.iter().find(|f| f.lookup_glyph_index(ch) != 0 || ch == ' ').map(|font| {
                 let (metrics, coverage) = font.rasterize(ch, px);
                 Glyph {
                     coverage,
