@@ -137,6 +137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     event_loop.handle().insert_source(
         smithay::reexports::calloop::timer::Timer::from_duration(std::time::Duration::from_secs(2)),
         |_, _, data| {
+            data.ipc.dirty = true;
             data.reload_config();
             smithay::reexports::calloop::timer::TimeoutAction::ToDuration(std::time::Duration::from_secs(2))
         },
@@ -147,9 +148,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     use smithay::reexports::calloop::signals::{Signal, Signals};
     event_loop.handle().insert_source(
         Signals::new(&[Signal::SIGTERM, Signal::SIGINT, Signal::SIGHUP, Signal::SIGUSR1])?,
-        |event, _, data| match event.signal() {
-            Signal::SIGUSR1 => crate::tty::screenshot(data),
-            _ => data.loop_signal.stop(),
+        |event, _, data| {
+            data.ipc.dirty = true;
+            match event.signal() {
+                Signal::SIGUSR1 => crate::tty::screenshot(data),
+                _ => data.loop_signal.stop(),
+            }
         },
     )?;
 
@@ -157,6 +161,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // must have them blocked), and the session read every so often to be saved
     data.session_restore();
     event_loop.handle().insert_source(smithay::reexports::calloop::timer::Timer::from_duration(crate::session::PERIOD), |_, _, data| {
+        data.ipc.dirty = true;
         data.session_tick();
         smithay::reexports::calloop::timer::TimeoutAction::ToDuration(crate::session::PERIOD)
     })?;

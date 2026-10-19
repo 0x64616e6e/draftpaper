@@ -58,6 +58,10 @@ pub struct Ipc {
     /// the state last sent, per kind
     last: HashMap<&'static str, Value>,
     flush_pending: bool,
+    /// something may have changed since the last refresh: set by every source that changes the state (a
+    /// client's request, input, a request here, a display coming or going, the config); not by a frame
+    /// drawn or retried, so an idle desktop builds nothing (ipc_refresh)
+    pub dirty: bool,
 }
 
 /// A window's IPC id, given on first sight and kept for its life.
@@ -88,6 +92,7 @@ impl Draftpaper {
         std::env::remove_var("SWAYSOCK");
         self.ipc.path = Some(path);
         let _ = self.loop_handle.insert_source(Generic::new(listener, Interest::READ, Mode::Level), |_, listener, data| {
+            data.ipc.dirty = true;
             while let Ok((stream, _)) = listener.accept() {
                 data.ipc_accept(stream);
             }
@@ -101,6 +106,7 @@ impl Draftpaper {
         self.ipc.next += 1;
         self.ipc.clients.insert(id, Client { stream: writer, input: Vec::new(), output: Vec::new(), events: HashSet::new() });
         let _ = self.loop_handle.insert_source(Generic::new(stream, Interest::READ, Mode::Level), move |_, stream, data| {
+            data.ipc.dirty = true;
             let mut buf = [0u8; 4096];
             loop {
                 // SAFETY of `get_mut`: reading does not close or replace the fd the source watches
@@ -445,8 +451,13 @@ impl Draftpaper {
         self.ipc_flush_later();
     }
 
-    /// After every turn of the event loop: send what changed to its subscribers.
+    /// After every turn of the event loop: send what changed to its subscribers. Only after a turn that may have
+    /// changed something (`dirty`): the three states were built and compared after every frame, retried
+    /// or not, a sixth of the idle compositor's time.
     pub fn ipc_refresh(&mut self) {
+        if !std::mem::take(&mut self.ipc.dirty) {
+            return;
+        }
         if self.ipc.clients.values().all(|c| c.events.is_empty()) {
             self.ipc.last.clear();
             return;

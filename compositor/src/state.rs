@@ -253,6 +253,7 @@ impl Draftpaper {
 
         loop_handle
             .insert_source(listening_socket, move |client_stream, _, state| {
+                state.ipc.dirty = true;
                 // Inside the callback, you should insert the client into the display.
                 //
                 // You may also associate some data with the client when inserting the client.
@@ -268,6 +269,7 @@ impl Draftpaper {
             .insert_source(
                 Generic::new(display, Interest::READ, Mode::Level),
                 |_, display, state| {
+                    state.ipc.dirty = true;
                     // Safety: we don't drop the display
                     unsafe {
                         display.get_mut().dispatch_clients(state).unwrap();

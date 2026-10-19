@@ -60,6 +60,7 @@ pub fn init_winit(
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
     event_loop.handle().insert_source(winit, move |event, _, data| {
+        data.ipc.dirty = true;
         let state = data;
 
         match event {

@@ -68,7 +68,9 @@ impl Draftpaper {
             }
         };
         let handle = self.loop_handle.clone();
-        let _ = self.loop_handle.insert_source(xwayland, move |event, _, data| match event {
+        let _ = self.loop_handle.insert_source(xwayland, move |event, _, data| {
+        data.ipc.dirty = true;
+        match event {
             XWaylandEvent::Ready { x11_socket, display_number } => match X11Wm::start_wm(handle.clone(), x11_socket, client.clone()) {
                 Ok(wm) => {
                     data.xwm = Some(wm);
@@ -88,6 +90,7 @@ impl Draftpaper {
                 Err(e) => eprintln!("draftpaper: X11 window manager: {e}"),
             },
             XWaylandEvent::Error => eprintln!("draftpaper: Xwayland failed to start"),
+        }
         });
     }
 

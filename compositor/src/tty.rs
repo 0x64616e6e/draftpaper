@@ -173,6 +173,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     let handle = event_loop.handle();
     handle
         .insert_source(LibinputInputBackend::new(libinput), |mut event, _, data| {
+            data.ipc.dirty = true;
             if let smithay::backend::input::InputEvent::DeviceAdded { device } = &mut event {
                 let input = data.config.input.clone();
                 if let Some(tty) = data.tty_data.as_mut() {
@@ -196,6 +197,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
         .map_err(|e| TtyError::Device(e.to_string()))?;
     handle
         .insert_source(session_notifier, |event, _, data| {
+            data.ipc.dirty = true;
             let Some(tty) = data.tty_data.as_mut() else { return };
             match event {
                 SessionEvent::PauseSession => {
@@ -223,6 +225,7 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
     let udev = UdevBackend::new(&seat).map_err(err("udev"))?;
     handle
         .insert_source(udev, |event, _, data| {
+            data.ipc.dirty = true;
             if let UdevEvent::Changed { device_id } = event {
                 if data.tty_data.as_ref().is_some_and(|t| t.node.dev_id() == device_id) {
                     scan_outputs(data);
