@@ -3,7 +3,10 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.4 (2026-10-19)
+
+The network and the disks on the graph, the graph beside the title block on every display, and Firefox's
+menus on the 4K display.
 
 - Firefox's menus open again on a display whose window's shadow reaches the display beside it (Firefox at
   the left margin of the 4K display, next to the panel): they were kept inside the panel, where the window

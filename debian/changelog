@@ -1,3 +1,19 @@
+draftpaper (0.7.4) unstable; urgency=medium
+
+  * Firefox's menus open again on a display whose window's shadow reaches
+    the display beside it: a popup is fitted to its window's own output.
+  * The network's and the disks' throughput on the graph, over the year, on
+    a logarithmic scale from 1 kB/s: a click on NETWORK in the title block,
+    on STORAGE in the equipment schedule. Only the machine's own interfaces
+    and disks are counted.
+  * A schedule's row can do something: tinted under the pointer, clicked
+    without dragging the schedule.
+  * The graph's place is worked out on each display: level with the title
+    block and across to it from the frame's left line. No longer dragged;
+    [sheet] load_at and the settings' GRAPH pages go.
+
+ -- 0x64616e6e <daniel@este.systems>  Mon, 19 Oct 2026 05:05:49 +0300
+
 draftpaper (0.7.3) unstable; urgency=medium
 
   * A year of readings on the graph, on a logarithmic time scale: now at
