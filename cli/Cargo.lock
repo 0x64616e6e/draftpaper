@@ -205,6 +205,7 @@ name = "draftpaper"
 version = "0.7.5"
 dependencies = [
  "regex",
+ "rustix",
  "serde_json",
  "toml",
  "zbus",

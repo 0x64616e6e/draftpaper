@@ -92,13 +92,77 @@ fn gpu_name(s: &str) -> String {
     name.replace(" (rev ", " (").trim().to_string()
 }
 
+/// Every display controller on the PCI bus, named from the system's own list of PCI ids: what `lspci`
+/// prints, read from /sys instead of starting it. The classes are 0300 VGA, 0302 3D, 0380 display.
 fn gpus() -> Vec<String> {
-    let out = util::run(&["lspci"], 10).unwrap_or_default();
-    out.lines()
-        .filter(|l| ["VGA compatible controller", "3D controller", "Display controller"].iter().any(|k| l.contains(k)))
-        .filter_map(|l| l.splitn(3, ": ").nth(1).or_else(|| l.split(": ").nth(1)))
-        .map(|d| gpu_name(d.split(" (rev").next().unwrap_or(d)))
+    let mut dirs: Vec<std::path::PathBuf> = std::fs::read_dir("/sys/bus/pci/devices").into_iter().flatten().flatten().map(|e| e.path()).collect();
+    dirs.sort();
+    let mut cards: Vec<(u16, u16)> = Vec::new();
+    for d in dirs {
+        let at = |f: &str| read(&d.join(f).to_string_lossy());
+        let class = at("class");
+        if !["0300", "0302", "0380"].iter().any(|k| class.trim_start_matches("0x").starts_with(k)) {
+            continue;
+        }
+        let id = |f: &str| u16::from_str_radix(at(f).trim().trim_start_matches("0x"), 16).ok();
+        if let (Some(vendor), Some(device)) = (id("vendor"), id("device")) {
+            cards.push((vendor, device));
+        }
+    }
+    let names = pci_names(&cards);
+    cards
+        .iter()
+        .map(|k| match names.get(k) {
+            Some(name) => gpu_name(name),
+            // no list installed (hwdata): the ids themselves, as lspci shows them without it
+            None => format!("{:04x}:{:04x}", k.0, k.1),
+        })
         .collect()
+}
+
+/// The names of the PCI devices wanted, from the list `lspci` itself reads; empty where it is not
+/// installed. Both the vendor's name and the device's, as one string ("Intel Corporation Arrow Lake-U").
+fn pci_names(want: &[(u16, u16)]) -> std::collections::HashMap<(u16, u16), String> {
+    let mut out = std::collections::HashMap::new();
+    if want.is_empty() {
+        return out;
+    }
+    let text = ["/usr/share/misc/pci.ids", "/usr/share/hwdata/pci.ids"].iter().map(|p| read(p)).find(|t| !t.is_empty()).unwrap_or_default();
+    // vendors start at the left, their devices one tab in, a device's subsystems two
+    let mut vendor: Option<(u16, String)> = None;
+    for line in text.lines() {
+        if line.starts_with('#') || line.trim().is_empty() || line.starts_with("\t\t") {
+            continue;
+        }
+        let (id, name) = line.trim_start().split_once("  ").unwrap_or((line.trim_start(), ""));
+        let Ok(id) = u16::from_str_radix(id.trim(), 16) else { continue };
+        if !line.starts_with('\t') {
+            vendor = Some((id, name.trim().to_string()));
+            continue;
+        }
+        let Some((v, maker)) = vendor.as_ref() else { continue };
+        if want.contains(&(*v, id)) {
+            out.insert((*v, id), format!("{maker} {}", name.trim()));
+            if out.len() == want.len() {
+                break;
+            }
+        }
+    }
+    out
+}
+
+/// The root file system: its kind, and the bytes used and in all, as `df` reads them — the mount table
+/// for the kind, the kernel for the rest.
+fn root_fs() -> (Option<String>, Option<f64>, Option<f64>) {
+    // the last mount on "/" is the one in use; its kind follows the " - " that ends the optional fields
+    let kind = read("/proc/self/mountinfo")
+        .lines()
+        .filter(|l| l.split(' ').nth(4) == Some("/"))
+        .filter_map(|l| Some(l.split(" - ").nth(1)?.split_whitespace().next()?.to_string()))
+        .next_back();
+    let Ok(s) = rustix::fs::statvfs("/") else { return (kind, None, None) };
+    let unit = s.f_frsize as f64;
+    (kind, Some((s.f_blocks - s.f_bfree) as f64 * unit), Some(s.f_blocks as f64 * unit))
 }
 
 /// A size in decimal units, as disks are sold: 2 TB, 512 GB.
@@ -124,14 +188,12 @@ fn storage() -> Option<Value> {
     let (bytes, name, model) = best?;
     let maker = model.split_whitespace().next().map(vendor).unwrap_or_default();
     let kind = if name.starts_with("nvme") { "NVMe" } else if read(&format!("/sys/block/{name}/queue/rotational")) == "1" { "disk" } else { "SSD" };
-    let df = util::run(&["df", "-B1", "--output=fstype,used,size", "/"], 10).unwrap_or_default();
-    let root: Vec<&str> = df.lines().nth(1).map(|l| l.split_whitespace().collect()).unwrap_or_default();
-    let n = |i: usize| root.get(i).and_then(|v| v.parse::<f64>().ok());
+    let (fs, used, size) = root_fs();
     Some(json!({
         "disk": format!("{} {kind} {}", maker, disk_size(bytes)).trim().to_string(),
-        "fs": root.first().map(|f| if *f == "zfs" { "ZFS".to_string() } else { f.to_string() }),
-        "used_gb": n(1).map(|v| (v / 1e9).round()),
-        "size_gb": n(2).map(|v| (v / 1e9).round()),
+        "fs": fs.map(|f| if f == "zfs" { "ZFS".to_string() } else { f }),
+        "used_gb": used.map(|v| (v / 1e9).round()),
+        "size_gb": size.map(|v| (v / 1e9).round()),
     }))
 }
 
@@ -154,7 +216,7 @@ fn kernel() -> Option<String> {
     Some(format!("Linux {}.{}", parts.next()?, parts.next()?))
 }
 
-pub fn main() {
+pub fn main(p: &crate::util::Paths) {
     let mut m = Map::new();
     let mut put = |k: &str, v: Option<Value>| {
         if let Some(v) = v {
@@ -172,8 +234,7 @@ pub fn main() {
     put("kernel", kernel().map(Value::from));
     put("uptime_s", read("/proc/uptime").split_whitespace().next().and_then(|v| v.parse::<f64>().ok()).map(|v| json!(v.round())));
     put("draftpaper", Some(json!(env!("CARGO_PKG_VERSION"))));
-    let qs = util::run(&["qs", "--version"], 10).unwrap_or_default();
-    put("quickshell", qs.split_whitespace().nth(1).map(|v| json!(v)));
+    put("quickshell", quickshell(p).map(|v| json!(v)));
     println!("{}", util::dumps(&Value::Object(m)));
 }
 
@@ -193,4 +254,25 @@ mod tests {
         assert_eq!(disk_size(2.048e12), "2 TB");
         assert_eq!(disk_size(5.12e11), "512 GB");
     }
+}
+
+/// Quickshell's version, kept in the cache beside the theme: asking the program itself costs 31 ms of
+/// Qt starting up, and the answer changes only when Quickshell does. The note is keyed by the size of
+/// its binary and when it was last written, so an upgrade is picked up at once.
+fn quickshell(p: &crate::util::Paths) -> Option<String> {
+    let bin = util::which("qs")?;
+    let stamp = std::fs::metadata(&bin)
+        .ok()
+        .map(|m| format!("{}-{}", m.len(), m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs()).unwrap_or(0)))
+        .unwrap_or_default();
+    let note = p.cache.join("quickshell-version");
+    if let Some((kept, version)) = read(&note.to_string_lossy()).split_once(' ') {
+        if kept == stamp && !version.is_empty() {
+            return Some(version.to_string());
+        }
+    }
+    let version = util::run(&["qs", "--version"], 10)?.split_whitespace().nth(1)?.to_string();
+    let _ = std::fs::create_dir_all(&p.cache);
+    util::write(&note, &format!("{stamp} {version}"));
+    Some(version)
 }

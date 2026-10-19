@@ -157,7 +157,7 @@ fn main() {
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
         ["revisions", ..] => revisions::main(),
-        ["machine", ..] => machine::main(),
+        ["machine", ..] => machine::main(&p),
         ["processes", ..] => processes::main(40),
         ["metrics", "keep", ..] => metrics::keep(&p),
         ["metrics", ..] => print!("{}", util::read(&metrics::runtime_file(&p))),

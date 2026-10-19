@@ -43,7 +43,8 @@ Recommends: fonts-ibm-plex,
             network-manager,
             upower,
             power-profiles-daemon,
-            bluez
+            bluez,
+            pci.ids
 Suggests: swaylock, fuzzel, kanshi, wlr-randr, wdisplays, adw-gtk3, qt5ct, qt6ct
 Description: Wayland desktop drawn as a drafting sheet
  Draftpaper is a tiling Wayland compositor whose desktop is a drafting

@@ -3,6 +3,13 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
+## Unreleased
+
+- The equipment schedule reads what `lspci` and `df` told it: the display controllers from
+  /sys/bus/pci, named from the same list of PCI ids `lspci` itself reads, and the root file system from
+  the mount table and the kernel. Quickshell's version is kept in the cache, keyed by its binary, rather
+  than starting Qt to ask: `draftpaper machine` went from 45 ms of a core to 8, and starts nothing.
+
 ## 0.7.5 (2026-10-19)
 
 A desktop that costs almost nothing while you are not using it. Idle on two displays, the compositor
