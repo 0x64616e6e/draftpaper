@@ -103,7 +103,8 @@ fn power() -> Value {
     Value::Null
 }
 
-pub fn main(p: &Paths) {
+/// What the sheet letters, as JSON: the sensors, the daemons, and how many processes there are.
+pub fn json(p: &Paths) -> Value {
     // the three daemons are asked on one bus connection, in a thread, while the sensors are read here
     // (dbus.rs). A daemon that does not answer is left out: the thread goes with the process.
     let (sent, daemons) = std::sync::mpsc::channel();
@@ -118,11 +119,12 @@ pub fn main(p: &Paths) {
     let (bt, profile, wifi, wired) = daemons.recv_timeout(std::time::Duration::from_millis(750)).unwrap_or_default();
     let bt: Vec<Value> = bt.into_iter().map(|n| json!(n)).collect();
     let wifi = wifi.map(|(signal, ssid)| json!({ "signal": signal, "ssid": ssid })).unwrap_or(Value::Null);
-    println!(
-        "{}",
-        util::dumps(&json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count(),
-            "wifi": wifi, "wired": wired, "backlight": backlight()}))
-    );
+    json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count(),
+            "wifi": wifi, "wired": wired, "backlight": backlight()})
+}
+
+pub fn main(p: &Paths) {
+    println!("{}", util::dumps(&json(p)));
 }
 
 /// The first backlight's directory, for the shell to read itself (qml/Watch.qml); None without one.

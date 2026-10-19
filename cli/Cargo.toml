@@ -5,6 +5,12 @@ edition = "2021"
 description = "Draftpaper's command: themes, colour schemes, the shell's readings, the applications' colours"
 license = "MIT"
 
+[lib]
+name = "draftpaper"
+path = "src/lib.rs"
+# the indented blocks in the module docs are tables, not Rust
+doctest = false
+
 [[bin]]
 name = "draftpaper"
 path = "src/main.rs"

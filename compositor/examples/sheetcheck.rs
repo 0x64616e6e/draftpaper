@@ -12,6 +12,10 @@
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM rulers ZERO_X_MM ZERO_Y_MM [ZERO_H_MM]
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM dots           (the 5 mm dots, on their pixels)
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lum X Y        (a pixel's lightness)
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM ink X0 Y0 X1 Y1 [DEPTH]   (pixels of lettering in a
+//!                                                                          rectangle, darker than its
+//!                                                                          own paper by DEPTH, 40 by
+//!                                                                          default)
 //!
 //! PX_PER_MM is physical, as the compositor logs it; `ambient` when the margins take a wallpaper's colours
 //! (the frame's line is drawn over the picture then, and changes along it); `windows` when two windows are
@@ -52,6 +56,36 @@ fn main() {
         let v = |i: usize| args.get(i).and_then(|v| v.parse::<u32>().ok()).expect("lum X Y");
         let p = img.get_pixel(v(6), v(7));
         println!("{:.0}", 0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64);
+        return;
+    }
+    if args.get(5).is_some_and(|a| a == "ink") {
+        // how many pixels in a rectangle are lettering: darker than the paper around them. The paper
+        // shades across the sheet, so each rectangle is judged against its own lightest pixel.
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<i64>().ok()).expect("ink X0 Y0 X1 Y1");
+        let (x0, y0) = (v(6).max(0), v(7).max(0));
+        let (x1, y1) = (v(8).min(img.width() as i64 - 1), v(9).min(img.height() as i64 - 1));
+        let lum = |x: i64, y: i64| {
+            let p = img.get_pixel(x as u32, y as u32);
+            0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+        };
+        // the paper shades across the sheet, so the rectangle is judged against its own lightest pixel;
+        // lettering is far darker than that shading, and the depth asked for keeps the two apart
+        let depth = args.get(10).and_then(|v| v.parse::<f64>().ok()).unwrap_or(40.0);
+        let mut lightest = 0.0f64;
+        let mut inked = 0;
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                lightest = lightest.max(lum(x, y));
+            }
+        }
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                if lum(x, y) < lightest - depth {
+                    inked += 1;
+                }
+            }
+        }
+        println!("{inked}");
         return;
     }
     if args.get(5).is_some_and(|a| a == "rulers") {

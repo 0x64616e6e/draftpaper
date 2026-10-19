@@ -11,6 +11,8 @@ use std::os::unix::net::UnixStream;
 
 use serde_json::Value;
 
+use crate::paint::Ink;
+
 /// One display's sheet, in that display's logical pixels.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Screen {
@@ -25,6 +27,17 @@ pub struct Screen {
     pub margin: f64,
     /// the frame's interior, from the display's corner
     pub frame: (f64, f64, f64, f64),
+    /// the title block and its twelve cells, from the display's corner
+    pub title: Option<Block>,
+    /// the workspace this display shows
+    pub workspace: u64,
+}
+
+/// The title block: where it is, and where each of its cells is, all from the display's corner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub rect: (f64, f64, f64, f64),
+    pub cells: Vec<(f64, f64, f64, f64)>,
 }
 
 impl Screen {
@@ -55,9 +68,70 @@ pub fn screens() -> Vec<Screen> {
                 margin: n("margin")?,
                 // the frame is given from the layout's corner; the sheet is drawn from the display's
                 frame: (f("x")? - n("x")?, f("y")? - n("y")?, f("width")?, f("height")?),
+                title: block(o.get("title"), n("x")?, n("y")?),
+                workspace: o.get("workspace").and_then(Value::as_u64).unwrap_or(1),
             })
         })
         .collect()
+}
+
+/// The title block as the compositor measured it, moved to the display's own corner.
+fn block(value: Option<&Value>, ox: f64, oy: f64) -> Option<Block> {
+    let v = value?;
+    let rect = |r: &Value| {
+        let g = |k: &str| r.get(k)?.as_f64();
+        Some((g("x")? - ox, g("y")? - oy, g("width")?, g("height")?))
+    };
+    let cells: Vec<(f64, f64, f64, f64)> = v.get("cells")?.as_array()?.iter().filter_map(rect).collect();
+    let whole = rect(v.get("rect")?)?;
+    (!cells.is_empty()).then_some(Block { rect: whole, cells })
+}
+
+/// The theme the sheet is lettered in: what the shell reads from the same file (qml/Theme.qml).
+#[derive(Debug, Clone)]
+pub struct Theme {
+    pub ink: Ink,
+    pub alert: Ink,
+    /// the family the lettering asks for, where the config names one
+    pub mono: Option<String>,
+    pub project: String,
+    pub drawn: String,
+}
+
+impl Theme {
+    /// From the cache the `draftpaper` command writes it to, as the shell reads it.
+    pub fn load() -> Theme {
+        let cache = std::env::var_os("DRAFTPAPER_CACHE").map(std::path::PathBuf::from).or_else(|| {
+            let home = std::env::var_os("HOME")?;
+            Some(std::path::PathBuf::from(home).join(".cache/draftpaper"))
+        });
+        let text = cache.map(|c| std::fs::read_to_string(c.join("theme.json")).unwrap_or_default()).unwrap_or_default();
+        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        // the lettering is softened by the theme's own measure of how strongly ink sits on the paper
+        let alpha = v.get("inkAlpha").and_then(Value::as_f64).unwrap_or(1.0) as f32;
+        let s = |a: &str, b: &str| v.get(a).and_then(|x| x.get(b)).and_then(Value::as_str).unwrap_or("").to_string();
+        Theme {
+            ink: Ink::parse(v.get("ink").and_then(Value::as_str).unwrap_or("#000000"), 1.0),
+            alert: Ink::parse(v.get("alert").and_then(Value::as_str).unwrap_or("#aa0000"), 1.0),
+            mono: Some(s("text", "monospace")).filter(|m| !m.is_empty()),
+            project: s("title", "project"),
+            drawn: s("title", "drawn"),
+        }
+        .with_alpha(alpha)
+    }
+
+    fn with_alpha(mut self, alpha: f32) -> Theme {
+        // as the title block mixes them (qml/TitleBlock.qml): the readings nearly full strength, their
+        // labels fainter, and never quite invisible however pale the theme
+        self.ink.a = (0.85 * alpha + 0.1).min(1.0);
+        self.alert.a = self.ink.a;
+        self
+    }
+
+    /// The ink a label is lettered in: fainter than the reading it names.
+    pub fn faint(&self) -> Ink {
+        Ink { a: (self.ink.a * 0.72).min(1.0), ..self.ink }
+    }
 }
 
 /// One request on the compositor's socket, one reply.
@@ -78,7 +152,7 @@ mod tests {
     use super::*;
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0) }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1 }
     }
 
     #[test]

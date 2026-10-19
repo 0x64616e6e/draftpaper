@@ -1,6 +1,6 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stage 0 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
+Status: stages 0 and 1 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
 
 ## Why
 
@@ -144,9 +144,14 @@ workspace.
    against the shell's 204 MB and 69 threads for the same two. Nothing is lettered yet, so this is the
    floor rather than the finished cost, but the per-window drawing contexts that the 40 MB a display went
    on are simply not there.
-1. **Text, and the title block.** Font loading from the theme, a glyph cache, the twelve cells lettered
-   from `readings` in process. Verified against `make pixels`, which already checks the title block's
-   lettering and its edges at five scales.
+1. **Text, and the title block.** *(done)* The face the theme names, found with `fontdb` and rasterised
+   with `fontdue` — the sheet letters in one monospaced family, so nothing has to be shaped, and a glyph
+   is rasterised once at each size and kept. A second family covers what the first does not have, a Nerd
+   Font among them. The twelve cells are lettered where the shell lettered them, from the readings taken
+   in process: `cli/` now builds a library as well as a program, so no `draftpaper readings` is started.
+   `tests/sheet.sh` counts the ink in each cell's label and reading, against a floor that tells lettering
+   from the rules that edge the cells. Two displays: 15 MB, three threads, 0.1% of a core — the last for
+   reading the machine every five seconds, as the shell did.
 2. **The margins.** Workspaces, notifications, zone letters, parked titles, the scale bar's figures, the
    column numbers, the config's cells, the theme's name. The existing `pixels.sh`, `zones.sh`, `scale.sh`,
    `text.sh` and `displays.sh` cover most of this already.

@@ -118,10 +118,17 @@ impl Store {
 }
 
 /// The processor's busy share since the last call, from /proc/stat (None the first time).
-struct Cpu(Option<(u64, u64)>);
+pub struct Cpu(Option<(u64, u64)>);
 
 impl Cpu {
-    fn busy(&mut self) -> Option<f64> {
+    /// A reading of its own, for anything that samples over time (the sheet's client).
+    pub fn new() -> Cpu {
+        let mut c = Cpu(None);
+        c.busy();
+        c
+    }
+
+    pub fn busy(&mut self) -> Option<f64> {
         let line = util::read(std::path::Path::new("/proc/stat")).lines().next()?.to_string();
         let f: Vec<u64> = line.split_whitespace().skip(1).take(8).filter_map(|v| v.parse().ok()).collect();
         if f.len() < 5 {
@@ -179,7 +186,7 @@ impl Rates {
     }
 }
 
-fn memory() -> Option<f64> {
+pub fn memory() -> Option<f64> {
     let text = util::read(std::path::Path::new("/proc/meminfo"));
     let field = |k: &str| text.lines().find_map(|l| l.strip_prefix(k)).and_then(|v| v.split_whitespace().next()?.parse::<f64>().ok());
     let (total, available) = (field("MemTotal:")?, field("MemAvailable:")?);

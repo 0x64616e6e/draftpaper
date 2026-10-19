@@ -10,7 +10,10 @@
 //!
 //! The geometry is the compositor's (sheet.rs); this client works out none of it.
 
+mod font;
+mod paint;
 mod sheet;
+mod title;
 
 use std::collections::HashMap;
 
@@ -45,10 +48,12 @@ enum Side {
     Bottom,
     Left,
     Right,
+    /// the block in the frame's bottom-right corner, lettered from the compositor's own cells
+    Title,
 }
 
 impl Side {
-    const ALL: [Side; 4] = [Side::Top, Side::Bottom, Side::Left, Side::Right];
+    const ALL: [Side; 5] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title];
 
     fn anchor(self) -> Anchor {
         match self {
@@ -57,11 +62,19 @@ impl Side {
             Side::Bottom => Anchor::BOTTOM | Anchor::LEFT | Anchor::RIGHT,
             Side::Left => Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
             Side::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
+            Side::Title => Anchor::BOTTOM | Anchor::RIGHT,
         }
     }
 
     fn vertical(self) -> bool {
         matches!(self, Side::Left | Side::Right)
+    }
+
+    fn namespace(self) -> &'static str {
+        match self {
+            Side::Title => "draftpaper-title-block",
+            _ => "draftpaper-margin",
+        }
     }
 }
 
@@ -87,12 +100,19 @@ struct Sheet {
     shell: LayerShell,
     viewporter: wp_viewporter::WpViewporter,
     scaling: Option<scale_manager::WpFractionalScaleManagerV1>,
-    pool: SlotPool,
+    /// taken out of the way while a surface is drawn, so the lettering may borrow the rest
+    pool: Option<SlotPool>,
     bands: Vec<Band>,
     /// the sheet as the compositor works it out, by display
     screens: HashMap<String, Screen>,
     /// the outputs Wayland knows, by the name the compositor gives them
     known: HashMap<String, wl_output::WlOutput>,
+    theme: sheet::Theme,
+    face: Option<font::Face>,
+    /// what the machine last said of itself, and the processor's share since the reading before
+    readings: serde_json::Value,
+    cpu: draftpaper::metrics::Cpu,
+    busy: Option<f64>,
     exit: bool,
 }
 
@@ -108,6 +128,11 @@ fn main() {
     let qh = queue.handle();
 
     let shm = Shm::bind(&globals, &qh).expect("wl_shm");
+    let theme = sheet::Theme::load();
+    let face = font::Face::load(theme.mono.as_deref());
+    if face.is_none() {
+        eprintln!("draftpaper-sheet: no lettering face found: the sheet will carry no words");
+    }
     let mut state = Sheet {
         registry: RegistryState::new(&globals),
         outputs: OutputState::new(&globals, &qh),
@@ -115,11 +140,16 @@ fn main() {
         shell: LayerShell::bind(&globals, &qh).expect("wlr-layer-shell"),
         viewporter: bind(&globals, &qh).expect("wp_viewporter"),
         scaling: bind(&globals, &qh),
-        pool: SlotPool::new(1 << 20, &shm).expect("a pool of shared memory"),
+        pool: Some(SlotPool::new(1 << 20, &shm).expect("a pool of shared memory")),
         shm,
         bands: Vec::new(),
         screens: HashMap::new(),
         known: HashMap::new(),
+        theme,
+        face,
+        readings: serde_json::Value::Null,
+        cpu: draftpaper::metrics::Cpu::new(),
+        busy: None,
         exit: false,
     };
     if state.scaling.is_none() {
@@ -129,13 +159,26 @@ fn main() {
     // the displays Wayland already has, before the first round trip
     queue.roundtrip(&mut state).expect("the first round trip");
     state.reread(&qh);
+    state.reread_machine();
 
-    while !state.exit {
-        if queue.blocking_dispatch(&mut state).is_err() {
-            break;
-        }
-    }
+    // the machine is read again every five seconds, as the shell read it, which is also what moves the
+    // clock in the title block
+    let mut events = calloop::EventLoop::<Sheet>::try_new().expect("an event loop");
+    let handle = events.handle();
+    handle
+        .insert_source(calloop::timer::Timer::from_duration(READ_EVERY), |_, _, state: &mut Sheet| {
+            state.reread_machine();
+            calloop::timer::TimeoutAction::ToDuration(READ_EVERY)
+        })
+        .expect("the reading timer");
+    calloop_wayland_source::WaylandSource::new(conn, queue).insert(handle).expect("the Wayland source");
+    let _ = events.run(None, &mut state, |state| {
+        state.exit |= state.bands.is_empty() && state.screens.is_empty();
+    });
 }
+
+/// How often the machine is read again for the title block.
+const READ_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
 
 /// A global, where the compositor has it.
 fn bind<I, S>(globals: &GlobalList, qh: &QueueHandle<S>) -> Option<I>
@@ -172,7 +215,7 @@ impl Sheet {
         let viewport = self.viewporter.get_viewport(&surface, qh, ());
         // the scale this display shows it at, to the 120th: without it the surface draws at whole scales
         let scale = self.scaling.as_ref().map(|m| m.get_fractional_scale(&surface, qh, surface.clone()));
-        let layer = self.shell.create_layer_surface(qh, surface, Layer::Bottom, Some("draftpaper-margin"), Some(output));
+        let layer = self.shell.create_layer_surface(qh, surface, Layer::Bottom, Some(side.namespace()), Some(output));
         layer.set_anchor(side.anchor());
         layer.set_exclusive_zone(-1);
         layer.set_keyboard_interactivity(smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None);
@@ -188,6 +231,16 @@ impl Sheet {
             // the band covers the margin; the frame's line is the compositor's to draw. Whole logical
             // pixels, rounded up so nothing of the paper shows through between the band and the frame.
             let thick = s.margin.ceil().max(1.0) as u32;
+            if band.side == Side::Title {
+                // the block sits in the frame's corner: the margin away from the display's edges, and as
+                // large as the compositor measured it
+                let Some(block) = s.title.as_ref() else { continue };
+                let (w, h) = (block.rect.2.ceil().max(1.0) as u32, block.rect.3.ceil().max(1.0) as u32);
+                band.layer.set_size(w, h);
+                band.layer.set_margin(0, thick as i32, thick as i32, 0);
+                band.layer.commit();
+                continue;
+            }
             let (w, h) = if band.side.vertical() { (thick, 0) } else { (0, thick) };
             band.layer.set_size(w, h);
             // the sides run between the top and the bottom
@@ -217,25 +270,26 @@ impl Sheet {
         if pw <= 0 || ph <= 0 {
             return;
         }
-        let Ok((buffer, canvas)) = self.pool.create_buffer(pw, ph, pw * 4, wl_shm::Format::Argb8888) else { return };
-        canvas.fill(0);
-        // 50 mm from the frame's corner, in this display's physical pixels, taken from the band's own
-        // corner: the top and bottom bands start at the display's left, the sides at its top
-        let along = (s.at(50.0, !side.vertical()) * scale).round() as i32 - if side.vertical() { (s.margin * scale).round() as i32 } else { 0 };
-        let ink = 0xff26221cu32.to_le_bytes();
-        if side.vertical() {
-            if along >= 0 && along < ph {
-                let row = (along as usize) * (pw as usize) * 4;
-                for px in canvas[row..row + (pw as usize) * 4].chunks_exact_mut(4) {
-                    px.copy_from_slice(&ink);
-                }
-            }
-        } else if along >= 0 && along < pw {
-            for row in 0..ph as usize {
-                let at = (row * pw as usize + along as usize) * 4;
-                canvas[at..at + 4].copy_from_slice(&ink);
+        let Some(mut pool) = self.pool.take() else { return };
+        let Ok((buffer, canvas)) = pool.create_buffer(pw, ph, pw * 4, wl_shm::Format::Argb8888) else {
+            self.pool = Some(pool);
+            return;
+        };
+        let mut canvas = paint::Canvas::new(canvas, pw, ph);
+        if side == Side::Title {
+            self.letter_title(&mut canvas, &s, scale);
+        } else {
+            // stage 0's rule, kept until the margins are lettered: 50 mm from the frame's corner, a
+            // physical pixel wide, which tests/sheet.sh measures at every scale
+            let along = (s.at(50.0, !side.vertical()) * scale).round() as i32 - if side.vertical() { (s.margin.ceil() * scale).round() as i32 } else { 0 };
+            let ink = self.theme.ink.premultiplied();
+            if side.vertical() {
+                canvas.fill(0, along, pw, 1, ink);
+            } else {
+                canvas.fill(along, 0, 1, ph, ink);
             }
         }
+        self.pool = Some(pool);
         let band = &mut self.bands[i];
         band.viewport.set_destination(size.0 as i32, size.1 as i32);
         surface.set_buffer_scale(1);
@@ -243,6 +297,50 @@ impl Sheet {
         let _ = buffer.attach_to(surface);
         band.layer.commit();
         band.drawn = true;
+    }
+}
+
+impl Sheet {
+    /// The title block's cells, lettered as the shell lettered them (qml/TitleBlock.qml): the label 2 mm
+    /// in and 1.2 mm down from the cell's corner, the reading 2 mm in and standing 1.6 mm above its foot.
+    /// A reading too wide for its cell is lettered smaller before it is cut, as the shell does.
+    fn letter_title(&mut self, canvas: &mut paint::Canvas, s: &sheet::Screen, scale: f64) {
+        let (Some(block), Some(face)) = (s.title.as_ref(), self.face.as_mut()) else { return };
+        let cells = title::cells(&self.theme, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy);
+        // a millimetre of this display, in the physical pixels the buffer is in
+        let mm = (s.mm * scale) as f32;
+        let (ink, faint, alert) = (self.theme.ink, self.theme.faint(), self.theme.alert);
+        for (cell, at) in cells.iter().zip(&block.cells) {
+            // the cell's corner, from the block's own
+            let (x, y) = (((at.0 - block.rect.0) * scale) as f32, ((at.1 - block.rect.1) * scale) as f32);
+            let (w, h) = ((at.2 * scale) as f32, (at.3 * scale) as f32);
+            // the label
+            let label_px = 2.2 * mm;
+            face.draw(canvas, x + 2.0 * mm, y + 1.2 * mm + face.ascent(label_px), cell.label, label_px, 0.3 * mm, faint.premultiplied());
+            // the reading: the tall cell (the clock) letters it large, the rest at reading size
+            if cell.value.is_empty() {
+                continue;
+            }
+            let mut px = if at.3 / s.mm > 12.0 { 9.0 * mm } else { 3.6 * mm };
+            let room = w - 4.0 * mm;
+            let least = 2.4 * mm;
+            while px > least && face.width(&cell.value, px, 0.0) > room {
+                px -= 0.2 * mm;
+            }
+            let colour = if cell.alert { alert } else { ink };
+            face.draw(canvas, x + 2.0 * mm, y + h - 1.6 * mm, &cell.value, px.max(least), 0.0, colour.premultiplied());
+        }
+    }
+
+    /// The machine, read again: what the title block letters changes with it.
+    fn reread_machine(&mut self) {
+        self.readings = draftpaper::readings::json(&draftpaper::util::Paths::new());
+        self.busy = self.cpu.busy();
+        let surfaces: Vec<wl_surface::WlSurface> =
+            self.bands.iter_mut().filter(|b| b.side == Side::Title).map(|b| { b.drawn = false; b.layer.wl_surface().clone() }).collect();
+        for surface in surfaces {
+            self.draw(&surface);
+        }
     }
 }
 

@@ -2,22 +2,6 @@
 //! shell: themes and colour schemes, the files the shell, launcher, lock screen and idle read, the
 //! applications' colours, and the readings the shell polls.
 
-mod apps;
-mod config;
-mod dbus;
-mod greeter;
-mod machine;
-mod metrics;
-mod processes;
-mod programs;
-mod readings;
-mod restore;
-mod revisions;
-mod scheme;
-mod text;
-mod theme;
-mod tmux;
-mod util;
 
 use std::{
     io::{Read, Write},
@@ -25,6 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 
+use draftpaper::{config, greeter, machine, metrics, processes, readings, restore, revisions, scheme, text, theme, tmux, util};
 use serde_json::{json, Map, Value};
 
 use util::Paths;

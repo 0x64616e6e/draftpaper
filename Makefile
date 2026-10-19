@@ -57,6 +57,7 @@ install: $(COMPOSITOR) $(CLI) $(SHADERS)
 check: $(CLI)
 	cd cli && $(CARGO) test --release --locked
 	cd compositor && $(CARGO) test --release --locked
+	cd sheet && $(CARGO) test --release --locked
 	# the shipped themes against the contrast rules (a home of its own: only the shipped themes)
 	h=$$(mktemp -d) && HOME=$$h XDG_CONFIG_HOME=$$h DRAFTPAPER_ROOT=$(CURDIR) $(CLI) theme check; s=$$?; rm -rf $$h; exit $$s
 
