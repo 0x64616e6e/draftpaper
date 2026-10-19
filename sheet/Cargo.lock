@@ -306,6 +306,7 @@ dependencies = [
  "smithay-client-toolkit",
  "wayland-client",
  "wayland-protocols",
+ "zbus",
 ]
 
 [[package]]

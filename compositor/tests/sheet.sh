@@ -12,7 +12,7 @@ client=$repo/sheet/target/release/draftpaper-sheet
 check=$repo/compositor/target/release/examples/sheetcheck
 runtime=${XDG_RUNTIME_DIR:?no XDG_RUNTIME_DIR}
 t=$(mktemp -d -p "${XDG_CACHE_HOME:-$HOME/.cache}" draftpaper-sheet.XXXXXX)
-mkdir -p "$t/Pictures" "$t/.config/draftpaper"
+mkdir -p "$t/Pictures" "$t/.config/draftpaper" "$t/run"
 cat > "$t/.config/draftpaper/config.toml" <<'TOML'
 theme = "softglow"
 margin = 6
@@ -59,7 +59,7 @@ start() {
     env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
         DRAFTPAPER_CACHE="$t/.cache/draftpaper" "$repo/cli/target/release/draftpaper" apply > /dev/null 2>&1
     env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
-        DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_SHEET_RULE=1 "$client" > "$t/client.log" 2>&1 &
+        DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" DRAFTPAPER_SHEET_RULE=1 "$client" > "$t/client.log" 2>&1 &
     sheet=$!
     pids="$nest $sheet"
     i=0
@@ -232,6 +232,28 @@ shots 1
 set -- $(box); marked=$("$check" "$t/shot-headless.png" "$sc" "$mm" "$mg" ink "$1" "$2" "$3" "$4" 6)
 ok "the cell under the pointer is marked" "$([ "$marked" -gt "$plain" ] && echo marked || echo "$marked not over $plain")" "marked"
 ok "nothing said by the client" "$(grep -ci "error\|protocol" "$t/client.log")" "0"
+stop
+
+# what the daemons say: the volume just moved, Bluetooth, and a notification along the top
+start 1920x1200 1.5 6.4 4
+sc=1.5
+mm=$(o 0 .px_per_mm); mg=$(o 0 .margin); w=$(o 0 .width); h=$(o 0 .height); across=$(o 0 .zones.across)
+zone() { awk -v k="$1" -v w="$w" -v mg="$mg" -v n="$across" 'BEGIN { z = (w - 2 * mg) / n; printf "%f %f", mg + k * z, mg + (k + 1) * z }'; }
+inked() {
+    set -- $(awk -v a="$1" -v b="$2" -v c="$3" -v d="$4" -v sc="$sc" 'BEGIN { printf "%d %d %d %d", a * sc, b * sc, c * sc, d * sc }')
+    "$check" "$t/shot-headless.png" "$sc" "$mm" "$mg" ink "$1" "$2" "$3" "$4"
+}
+# Bluetooth, in the bottom margin's first zone, says so even with nothing connected
+set -- $(zone 0)
+shots 1
+ok "Bluetooth lettered at the foot" "$([ "$(inked "$1" "$(awk -v h="$h" -v m="$mg" 'BEGIN { print h - m }')" "$2" "$h")" -gt 20 ] && echo lettered || echo bare)" "lettered"
+# the volume, as `draftpaper volume` leaves it for the sheet to find
+set -- $(zone $((across - 1))); vol_a=$1; vol_b=$2
+before=$(inked "$vol_a" 0 "$vol_b" "$mg")
+printf '{"volume":0.42,"muted":false,"at":%s}\n' "$(date +%s)" > "$t/run/volume.json"
+sleep 2
+shots 1
+ok "the volume said while it is fresh" "$([ "$(inked "$vol_a" 0 "$vol_b" "$mg")" -gt $((before + 20)) ] && echo said || echo quiet)" "said"
 stop
 
 [ "$fail" = 0 ] && echo "sheet: ok" || echo "sheet: FAILED"

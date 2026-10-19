@@ -13,7 +13,10 @@ What changed in each release, newest first. The Debian package's own record, wit
   are lettered from the readings taken in its own process, `cli/` now building a library as well as a
   program so that nothing is started to ask. Two displays: 15 MB and three threads, against the shell's
   204 MB and 69. The compositor publishes where each parking cell is, rather than the sheet working it
-  out a second time. The margins answer the pointer: a workspace shown, a window parked or called back,
+  out a second time. It is the desktop's notification server as well, lettering the newest along the top
+  margin, and says the volume, the backlight and what Bluetooth is connected to; `draftpaper volume
+  up|down|mute` moves the volume and leaves what it now is for the sheet to find, which is what the
+  volume keys now press. There is no system tray, by decision. The margins answer the pointer: a workspace shown, a window parked or called back,
   the power profile taken to the next, with the pointer a hand over whatever answers and a mark under it.
   `make pixels` measures a rule a physical pixel wide at five scales — fractional scale
   being what would sink the idea — and counts the ink in every cell. Built and tested, not installed:

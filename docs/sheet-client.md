@@ -1,6 +1,7 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stages 0 to 3 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
+Status: stages 0 to 4 built, 2026-10-19 (without the tray, by decision); the rest proposed.
+Measured against 0.7.4.
 
 ## Why
 
@@ -170,7 +171,16 @@ workspace.
    The test works the pointer with the compositor's own `msg pointer` and `msg button`.
    The title block's other clicks — a reading's graph, the equipment and process schedules — wait for the
    drawings themselves in stage 6.
-4. **The services.** Audio, notifications, Bluetooth, and the tray or a decision not to have one.
+4. **The services.** *(done; the tray dropped)* The client is the desktop's notification server, taking
+   `org.freedesktop.Notifications` on the session bus and lettering the newest along the top margin with
+   `+2` for those waiting. Bluetooth comes with the readings. The volume goes through `draftpaper volume
+   up|down|mute`, which moves it and leaves what it now is in the runtime directory for the sheet to
+   find — so no PipeWire library in the client, at the cost that a volume changed another way (a mixer)
+   is not shown until the next key. The backlight is read straight from the kernel. Both are lettered
+   for four seconds after they move, as the shell lettered them.
+   **The tray is not built**, by decision: StatusNotifierItem and DBusMenu are poorly specified and
+   widely varied, and a drafting sheet is a poor place for other people's icons. A tray applet that only
+   appears there has no home on this desktop; anything that matters should say so in a notification.
 5. **The swap.** `draftpaper start` runs the client instead of Quickshell; the settings, launcher and
    rulers are started on demand and exit when closed. The session's service file changes with it.
 6. **The schedules and the graph**, moved across. Only after everything else is steady.
@@ -196,8 +206,8 @@ Two new checks are needed:
 - **Glyph rendering differs from Qt's.** Hinting and subpixel positioning will not match exactly. The
   pixel tests mostly check rules and the luminance of lettered regions, not glyph pixels, but some will
   need their tolerances looked at — carefully, one at a time, never loosened in bulk to make a stage pass.
-- **The tray.** StatusNotifierItem and DBusMenu are poorly specified and widely varied. Budget as much for
-  it as for the text, or decide to do without.
+- **The tray.** Decided against (stage 4): StatusNotifierItem and DBusMenu are poorly specified and
+  widely varied, and the sheet is the wrong place for other people's icons.
 - **Fractional scale.** The whole project fails if this is wrong. It should be the first thing proved, in
   stage 0, on a 1.25 display with nothing drawn but a one-pixel rule.
 - **Two shells at once.** Between stages 1 and 5 some of the sheet is drawn by the client and some by

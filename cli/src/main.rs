@@ -42,6 +42,9 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper menu [--prompt TEXT]
                               a menu of stdin's lines in the launcher's register; the choice on stdout
                               (exit 1: closed without one)
+  draftpaper volume up|down|mute
+                              the default output's volume, and the sheet told what it now is (the sheet's
+                              own client watches $XDG_RUNTIME_DIR/draftpaper/volume.json)
   draftpaper audio save|restore
                               the default output's volume and mute, kept from one session to the next
                               (draftpaper-audio.service: the switch to the login screen mutes it)
@@ -119,6 +122,8 @@ fn main() {
             greeter::sync(&p);
         }
         ["margins", ..] => util::die("draftpaper margins paper|ambient"),
+        ["volume", how, ..] => volume(&p, how),
+        ["volume"] => util::die("draftpaper volume up|down|mute"),
         ["audio", how, ..] => audio(&p, how),
         ["audio"] => util::die("draftpaper audio save|restore"),
         ["settings" | "picker", ..] => {
@@ -325,6 +330,28 @@ fn start(p: &Paths) {
         .env("DRAFTPAPER_RUNTIME", &p.runtime)
         .exec();
     util::die(format!("draftpaper: qs: {err}"));
+}
+
+/// The volume, changed and then told: wpctl moves it, and what it now is goes to the runtime directory,
+/// where the sheet's client reads it (sheet/, docs/sheet-client.md). The shell watches PipeWire itself;
+/// this way the sheet learns of a change without a library of its own, and anything that changes the
+/// volume another way is simply not shown until the next key.
+fn volume(p: &Paths, how: &str) {
+    let sink = "@DEFAULT_AUDIO_SINK@";
+    match how {
+        "up" => drop(util::run(&["wpctl", "set-volume", "-l", "1.5", sink, "5%+"], 10)),
+        "down" => drop(util::run(&["wpctl", "set-volume", sink, "5%-"], 10)),
+        "mute" => drop(util::run(&["wpctl", "set-mute", sink, "toggle"], 10)),
+        _ => util::die("draftpaper volume up|down|mute"),
+    }
+    let out = util::run(&["wpctl", "get-volume", sink], 10).unwrap_or_default();
+    let Some(c) = regex::Regex::new(r"Volume:\s*([0-9.]+)(\s*\[MUTED\])?").unwrap().captures(&out) else { return };
+    let at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let _ = std::fs::create_dir_all(&p.runtime);
+    util::write_atomic(
+        &p.runtime.join("volume.json"),
+        &util::dumps(&json!({ "volume": c[1].parse::<f64>().unwrap_or(0.0), "muted": c.get(2).is_some(), "at": at })),
+    );
 }
 
 /// Keep the default output's volume and mute across sessions. Logging out hands the sound card to the

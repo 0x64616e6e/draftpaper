@@ -27,15 +27,27 @@ struct Band {
     zones: u32,
     /// across the band: the margin's own thickness
     thick: f64,
+    vertical: bool,
 }
 
 impl Band {
     fn of(s: &Screen, side: Side) -> Band {
         let thick = s.margin;
         if side.vertical() {
-            Band { offset: thick, length: s.height - 2.0 * thick, zones: s.down, thick }
+            Band { offset: thick, length: s.height - 2.0 * thick, zones: s.down, thick, vertical: true }
         } else {
-            Band { offset: thick, length: s.width - 2.0 * thick, zones: s.across, thick }
+            Band { offset: thick, length: s.width - 2.0 * thick, zones: s.across, thick, vertical: false }
+        }
+    }
+
+    /// A place along the band, in the surface's own coordinates. The top and bottom bands run the whole
+    /// width of the display, so a place on the display is a place in the surface; the sides begin a
+    /// margin down, where the top band ends.
+    fn here(&self, v: f64) -> f64 {
+        if self.vertical {
+            v - self.offset
+        } else {
+            v
         }
     }
 
@@ -49,16 +61,12 @@ impl Band {
 
 /// Letter one margin. `along` turns a place along the band and across it into the buffer's own physical
 /// pixels, the band having been drawn from its own corner.
-pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, workspace: u64, spaces: &[(u64, bool)], parked: &[(usize, String, u64)], hover: Option<(f64, f64)>) {
+pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, workspace: u64, spaces: &[(u64, bool)], parked: &[(usize, String, u64)], hover: Option<(f64, f64)>, told: &Told) {
     let band = Band::of(s, side);
     let mm = (s.mm * scale) as f32;
     let px = ((s.margin * 0.5).min(3.2 * s.mm) * scale) as f32;
     let ink = theme.ink;
     let soft = crate::paint::Ink { a: (ink.a * 0.8).min(1.0), ..ink };
-    // the band's own corner, so a place on the display becomes a place in the buffer
-    let corner = if side.vertical() { band.offset } else { band.offset };
-    let _ = corner;
-
     match side {
         Side::Top => {
             // the workspaces share the first zone, each a slot of it, the one in use in the strong ink
@@ -66,21 +74,66 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             let shown: Vec<&(u64, bool)> = spaces.iter().collect();
             let slot = (end - start) / shown.len().max(1) as f64;
             for (i, (number, focused)) in shown.iter().enumerate() {
-                let at = start + (i as f64 + 0.5) * slot - band.offset;
+                let at = band.here(start + (i as f64 + 0.5) * slot);
                 let text = number.to_string();
                 let w = face.width(&text, px, 0.0);
                 let colour = if *focused { ink } else { soft };
                 face.draw(canvas, (at * scale) as f32 - w / 2.0, middle(&band, scale, face, px), &text, px, 0.0, colour.premultiplied());
             }
-            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(1));
+            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2));
+            // the newest notification, in the zone before the last, with how many wait behind it
+            if let Some(text) = told.notices.last() {
+                let (start, end) = band.zone(band.zones.saturating_sub(2));
+                let pad = 3.0 * mm;
+                let waiting = if told.notices.len() > 1 { format!("+{}", told.notices.len() - 1) } else { String::new() };
+                let counted = if waiting.is_empty() { 0.0 } else { face.width(&waiting, px * 0.8, 0.0) + pad };
+                let room = ((end - start) * scale) as f32 - 2.0 * pad - counted;
+                let line = cut(face, text, px, room);
+                let at = (band.here(start) * scale) as f32 + pad;
+                face.draw(canvas, at, middle(&band, scale, face, px), &line, px, 0.0, ink.premultiplied());
+                if !waiting.is_empty() {
+                    let right = (band.here(end) * scale) as f32 - pad - face.width(&waiting, px * 0.8, 0.0);
+                    face.draw(canvas, right, middle(&band, scale, face, px * 0.8), &waiting, px * 0.8, 0.0, soft.premultiplied());
+                }
+            }
+            // the last zone: what wants saying now — a reading past its alarm, the volume or the
+            // brightness just moved. The tray is the shell's still (docs/sheet-client.md).
+            let mut row: Vec<(String, crate::paint::Ink)> = Vec::new();
+            if told.hot {
+                row.push((told.temperature.clone(), theme.alert));
+            }
+            if told.battery_low {
+                if let Some(b) = told.battery {
+                    row.push((format!("BAT {}%", (b * 100.0).round()), theme.alert));
+                }
+            }
+            if let Some(v) = told.volume.filter(|_| told.volume_lit || told.muted) {
+                row.push((if told.muted { "VOL muted".into() } else { format!("VOL {}%", (v * 100.0).round()) }, ink));
+            }
+            if let Some(b) = told.brightness.filter(|_| told.brightness_lit) {
+                row.push((format!("BRT {}%", (b * 100.0).round()), ink));
+            }
+            if !row.is_empty() {
+                let gap = 4.0 * mm;
+                let total: f32 = row.iter().map(|(t, _)| face.width(t, px, 0.0)).sum::<f32>() + gap * (row.len() - 1) as f32;
+                let (start, end) = band.zone(band.zones.saturating_sub(1));
+                let mut at = (band.here((start + end) / 2.0) * scale) as f32 - total / 2.0;
+                for (text, colour) in &row {
+                    at = face.draw(canvas, at, middle(&band, scale, face, px), text, px, 0.0, colour.premultiplied()) + gap;
+                }
+            }
         }
         Side::Bottom => {
+            // Bluetooth in the first zone, as the shell letters it
+            let (start, _) = band.zone(0);
+            let bt = if told.bluetooth.is_empty() { "BT -".to_string() } else { format!("BT {}", told.bluetooth.join(", ")) };
+            face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
             // the figures over the scale bar's rules, and the theme's name in the last zone
-            numbers(canvas, face, &band, scale, px, soft, 0, band.zones.saturating_sub(2));
+            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2));
             figures(canvas, face, s, scale, px, soft);
             let (start, _) = band.zone(band.zones.saturating_sub(1));
             let name = theme.label.to_uppercase();
-            face.draw(canvas, ((start - band.offset + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &name, px, 0.2 * mm, soft.premultiplied());
+            face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &name, px, 0.2 * mm, soft.premultiplied());
         }
         Side::Left | Side::Right => {
             // a letter at the head of every row, and the window parked there lettered up the margin
@@ -89,15 +142,15 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             if let Some(Spot::Cell { cell, .. }) = hover.and_then(|(x, y)| under(s, side, x, y, spaces, parked)) {
                 let k = (cell - first.min(cell)) as u32;
                 let (start, end) = band.zone(k.min(band.zones.saturating_sub(1)));
-                let top = ((start - band.offset + 6.0 * s.mm) * scale) as i32;
-                let foot = ((end - band.offset - 2.0 * s.mm) * scale) as i32;
+                let top = (band.here(start + 6.0 * s.mm) * scale) as i32;
+                let foot = (band.here(end - 2.0 * s.mm) * scale) as i32;
                 let wide = (2.0 * scale).round().max(1.0) as i32;
                 let x = if side == Side::Left { (band.thick * scale) as i32 - wide } else { 0 };
                 canvas.fill(x, top, wide, (foot - top).max(0), theme.accent.premultiplied());
             }
             for k in 0..band.zones {
                 let (start, end) = band.zone(k);
-                let head = (start - band.offset + 1.5 * s.mm) * scale;
+                let head = band.here(start + 1.5 * s.mm) * scale;
                 let letter = ROWS.chars().nth(k as usize % ROWS.len()).unwrap_or('A').to_string();
                 let w = face.width(&letter, px * 0.8, 0.0);
                 let across = (band.thick * scale) as f32 / 2.0 - w / 2.0;
@@ -107,7 +160,7 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 let room = ((end - start) - 9.0 * s.mm) * scale;
                 let text = cut(face, title, px, room as f32);
                 let length = face.width(&text, px, 0.0);
-                let middle_of_cell = ((start - band.offset + (end - start) / 2.0 + 2.0 * s.mm) * scale) as f32;
+                let middle_of_cell = (band.here(start + (end - start) / 2.0 + 2.0 * s.mm) * scale) as f32;
                 let foot = middle_of_cell + length / 2.0;
                 face.draw_up(canvas, (band.thick * scale) as f32 / 2.0 + px * 0.4, foot, &text, px, 0.0, ink.premultiplied());
             }
@@ -115,6 +168,24 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
         Side::Title => {}
     }
     let _ = workspace;
+}
+
+/// What the margins have to say beyond the sheet's own geometry: the readings that have passed their
+/// alarm, the levels just moved, and what Bluetooth is connected to.
+#[derive(Debug, Clone, Default)]
+pub struct Told {
+    pub hot: bool,
+    pub temperature: String,
+    pub battery_low: bool,
+    pub battery: Option<f64>,
+    pub volume: Option<f64>,
+    pub muted: bool,
+    pub volume_lit: bool,
+    pub brightness: Option<f64>,
+    pub brightness_lit: bool,
+    pub bluetooth: Vec<String>,
+    /// what has come in and not yet gone, newest last
+    pub notices: Vec<String>,
 }
 
 /// What sits under the pointer on a margin, and what a click on it does.
@@ -133,7 +204,7 @@ pub fn under(s: &Screen, side: Side, x: f64, y: f64, spaces: &[(u64, bool)], par
         Side::Top => {
             // the workspaces share the first zone, a slot each
             let (start, end) = band.zone(0);
-            let along = x + band.offset;
+            let along = x;
             if along < start || along >= end || spaces.is_empty() {
                 return None;
             }
@@ -188,7 +259,7 @@ fn numbers(canvas: &mut Canvas, face: &mut Face, band: &Band, scale: f64, px: f3
         let (start, end) = band.zone(k);
         let text = (k + 1).to_string();
         let w = face.width(&text, px * 0.8, 0.0);
-        let at = ((start + end) / 2.0 - band.offset) * scale;
+        let at = band.here((start + end) / 2.0) * scale;
         face.draw(canvas, at as f32 - w / 2.0, middle(band, scale, face, px * 0.8), &text, px * 0.8, 0.0, ink.premultiplied());
     }
 }
@@ -201,14 +272,14 @@ fn figures(canvas: &mut Canvas, face: &mut Face, s: &Screen, scale: f64, px: f32
     // the band is drawn from the margin's own corner, and the bar's rows are given from the display's
     let baseline = ((bar.text_top - (s.height - s.margin)) * scale) as f32 + face.ascent(small);
     if !bar.measured {
-        let at = ((bar.zone.0 - s.margin) * scale) as f32;
+        let at = (bar.zone.0 * scale) as f32;
         face.draw(canvas, at, baseline, "NTS", small, 0.2 * (s.mm * scale) as f32, ink.premultiplied());
         return;
     }
     for (i, (x, mm)) in bar.marks.iter().enumerate() {
         let text = mm.to_string();
         let w = face.width(&text, small, 0.0);
-        let at = ((x - s.margin) * scale) as f32 - w / 2.0;
+        let at = (x * scale) as f32 - w / 2.0;
         face.draw(canvas, at, baseline, &text, small, 0.0, ink.premultiplied());
         if i + 1 == bar.marks.len() {
             face.draw(canvas, at + w + small * 0.6, baseline, "mm", small, 0.0, ink.premultiplied());

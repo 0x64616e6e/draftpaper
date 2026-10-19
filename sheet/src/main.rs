@@ -12,6 +12,7 @@
 
 mod font;
 mod margins;
+mod notices;
 mod paint;
 mod sheet;
 mod title;
@@ -131,6 +132,10 @@ struct Sheet {
     /// what the pointer is over: the surface and where in it, so the lettering under it can answer
     over: Option<(wl_surface::WlSurface, f64, f64)>,
     marked: Option<wl_surface::WlSurface>,
+    levels: sheet::Levels,
+    notices: std::sync::Arc<notices::Notices>,
+    /// when the backlight was last seen to move
+    brightness_at: u64,
     exit: bool,
 }
 
@@ -174,6 +179,9 @@ fn main() {
         pointer: None,
         over: None,
         marked: None,
+        levels: sheet::Levels::default(),
+        notices: std::sync::Arc::new(notices::Notices::default()),
+        brightness_at: 0,
         exit: false,
     };
     if state.scaling.is_none() {
@@ -185,6 +193,7 @@ fn main() {
     state.reread(&qh);
     state.reread_machine();
     state.reread_margins(&qh);
+    state.levels = sheet::Levels::read(state.readings.get("backlight").and_then(serde_json::Value::as_str));
 
     // the machine is read again every five seconds, as the shell read it, which is also what moves the
     // clock in the title block
@@ -196,6 +205,36 @@ fn main() {
             calloop::timer::TimeoutAction::ToDuration(READ_EVERY)
         })
         .expect("the reading timer");
+    // the volume and the backlight move between readings, and the sheet says so while they do
+    handle
+        .insert_source(calloop::timer::Timer::from_duration(LEVELS_EVERY), |_, _, state: &mut Sheet| {
+            state.reread_levels();
+            calloop::timer::TimeoutAction::ToDuration(LEVELS_EVERY)
+        })
+        .expect("the levels timer");
+    // the desktop's notification server: what comes in is lettered along the top margin
+    let (told, notified) = std::sync::mpsc::channel();
+    let held = state.notices.clone();
+    std::thread::spawn(move || notices::serve(held, told));
+    let (noticed, notices_in) = calloop::channel::channel::<()>();
+    std::thread::spawn(move || {
+        while notified.recv().is_ok() {
+            if noticed.send(()).is_err() {
+                return;
+            }
+        }
+    });
+    handle
+        .insert_source(notices_in, move |_, _, state: &mut Sheet| state.redraw_top())
+        .expect("the notifications");
+    // one that has had its while comes off the sheet
+    handle
+        .insert_source(calloop::timer::Timer::from_duration(NOTICE_EVERY), |_, _, state: &mut Sheet| {
+            state.redraw_top();
+            calloop::timer::TimeoutAction::ToDuration(NOTICE_EVERY)
+        })
+        .expect("the notice timer");
+
     // the compositor says when a workspace is switched or a window parked, so the margins follow at once
     let (say, heard) = std::sync::mpsc::channel();
     std::thread::spawn(move || sheet::watch(say));
@@ -219,6 +258,10 @@ fn main() {
 
 /// How often the machine is read again for the title block.
 const READ_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+/// How often a notification is looked at for having had its while.
+const NOTICE_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
+/// How often the volume and the backlight are looked at: two small files, as the shell looked at them.
+const LEVELS_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// A global, where the compositor has it.
 fn bind<I, S>(globals: &GlobalList, qh: &QueueHandle<S>) -> Option<I>
@@ -319,9 +362,11 @@ impl Sheet {
         let hover = self.over.as_ref().filter(|(o, _, _)| o == surface).map(|(_, x, y)| (*x, *y));
         if side == Side::Title {
             self.letter_title(&mut canvas, &s, scale, hover);
-        } else if let Some(face) = self.face.as_mut() {
+        } else if self.face.is_some() {
             let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
-            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked, hover);
+            let told = self.told();
+            let face = self.face.as_mut().expect("a face, just looked for");
+            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked, hover, &told);
             // DRAFTPAPER_SHEET_RULE: a rule a physical pixel wide, 50 mm from the frame's corner, which
             // tests/sheet.sh measures at every scale. It proves that the buffer is in physical pixels and
             // nothing is resampled — the one thing that would quietly spoil every word on the sheet — and
@@ -383,6 +428,73 @@ impl Sheet {
             }
             let colour = if cell.alert { alert } else { ink };
             face.draw(canvas, x + 2.0 * mm, y + h - 1.6 * mm, &cell.value, px.max(least), 0.0, colour.premultiplied());
+        }
+    }
+
+    /// What the margins have to say: the readings past their alarm, the levels just moved, Bluetooth.
+    /// A level is lettered for four seconds after it moves, as the shell lettered it.
+    fn told(&self) -> margins::Told {
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let r = &self.readings;
+        let temps = r.get("temps").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
+        let named = |which: &str| {
+            temps
+                .iter()
+                .find(|t| t.get("label").and_then(serde_json::Value::as_str) == Some(which))
+                .and_then(|t| t.get("value").and_then(serde_json::Value::as_str))
+                .map(|v| format!("{which} {v}"))
+        };
+        margins::Told {
+            hot: r.get("hot").and_then(serde_json::Value::as_bool).unwrap_or(false),
+            temperature: named("CPU").unwrap_or_default(),
+            battery_low: r.get("battery_low").and_then(serde_json::Value::as_bool).unwrap_or(false),
+            battery: r.get("battery").and_then(serde_json::Value::as_f64),
+            volume: self.levels.volume,
+            muted: self.levels.muted,
+            volume_lit: self.levels.volume_at + 4 >= now && self.levels.volume_at > 0,
+            brightness: self.levels.brightness,
+            brightness_lit: self.brightness_at + 4 >= now && self.brightness_at > 0,
+            notices: self.notices.due().iter().map(|n| n.text()).collect(),
+            bluetooth: r
+                .get("bt")
+                .and_then(serde_json::Value::as_array)
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// The top margin again: what it says changes without the sheet itself changing.
+    fn redraw_top(&mut self) {
+        let surfaces: Vec<wl_surface::WlSurface> = self
+            .bands
+            .iter_mut()
+            .filter(|b| b.side == Side::Top)
+            .map(|b| {
+                b.drawn = false;
+                b.layer.wl_surface().clone()
+            })
+            .collect();
+        for surface in surfaces {
+            self.draw(&surface);
+        }
+    }
+
+    /// The volume and the backlight, read again: both are files, so this costs two small reads. When
+    /// either has moved, the margins say so for a few seconds.
+    fn reread_levels(&mut self) {
+        let backlight = self.readings.get("backlight").and_then(serde_json::Value::as_str).map(str::to_string);
+        let now = sheet::Levels::read(backlight.as_deref());
+        let moved = now.volume_at != self.levels.volume_at || now.muted != self.levels.muted;
+        if now.brightness != self.levels.brightness && self.levels.brightness.is_some() {
+            self.brightness_at = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        }
+        let lit = self.told();
+        let was = (lit.volume_lit, lit.brightness_lit);
+        self.levels = now;
+        let lit = self.told();
+        // redraw only while it has something to say, or has just stopped saying it
+        if moved || was != (lit.volume_lit, lit.brightness_lit) {
+            self.redraw_top();
         }
     }
 

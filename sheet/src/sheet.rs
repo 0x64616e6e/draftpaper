@@ -246,6 +246,40 @@ pub fn watch(say: std::sync::mpsc::Sender<()>) {
     }
 }
 
+/// What the sheet shows for a moment after it changes: the volume, as `draftpaper volume` last left it,
+/// and the backlight, read straight from the kernel. Both are plain files, read in place.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Levels {
+    pub volume: Option<f64>,
+    pub muted: bool,
+    /// when the volume was last moved, in seconds since the epoch
+    pub volume_at: u64,
+    pub brightness: Option<f64>,
+}
+
+impl Levels {
+    pub fn read(backlight: Option<&str>) -> Levels {
+        let runtime = std::env::var_os("DRAFTPAPER_RUNTIME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| Some(std::path::PathBuf::from(std::env::var_os("XDG_RUNTIME_DIR")?).join("draftpaper")));
+        let v: Value = runtime
+            .map(|r| std::fs::read_to_string(r.join("volume.json")).unwrap_or_default())
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or(Value::Null);
+        let number = |dir: &str, file: &str| std::fs::read_to_string(format!("{dir}/{file}")).ok()?.trim().parse::<f64>().ok();
+        let brightness = backlight.and_then(|d| {
+            let (now, max) = (number(d, "brightness")?, number(d, "max_brightness")?);
+            (max > 0.0).then_some(now / max)
+        });
+        Levels {
+            volume: v.get("volume").and_then(Value::as_f64),
+            muted: v.get("muted").and_then(Value::as_bool).unwrap_or(false),
+            volume_at: v.get("at").and_then(Value::as_u64).unwrap_or(0),
+            brightness,
+        }
+    }
+}
+
 /// Do one of the compositor's own actions, as a key binding would (compositor/src/config.rs).
 pub fn action(what: &str) {
     let request = serde_json::json!({ "request": "action", "action": what });

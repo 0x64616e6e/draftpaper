@@ -175,9 +175,10 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     // scroll sizes it, Escape or Mod+z again puts it away
     ("Mod+z", "zoom"),
     // the laptop's media keys: PipeWire's wpctl (up to 150%, as the shell's volume cell), brightnessctl
-    ("XF86AudioRaiseVolume", "spawn wpctl set-volume -l 1.5 @DEFAULT_AUDIO_SINK@ 5%+"),
-    ("XF86AudioLowerVolume", "spawn wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"),
-    ("XF86AudioMute", "spawn wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+    // through draftpaper rather than wpctl alone, so the sheet is told what the volume now is
+    ("XF86AudioRaiseVolume", "spawn draftpaper volume up"),
+    ("XF86AudioLowerVolume", "spawn draftpaper volume down"),
+    ("XF86AudioMute", "spawn draftpaper volume mute"),
     ("XF86AudioMicMute", "spawn wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
     ("XF86MonBrightnessUp", "spawn brightnessctl -q set 5%+"),
     ("XF86MonBrightnessDown", "spawn brightnessctl -q set 5%-"),

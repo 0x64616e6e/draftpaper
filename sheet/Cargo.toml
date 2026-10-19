@@ -20,6 +20,7 @@ libc = "0.2.191"
 draftpaper = { version = "0.7.5", path = "../cli" }
 calloop = "0.14.5"
 calloop-wayland-source = "0.4.1"
+zbus = { version = "5", default-features = false, features = ["blocking-api", "async-io"] }
 
 [profile.release]
 opt-level = 3
