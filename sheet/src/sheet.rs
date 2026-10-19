@@ -208,6 +208,8 @@ pub struct Theme {
     pub strong: Ink,
     /// the paper, for the lettering a drawing breaks its lines to make room for
     pub paper: Ink,
+    /// whether the sheet sets a glyph before a reading where it can (config [text] glyphs)
+    pub glyphs: bool,
     /// how strongly the theme sets ink on paper: what is lettered is lettered in full, and only the
     /// labels, the rules and the ticks are softened by it (qml/TitleBlock.qml)
     pub ink_alpha: f32,
@@ -236,6 +238,7 @@ impl Theme {
             strong: Ink::parse(v.get("strong").and_then(Value::as_str).or_else(|| v.get("accent").and_then(Value::as_str)).unwrap_or("#b4701a"), 1.0),
             paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),
             ink_alpha: alpha,
+            glyphs: v.get("glyphs").and_then(Value::as_bool).unwrap_or(true),
         }
     }
 

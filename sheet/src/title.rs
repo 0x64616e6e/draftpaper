@@ -22,29 +22,47 @@ pub struct Cell {
     pub large: bool,
 }
 
-/// The twelve cells, in the order the compositor measured them.
-pub fn cells(theme: &crate::sheet::Theme, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>) -> Vec<Cell> {
+/// The twelve cells, in the order the compositor measured them. The face is wanted because a reading
+/// that would carry a glyph carries the word instead where no face installed has it (glyph.rs).
+pub fn cells(theme: &crate::sheet::Theme, face: &mut crate::font::Face, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>) -> Vec<Cell> {
     let cell = |label, value: String| Cell { label, value, alert: false, large: false };
     let (date, time) = clock(now);
     let text = |v: Option<&Value>| v.and_then(Value::as_str).unwrap_or("-").to_string();
     let temps = r.get("temps").and_then(Value::as_array).cloned().unwrap_or_default();
     let named = |which: &str| temps.iter().find(|t| t.get("label").and_then(Value::as_str) == Some(which)).map(|t| text(t.get("value")));
+    let on = theme.glyphs;
     vec![
         Cell { label: "TIME", value: time, alert: false, large: true },
         cell("DATE", date),
         cell("SHEET", workspace.to_string()),
         cell("PROJECT", theme.project.to_uppercase()),
-        cell("POWER", power(&r)),
-        Cell { label: "BATTERY", value: battery(&r), alert: r.get("battery_low").and_then(Value::as_bool).unwrap_or(false), large: false },
-        cell("PROFILE", text(r.get("profile")).to_lowercase()),
+        cell("POWER", format!("{}{}", crate::glyph::before(face, on, '\u{f140b}', ""), power(&r))),
+        Cell { label: "BATTERY", value: battery(face, on, &r), alert: r.get("battery_low").and_then(Value::as_bool).unwrap_or(false), large: false },
+        cell("PROFILE", profile(face, on, &text(r.get("profile")).to_lowercase())),
         cell("CPU / MEMORY", {
             let pct = |v: Option<f64>| v.map(|v| format!("{}%", (v * 100.0).round())).unwrap_or_else(|| "-".into());
-            format!("{} / {}", pct(cpu), pct(draftpaper::metrics::memory()))
+            // with their glyphs the two readings stand apart on their own, without the stroke between.
+            // The shell writes two spaces here and in the temperatures; its text is styled, and styled
+            // text collapses them to one, which is what the sheet actually carries.
+            let (load, mem) = (crate::glyph::before(face, on, '\u{f0ee0}', ""), crate::glyph::before(face, on, '\u{f035b}', ""));
+            if load.is_empty() || mem.is_empty() {
+                format!("{} / {}", pct(cpu), pct(draftpaper::metrics::memory()))
+            } else {
+                format!("{load}{} {mem}{}", pct(cpu), pct(draftpaper::metrics::memory()))
+            }
         }),
-        cell("NETWORK", network(&r)),
+        cell("NETWORK", network(face, on, &r)),
         Cell {
             label: "TEMPERATURE · FAN",
-            value: ["CPU", "NVME", "FAN"].iter().filter_map(|k| named(k).map(|v| format!("{k} {v}"))).collect::<Vec<_>>().join(" ").trim().to_string(),
+            // each reading behind its own glyph where there is one, else behind its name, as the shell
+            // letters them (qml/shell.qml's `tempLabel`)
+            value: [("CPU", '\u{f061a}'), ("NVME", '\u{f02ca}'), ("FAN", '\u{f0210}')]
+                .iter()
+                .filter_map(|(k, g)| named(k).map(|v| format!("{}{v}", crate::glyph::before(face, on, *g, &format!("{k} ")))))
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim()
+                .to_string(),
             alert: r.get("hot").and_then(Value::as_bool).unwrap_or(false),
             large: false,
         },
@@ -98,18 +116,52 @@ fn power(r: &Value) -> String {
     }
 }
 
-fn battery(r: &Value) -> String {
-    match r.get("battery").and_then(Value::as_f64) {
-        Some(v) => format!("{}%", (v * 100.0).round()),
-        None => "-".into(),
+/// The charge, behind a cell that fills as it does — or the bolt while it is charging. Without glyphs
+/// the word says what the glyph would have: "charging" after the figure, as the shell says it.
+fn battery(face: &mut crate::font::Face, on: bool, r: &Value) -> String {
+    let Some(v) = r.get("battery").and_then(Value::as_f64) else { return "-".into() };
+    let charging = r.get("charging").and_then(Value::as_bool).unwrap_or(false);
+    let cells = ['\u{f007a}', '\u{f007c}', '\u{f007e}', '\u{f0080}', '\u{f0079}'];
+    let ch = if charging { '\u{f0084}' } else { crate::glyph::ramp(v, &cells) };
+    let glyph = crate::glyph::before(face, on, ch, "");
+    let figure = format!("{}%", (v * 100.0).round());
+    if glyph.is_empty() && charging {
+        format!("{figure} charging")
+    } else {
+        format!("{glyph}{figure}")
     }
 }
 
-fn network(r: &Value) -> String {
-    if let Some(ssid) = r.get("wifi").and_then(|w| w.get("ssid")).and_then(Value::as_str) {
-        return ssid.to_string();
+/// The profile behind its glyph. The glyph takes room the cell has not got, so beside one the longer
+/// names are shortened — "saver", "perf" — and lettered whole where there is no glyph, as the shell does.
+fn profile(face: &mut crate::font::Face, on: bool, p: &str) -> String {
+    let ch = match p {
+        "power-saver" => '\u{f032a}',
+        "performance" => '\u{f04c5}',
+        _ => '\u{f0f85}',
+    };
+    let glyph = crate::glyph::before(face, on, ch, "");
+    let word = match (glyph.is_empty(), p) {
+        (false, "power-saver") => "saver",
+        (false, "performance") => "perf",
+        (_, p) => p,
+    };
+    format!("{glyph}{word}")
+}
+
+/// The network behind the arc its signal fills, the plug where it is wired, or the struck-out arc where
+/// it is neither.
+fn network(face: &mut crate::font::Face, on: bool, r: &Value) -> String {
+    if let Some(wifi) = r.get("wifi").filter(|w| !w.is_null()) {
+        let ssid = wifi.get("ssid").and_then(Value::as_str).unwrap_or("");
+        let signal = wifi.get("signal").and_then(Value::as_f64).unwrap_or(0.0) / 100.0;
+        let arcs = ['\u{f092f}', '\u{f091f}', '\u{f0922}', '\u{f0925}', '\u{f0928}'];
+        return format!("{}{ssid}", crate::glyph::before(face, on, crate::glyph::ramp(signal, &arcs), ""));
     }
-    r.get("wired").and_then(Value::as_str).unwrap_or("-").to_string()
+    match r.get("wired").and_then(Value::as_str) {
+        Some(address) => format!("{}{address}", crate::glyph::before(face, on, '\u{f0201}', "wired ")),
+        None => format!("{}offline", crate::glyph::before(face, on, '\u{f092e}', "")),
+    }
 }
 
 #[cfg(test)]
@@ -128,6 +180,7 @@ mod tests {
             strong: crate::paint::Ink::parse("#b4701a", 1.0),
             paper: crate::paint::Ink::parse("#ffffff", 1.0),
             ink_alpha: 1.0,
+            glyphs: false,
         }
     }
 
@@ -167,7 +220,8 @@ mod tests {
 
     #[test]
     fn twelve_cells_in_the_order_the_compositor_measured_them() {
-        let cells = cells(&theme(), 3, std::time::SystemTime::now(), &serde_json::Value::Null, None);
+        let Some(mut face) = crate::font::Face::load(None) else { return };
+        let cells = cells(&theme(), &mut face, 3, std::time::SystemTime::now(), &serde_json::Value::Null, None);
         let labels: Vec<&str> = cells.iter().map(|c| c.label).collect();
         assert_eq!(
             labels,
@@ -185,18 +239,21 @@ mod tests {
         // clock, 12 mm for the other eleven — so the clock alone is lettered at 9 mm and the rest at
         // 3.6 mm. Reading it off the measured cell instead makes the whole top row large, because the
         // block's proportions stretch those cells past 12 mm.
-        let cells = cells(&theme(), 1, std::time::SystemTime::now(), &serde_json::Value::Null, None);
+        let Some(mut face) = crate::font::Face::load(None) else { return };
+        let cells = cells(&theme(), &mut face, 1, std::time::SystemTime::now(), &serde_json::Value::Null, None);
         let large: Vec<&str> = cells.iter().filter(|c| c.large).map(|c| c.label).collect();
         assert_eq!(large, ["TIME"]);
     }
 
     #[test]
     fn a_reading_that_is_not_there_is_a_dash_rather_than_nothing() {
-        let cells = cells(&theme(), 1, std::time::SystemTime::now(), &serde_json::Value::Null, None);
+        let Some(mut face) = crate::font::Face::load(None) else { return };
+        let cells = cells(&theme(), &mut face, 1, std::time::SystemTime::now(), &serde_json::Value::Null, None);
         let by = |l: &str| cells.iter().find(|c| c.label == l).unwrap();
         assert_eq!(by("BATTERY").value, "-");
-        assert_eq!(by("NETWORK").value, "-");
         assert_eq!(by("PROCESSES").value, "-");
+        // no network at all is a word, not a dash: the sheet says what is the case (qml/shell.qml)
+        assert_eq!(by("NETWORK").value, "offline");
         // on mains there is nothing drawn, which the sheet says in words
         assert_eq!(by("POWER").value, "mains");
         assert_eq!(by("CPU / MEMORY").value.matches('/').count(), 1);
@@ -210,7 +267,8 @@ mod tests {
             "temps": [{ "label": "CPU", "value": "57°" }, { "label": "FAN", "value": "2322" }],
             "hot": true
         });
-        let cells = cells(&theme(), 1, std::time::SystemTime::now(), &r, Some(0.08));
+        let Some(mut face) = crate::font::Face::load(None) else { return };
+        let cells = cells(&theme(), &mut face, 1, std::time::SystemTime::now(), &r, Some(0.08));
         let by = |l: &str| cells.iter().find(|c| c.label == l).unwrap();
         assert_eq!(by("BATTERY").value, "78%");
         assert_eq!(by("POWER").value, "12.3 W");
@@ -220,5 +278,33 @@ mod tests {
         assert_eq!(by("TEMPERATURE · FAN").value, "CPU 57° FAN 2322");
         assert!(by("TEMPERATURE · FAN").alert, "read beyond the alarm: the alert ink");
         assert!(by("CPU / MEMORY").value.starts_with("8% / "));
+    }
+
+    #[test]
+    fn with_glyphs_on_each_reading_comes_behind_its_own() {
+        let Some(mut face) = crate::font::Face::load(None) else { return };
+        // no Nerd Font installed: the sheet letters the words, which the test above already holds it to
+        if !face.has('\u{f140b}') {
+            return;
+        }
+        let theme = crate::sheet::Theme { glyphs: true, ..theme() };
+        let r = serde_json::json!({
+            "battery": 0.78, "charging": false, "power": 12.345, "profile": "power-saver",
+            "wifi": { "ssid": "a network", "signal": 62 },
+            "temps": [{ "label": "CPU", "value": "57°" }],
+        });
+        let cells = cells(&theme, &mut face, 1, std::time::SystemTime::now(), &r, Some(0.08));
+        let by = |l: &str| cells.iter().find(|c| c.label == l).unwrap().value.clone();
+        assert_eq!(by("POWER"), "\u{f140b} 12.3 W");
+        // the cell fills as the charge does: 78% is the fourth of five
+        assert_eq!(by("BATTERY"), "\u{f0080} 78%");
+        // the glyph takes room from the cell, so the longer names are shortened beside it
+        assert_eq!(by("PROFILE"), "\u{f032a} saver");
+        assert_eq!(by("NETWORK"), "\u{f0925} a network");
+        assert_eq!(by("TEMPERATURE · FAN"), "\u{f061a} 57°");
+        // the two readings stand apart behind their own glyphs, with no stroke between them
+        assert_eq!(by("CPU / MEMORY").matches('/').count(), 0);
+        // what never carried a glyph is lettered as before
+        assert_eq!(by("PROCESSES"), "-");
     }
 }

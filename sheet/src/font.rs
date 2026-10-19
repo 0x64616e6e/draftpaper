@@ -78,6 +78,15 @@ impl Face {
         false
     }
 
+    /// Whether any face the sheet can letter with has this character, reading the ones still waiting
+    /// until one does. A glyph the sheet cannot draw would come out as an empty box, so what wants
+    /// lettering in glyphs asks this first and letters the word where the answer is no.
+    pub fn has(&mut self, ch: char) -> bool {
+        let found = |read: &Vec<fontdue::Font>| read.iter().any(|f| f.lookup_glyph_index(ch) != 0);
+        while !found(&self.read) && self.read_another() {}
+        found(&self.read)
+    }
+
     /// How far the pen moves for one character at this size, letter spacing aside.
     pub fn advance(&mut self, ch: char, px: f32) -> f32 {
         self.glyph(ch, px).map(|g| g.advance).unwrap_or(px * 0.6)

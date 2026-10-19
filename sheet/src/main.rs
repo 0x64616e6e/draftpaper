@@ -11,6 +11,7 @@
 //! The geometry is the compositor's (sheet.rs); this client works out none of it.
 
 mod font;
+mod glyph;
 mod graph;
 mod margins;
 mod notices;
@@ -467,7 +468,7 @@ impl Sheet {
     /// A reading too wide for its cell is lettered smaller before it is cut, as the shell does.
     fn letter_title(&mut self, canvas: &mut paint::Canvas, s: &sheet::Screen, scale: f64, hover: Option<(f64, f64)>) {
         let (Some(block), Some(face)) = (s.title.as_ref(), self.face.as_mut()) else { return };
-        let cells = title::cells(&self.theme, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy);
+        let cells = title::cells(&self.theme, face, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy);
         // a millimetre of this display, in the physical pixels the buffer is in
         let mm = (s.mm * scale) as f32;
         let (ink, faint, alert) = (self.theme.ink, self.theme.faint(), self.theme.alert);
@@ -516,7 +517,7 @@ impl Sheet {
                 .iter()
                 .find(|t| t.get("label").and_then(serde_json::Value::as_str) == Some(which))
                 .and_then(|t| t.get("value").and_then(serde_json::Value::as_str))
-                .map(|v| format!("{which} {v}"))
+                .map(str::to_string)
         };
         margins::Told {
             hot: r.get("hot").and_then(serde_json::Value::as_bool).unwrap_or(false),

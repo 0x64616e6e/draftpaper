@@ -100,18 +100,25 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             // brightness just moved. The tray is the shell's still (docs/sheet-client.md).
             let mut row: Vec<(String, crate::paint::Ink)> = Vec::new();
             if told.hot {
-                row.push((told.temperature.clone(), theme.alert));
+                let g = crate::glyph::before(face, theme.glyphs, '\u{f061a}', "CPU ");
+                row.push((format!("{g}{}", told.temperature), theme.alert));
             }
             if told.battery_low {
                 if let Some(b) = told.battery {
-                    row.push((format!("BAT {}%", (b * 100.0).round()), theme.alert));
+                    let g = crate::glyph::before(face, theme.glyphs, '\u{f0083}', "BAT ");
+                    row.push((format!("{g}{}%", (b * 100.0).round()), theme.alert));
                 }
             }
             if let Some(v) = told.volume.filter(|_| told.volume_lit || told.muted) {
-                row.push((if told.muted { "VOL muted".into() } else { format!("VOL {}%", (v * 100.0).round()) }, ink));
+                let steps = ['\u{f057f}', '\u{f0580}', '\u{f057e}'];
+                let ch = if told.muted { '\u{f075f}' } else { crate::glyph::ramp(v, &steps) };
+                let g = crate::glyph::before(face, theme.glyphs, ch, "VOL ");
+                row.push((if told.muted { format!("{g}muted") } else { format!("{g}{}%", (v * 100.0).round()) }, ink));
             }
             if let Some(b) = told.brightness.filter(|_| told.brightness_lit) {
-                row.push((format!("BRT {}%", (b * 100.0).round()), ink));
+                let steps = ['\u{f00de}', '\u{f00df}', '\u{f00e0}'];
+                let g = crate::glyph::before(face, theme.glyphs, crate::glyph::ramp(b, &steps), "BRT ");
+                row.push((format!("{g}{}%", (b * 100.0).round()), ink));
             }
             if !row.is_empty() {
                 let gap = 4.0 * mm;
@@ -129,9 +136,16 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones, |k| k == notice || k == status);
         }
         Side::Bottom => {
-            // Bluetooth in the first zone, as the shell letters it
+            // Bluetooth in the first zone, as the shell letters it: the glyph says whether anything is
+            // connected, so without one the reading says "-" in words
             let (start, _) = band.zone(0);
-            let bt = if told.bluetooth.is_empty() { "BT -".to_string() } else { format!("BT {}", told.bluetooth.join(", ")) };
+            let connected = !told.bluetooth.is_empty();
+            let ch = if connected { '\u{f00b1}' } else { '\u{f00af}' };
+            let names = told.bluetooth.join(", ");
+            let bt = match crate::glyph::before(face, theme.glyphs, ch, "BT ") {
+                g if g == "BT " && !connected => "BT -".to_string(),
+                g => format!("{g}{names}"),
+            };
             face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
             // the figures over the scale bar's rules, and the theme's name in the last zone
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), |_| false);
@@ -180,6 +194,8 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
 #[derive(Debug, Clone, Default)]
 pub struct Told {
     pub hot: bool,
+    /// the CPU's reading alone: what goes before it is settled where it is lettered, since that is
+    /// where the face is to hand to say whether its glyph can be drawn
     pub temperature: String,
     pub battery_low: bool,
     pub battery: Option<f64>,

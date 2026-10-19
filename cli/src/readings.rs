@@ -5,6 +5,8 @@
 //!   power    battery draw in watts while discharging, null on mains
 //!   profile  the power profile (power-profiles-daemon over D-Bus, busctl), "" without it
 //!   bt       names of the connected Bluetooth devices (bluetoothctl)
+//!   battery  the first battery's charge, 0..1, and whether it is charging; null without one. The shell
+//!            takes these from UPower itself; the sheet's own client has no UPower, so they come here.
 //!
 //! hwmon devices are found by name, not index, so a reboot that renumbers them changes nothing.
 
@@ -103,6 +105,17 @@ fn power() -> Value {
     Value::Null
 }
 
+/// The first battery's charge (0..1) and whether it is charging; None where the machine has none.
+/// `/sys/class/power_supply` is what UPower reads too, so the shell and the client agree.
+fn battery() -> (Option<f64>, bool) {
+    let mut bats: Vec<PathBuf> = std::fs::read_dir("/sys/class/power_supply")
+        .map(|r| r.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("BAT"))).collect())
+        .unwrap_or_default();
+    bats.sort();
+    let Some(b) = bats.first() else { return (None, false) };
+    (read_int(&b.join("capacity")).map(|v| v as f64 / 100.0), read_str(&b.join("status")).as_deref() == Some("Charging"))
+}
+
 /// What the sheet letters, as JSON: the sensors, the daemons, and how many processes there are.
 pub fn json(p: &Paths) -> Value {
     // the three daemons are asked on one bus connection, in a thread, while the sensors are read here
@@ -119,8 +132,11 @@ pub fn json(p: &Paths) -> Value {
     let (bt, profile, wifi, wired) = daemons.recv_timeout(std::time::Duration::from_millis(750)).unwrap_or_default();
     let bt: Vec<Value> = bt.into_iter().map(|n| json!(n)).collect();
     let wifi = wifi.map(|(signal, ssid)| json!({ "signal": signal, "ssid": ssid })).unwrap_or(Value::Null);
+    // low enough to say so, and not on its way back up: the shell's own rule (qml/shell.qml)
+    let (battery, charging) = battery();
+    let low = battery.is_some_and(|v| v * 100.0 < alert(cfg.get("alerts").unwrap_or(&Value::Null), "battery", 15.0)) && !charging;
     json!({"temps": t, "hot": hot, "power": power, "profile": profile, "bt": bt, "processes": crate::processes::count(),
-            "wifi": wifi, "wired": wired, "backlight": backlight()})
+            "wifi": wifi, "wired": wired, "backlight": backlight(), "battery": battery, "charging": charging, "battery_low": low})
 }
 
 pub fn main(p: &Paths) {
