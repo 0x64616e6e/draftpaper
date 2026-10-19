@@ -23,7 +23,8 @@ control) and everything on the sheet on one millimetre grid (0.7.0). It replaces
 Design: `docs/wayland-design.md`.
 
 Next: drag and drop (#18); the login screen's reveal without skipped frames (#42); full colour management
-(gamut mapping) after #50's calibration curves.
+(gamut mapping) after #50's calibration curves. A client of its own for the sheet's lettering, in place of
+Quickshell for the always-on margins and title block (proposed: `docs/sheet-client.md`).
 
 ## 3. A distribution (vision)
 
