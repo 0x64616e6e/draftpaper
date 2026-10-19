@@ -59,7 +59,8 @@ fn memory(bytes: u64) -> String {
     if b >= 1e9 { format!("{:.1} GB", b / 1e9) } else { format!("{:.0} MB", b / 1e6) }
 }
 
-pub fn main(rows: usize) {
+/// What the process schedule letters.
+pub fn json(rows: usize) -> Value {
     let hz = 100;
     let page = 4096;
     let first = sample();
@@ -102,7 +103,11 @@ pub fn main(rows: usize) {
         .collect();
     let load = read("/proc/loadavg").split_whitespace().next().unwrap_or("").to_string();
     let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-    println!("{}", util::dumps(&json!({ "rows": rows, "load": load, "processes": second.len(), "threads": threads })));
+    json!({ "rows": rows, "load": load, "processes": second.len(), "threads": threads })
+}
+
+pub fn main(rows: usize) {
+    println!("{}", util::dumps(&json(rows)));
 }
 
 #[cfg(test)]

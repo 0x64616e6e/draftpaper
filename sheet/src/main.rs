@@ -13,6 +13,7 @@
 mod font;
 mod margins;
 mod notices;
+mod schedule;
 mod paint;
 mod sheet;
 mod title;
@@ -60,10 +61,12 @@ pub enum Side {
     Right,
     /// the block in the frame's bottom-right corner, lettered from the compositor's own cells
     Title,
+    /// whichever schedule is out, in the title block's column
+    Schedule,
 }
 
 impl Side {
-    const ALL: [Side; 5] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title];
+    const ALL: [Side; 6] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title, Side::Schedule];
 
     fn anchor(self) -> Anchor {
         match self {
@@ -73,6 +76,7 @@ impl Side {
             Side::Left => Anchor::LEFT | Anchor::TOP | Anchor::BOTTOM,
             Side::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
             Side::Title => Anchor::BOTTOM | Anchor::RIGHT,
+            Side::Schedule => Anchor::TOP | Anchor::LEFT,
         }
     }
 
@@ -83,6 +87,7 @@ impl Side {
     fn namespace(self) -> &'static str {
         match self {
             Side::Title => "draftpaper-title-block",
+            Side::Schedule => "draftpaper-schedule",
             _ => "draftpaper-margin",
         }
     }
@@ -133,6 +138,9 @@ struct Sheet {
     over: Option<(wl_surface::WlSurface, f64, f64)>,
     marked: Option<wl_surface::WlSurface>,
     levels: sheet::Levels,
+    /// which schedule is out (Mod+i takes the next), and the one worked out for it
+    showing: schedule::Which,
+    schedule: Option<schedule::Schedule>,
     notices: std::sync::Arc<notices::Notices>,
     /// when the backlight was last seen to move
     brightness_at: u64,
@@ -180,6 +188,8 @@ fn main() {
         over: None,
         marked: None,
         levels: sheet::Levels::default(),
+        showing: schedule::Which::None,
+        schedule: None,
         notices: std::sync::Arc::new(notices::Notices::default()),
         brightness_at: 0,
         exit: false,
@@ -314,6 +324,22 @@ impl Sheet {
             // the band covers the margin; the frame's line is the compositor's to draw. Whole logical
             // pixels, rounded up so nothing of the paper shows through between the band and the frame.
             let thick = s.margin.ceil().max(1.0) as u32;
+            if band.side == Side::Schedule {
+                let (Some(what), Some(s)) = (self.schedule.as_ref(), self.screens.get(&band.screen)) else {
+                    band.layer.set_size(1, 1);
+                    band.layer.commit();
+                    continue;
+                };
+                let Some(at) = what.place(s) else {
+                    band.layer.set_size(1, 1);
+                    band.layer.commit();
+                    continue;
+                };
+                band.layer.set_size((at.width * s.mm).ceil().max(1.0) as u32, (at.height * s.mm).ceil().max(1.0) as u32);
+                band.layer.set_margin(at.y.round() as i32, 0, 0, at.x.round() as i32);
+                band.layer.commit();
+                continue;
+            }
             if band.side == Side::Title {
                 // the block sits in the frame's corner: the margin away from the display's edges, and as
                 // large as the compositor measured it
@@ -360,7 +386,13 @@ impl Sheet {
         };
         let mut canvas = paint::Canvas::new(canvas, pw, ph);
         let hover = self.over.as_ref().filter(|(o, _, _)| o == surface).map(|(_, x, y)| (*x, *y));
-        if side == Side::Title {
+        if side == Side::Schedule {
+            if let (Some(what), Some(face)) = (self.schedule.as_ref(), self.face.as_mut()) {
+                if let Some(at) = what.place(&s) {
+                    schedule::draw(&mut canvas, face, what, &at, &s, &self.theme, scale, None);
+                }
+            }
+        } else if side == Side::Title {
             self.letter_title(&mut canvas, &s, scale, hover);
         } else if self.face.is_some() {
             let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
@@ -498,12 +530,49 @@ impl Sheet {
         }
     }
 
+    /// The schedule the sheet carries, worked out again where the compositor says it has changed. It is
+    /// read fresh each time it is called up: a schedule is a note of how things stand, not a live meter.
+    fn reread_schedule(&mut self) {
+        let wanted = self.screens.values().map(|s| s.schedule.as_str()).find(|w| !w.is_empty()).unwrap_or("");
+        let which = schedule::Which::of(wanted);
+        if which == self.showing && self.schedule.is_some() == (which != schedule::Which::None) {
+            return;
+        }
+        self.showing = which;
+        let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
+        let displays: Vec<(String, String, String)> = self
+            .screens
+            .values()
+            .map(|s| {
+                (
+                    s.name.clone(),
+                    format!("{} × {} · scale {}", (s.width * s.scale).round(), (s.height * s.scale).round(), s.scale),
+                    format!("{:.1} px/mm · {:.1} logical px a mm", s.mm * s.scale, s.mm),
+                )
+            })
+            .collect();
+        let sheet_of = self
+            .screens
+            .values()
+            .next()
+            .map(|s| format!("{} · margin {} mm", self.theme.label, (s.margin / s.mm).round()))
+            .unwrap_or_default();
+        self.schedule = match which {
+            schedule::Which::None => None,
+            schedule::Which::Equipment => Some(schedule::equipment(&draftpaper::util::Paths::new(), &displays, &sheet_of)),
+            schedule::Which::Processes => Some(schedule::processes()),
+            schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
+        };
+    }
+
     /// The workspaces and the windows, read again: what the margins letter changes with them.
     fn reread_margins(&mut self, qh: &QueueHandle<Self>) {
         self.spaces = sheet::workspaces();
         let shown: Vec<u64> = self.screens.values().map(|s| s.workspace).collect();
         self.parked = shown.into_iter().flat_map(sheet::parked).collect();
         self.reread(qh);
+        self.reread_schedule();
+        self.lay_out();
         // the compositor hatches a parked cell, and breaks that hatching around what is lettered there
         if let Some(face) = self.face.as_mut() {
             for s in self.screens.values() {

@@ -63,6 +63,9 @@ pub struct Draftpaper {
     /// request, input, an IPC request, a display, the config, Xwayland, a signal, key repeat), not by a
     /// frame; after the turn the shell is told what changed (ipc_refresh) and the displays wake (tty::wake)
     pub touched: bool,
+    /// the schedule the sheet carries and the screen it is on, for the sheet's own client (ipc.rs)
+    pub schedule: String,
+    pub schedule_on: String,
     /// frames drawn with something changed, per output (`msg frames`: tests check an idle desktop draws none)
     pub frames: std::collections::HashMap<String, u64>,
     /// the lock object of the locker holding the lock (handlers/lock_idle.rs)
@@ -210,6 +213,8 @@ impl Draftpaper {
             screens_off: false,
             touched: true,
             frames: Default::default(),
+            schedule: String::new(),
+            schedule_on: String::new(),
             lock_holder: None,
             lock_surfaces: Default::default(),
             inhibitors: Vec::new(),

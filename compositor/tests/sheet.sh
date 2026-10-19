@@ -288,6 +288,23 @@ ok "and the sheet is still the client's" "$(layers)/$(blocks)" "4/1"
 run "$repo/cli/target/release/draftpaper" settings > /dev/null 2>&1
 sleep 3
 ok "closed, the settings go with their shell" "$(tool_layers)" "0"
+# the schedules: called up by name, taking turns, and away again
+sched() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg schedule "$1" > /dev/null 2>&1 || run "$repo/cli/target/release/draftpaper" schedule "$1" > /dev/null 2>&1; }
+layer_sched() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs 2>/dev/null | grep -c '"draftpaper-schedule"'; }
+run "$repo/cli/target/release/draftpaper" schedule equipment > /dev/null 2>&1
+sleep 2
+ok "the equipment schedule comes up" "$(layer_sched)" "1"
+mm=$(o 0 .px_per_mm); mg=$(o 0 .margin)
+shots 1
+tx=$(o 0 .title.rect.x); ty=$(o 0 .title.rect.y); fy=$(o 0 .frame.y); oy=$(o 0 .y)
+set -- $(awk -v a="$tx" -v b="$fy" -v c="$oy" -v mm="$mm" -v sc="1.5" 'BEGIN { printf "%d %d %d %d", a * sc + 2, (b - c + 7 * mm) * sc, (a + 300) * sc, (b - c + 40 * mm) * sc }')
+ok "and carries lettering in the title block's column" "$([ "$("$check" "$t/shot-headless.png" 1.5 "$mm" "$mg" ink "$1" "$2" "$3" "$4")" -gt 100 ] && echo lettered || echo bare)" "lettered"
+run "$repo/cli/target/release/draftpaper" schedule next > /dev/null 2>&1
+sleep 2
+ok "the next takes its place" "$(layer_sched)" "1"
+run "$repo/cli/target/release/draftpaper" schedule hide > /dev/null 2>&1
+sleep 2
+ok "and hide takes it away" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].schedule')" ""
 kill $started 2>/dev/null
 stop
 

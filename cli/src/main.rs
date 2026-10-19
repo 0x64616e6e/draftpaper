@@ -166,6 +166,12 @@ fn main() {
             if !["next", "equipment", "processes", "revisions", "hide"].contains(&which) {
                 util::die("draftpaper schedule next|equipment|processes|revisions|hide");
             }
+            // the sheet's own client has no socket: the compositor keeps which schedule is out, and
+            // every subscriber hears of it (compositor/src/ipc.rs)
+            if lettering(&p) == "client" {
+                let said = util::ask(&json!({ "request": "schedule", "which": which }).to_string());
+                std::process::exit(if said.is_some() { 0 } else { 1 });
+            }
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "schedules", which]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }

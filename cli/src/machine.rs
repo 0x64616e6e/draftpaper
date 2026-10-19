@@ -216,7 +216,8 @@ fn kernel() -> Option<String> {
     Some(format!("Linux {}.{}", parts.next()?, parts.next()?))
 }
 
-pub fn main(p: &crate::util::Paths) {
+/// Everything the equipment schedule letters.
+pub fn json(p: &crate::util::Paths) -> Value {
     let mut m = Map::new();
     let mut put = |k: &str, v: Option<Value>| {
         if let Some(v) = v {
@@ -235,7 +236,11 @@ pub fn main(p: &crate::util::Paths) {
     put("uptime_s", read("/proc/uptime").split_whitespace().next().and_then(|v| v.parse::<f64>().ok()).map(|v| json!(v.round())));
     put("draftpaper", Some(json!(env!("CARGO_PKG_VERSION"))));
     put("quickshell", quickshell(p).map(|v| json!(v)));
-    println!("{}", util::dumps(&Value::Object(m)));
+    Value::Object(m)
+}
+
+pub fn main(p: &crate::util::Paths) {
+    println!("{}", util::dumps(&json(p)));
 }
 
 #[cfg(test)]

@@ -259,6 +259,23 @@ impl Draftpaper {
                 let p = self.seat.get_pointer().map(|p| p.current_location()).unwrap_or_default();
                 Ok(json!({ "x": p.x, "y": p.y }))
             }
+            // which schedule the sheet carries, for the sheet's own client (sheet/, docs/sheet-client.md),
+            // which has no socket of its own: the compositor keeps it, as it keeps the rest of the sheet,
+            // and every subscriber hears of it. "next" takes the one after this.
+            "schedule" => {
+                let which = request.get("which").and_then(Value::as_str).unwrap_or("");
+                const ORDER: [&str; 4] = ["", "equipment", "processes", "revisions"];
+                self.schedule = match which {
+                    "next" => {
+                        let i = ORDER.iter().position(|w| *w == self.schedule).unwrap_or(0);
+                        ORDER[(i + 1) % ORDER.len()].to_string()
+                    }
+                    other => ORDER.iter().find(|w| **w == other).unwrap_or(&"").to_string(),
+                };
+                self.schedule_on = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();
+                self.touched = true;
+                Ok(json!(self.schedule))
+            }
             "sheet" => {
                 // the shell's merged cells: {"output": NAME, "merged": {"top": [[FROM, TO], ...], ...}},
                 // zone ranges counted from the frame's corner; the ticks inside each are not drawn
@@ -378,6 +395,8 @@ impl Draftpaper {
                             json!({ "zone": r(p.zone), "mark": r(p.arrow), "towards": towards })
                         }),
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
+                        // the schedule the sheet carries, where it is this screen's
+                        "schedule": if self.schedule_on == s.output.name() { self.schedule.clone() } else { String::new() },
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
                 })

@@ -274,3 +274,18 @@ mod tests {
         assert_eq!(dumps_indent(&v, 1), "{\n \"a\": [\n  1,\n  2.0,\n  \"x\\u00b0\"\n ],\n \"b\": {}\n}");
     }
 }
+
+/// One request on the compositor's socket, and its reply; None where it cannot be reached. The sheet's
+/// own client has no socket of its own, so what it is to carry is kept by the compositor (sheet/).
+pub fn ask(request: &str) -> Option<String> {
+    use std::io::{BufRead, BufReader, Write};
+    let path = std::env::var_os("DRAFTPAPER_SOCKET")?;
+    let mut socket = std::os::unix::net::UnixStream::connect(path).ok()?;
+    let timeout = Some(std::time::Duration::from_secs(2));
+    socket.set_read_timeout(timeout).ok()?;
+    socket.set_write_timeout(timeout).ok()?;
+    socket.write_all(format!("{request}\n").as_bytes()).ok()?;
+    let mut line = String::new();
+    BufReader::new(socket).read_line(&mut line).ok()?;
+    (!line.trim().is_empty()).then_some(line)
+}

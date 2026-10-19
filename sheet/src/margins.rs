@@ -88,7 +88,7 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 let waiting = if told.notices.len() > 1 { format!("+{}", told.notices.len() - 1) } else { String::new() };
                 let counted = if waiting.is_empty() { 0.0 } else { face.width(&waiting, px * 0.8, 0.0) + pad };
                 let room = ((end - start) * scale) as f32 - 2.0 * pad - counted;
-                let line = cut(face, text, px, room);
+                let line = fit(face, text, px, room);
                 let at = (band.here(start) * scale) as f32 + pad;
                 face.draw(canvas, at, middle(&band, scale, face, px), &line, px, 0.0, ink.premultiplied());
                 if !waiting.is_empty() {
@@ -158,14 +158,14 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 // the title runs up the middle of the cell, clear of the letter at its head
                 let Some((_, title, _)) = parked.iter().find(|(c, _, _)| *c == first + k as usize) else { continue };
                 let room = ((end - start) - 9.0 * s.mm) * scale;
-                let text = cut(face, title, px, room as f32);
+                let text = fit(face, title, px, room as f32);
                 let length = face.width(&text, px, 0.0);
                 let middle_of_cell = (band.here(start + (end - start) / 2.0 + 2.0 * s.mm) * scale) as f32;
                 let foot = middle_of_cell + length / 2.0;
                 face.draw_up(canvas, (band.thick * scale) as f32 / 2.0 + px * 0.4, foot, &text, px, 0.0, ink.premultiplied());
             }
         }
-        Side::Title => {}
+        Side::Title | Side::Schedule => {}
     }
     let _ = workspace;
 }
@@ -288,7 +288,7 @@ fn figures(canvas: &mut Canvas, face: &mut Face, s: &Screen, scale: f64, px: f32
 }
 
 /// A title cut to the room it has, with an ellipsis where it is cut, as the shell elided it.
-fn cut(face: &mut Face, text: &str, px: f32, room: f32) -> String {
+pub fn fit(face: &mut Face, text: &str, px: f32, room: f32) -> String {
     if face.width(text, px, 0.0) <= room {
         return text.to_string();
     }

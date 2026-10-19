@@ -38,6 +38,8 @@ pub struct Screen {
     pub parking: Vec<(f64, f64, f64, f64)>,
     /// the scale bar's rules and the rows left above them for its figures
     pub bar: Option<Bar>,
+    /// the schedule this screen carries, as the compositor keeps it ("" for none)
+    pub schedule: String,
 }
 
 /// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
@@ -96,6 +98,7 @@ pub fn screens() -> Vec<Screen> {
                     .map(|a| a.iter().filter_map(|r| Some((r.get("x")?.as_f64()?, r.get("y")?.as_f64()?, r.get("width")?.as_f64()?, r.get("height")?.as_f64()?))).collect())
                     .unwrap_or_default(),
                 bar: bar(o.get("scale_bar"), n("x")?, n("y")?),
+                schedule: o.get("schedule").and_then(Value::as_str).unwrap_or("").to_string(),
             })
         })
         .collect()
@@ -313,7 +316,7 @@ mod tests {
     use super::*;
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new() }
     }
 
     #[test]

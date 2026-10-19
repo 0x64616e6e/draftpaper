@@ -31,14 +31,17 @@ use crate::util;
 const SHELLS: &[&str] = &["bash", "zsh", "fish", "sh", "dash", "ksh", "mksh", "tcsh", "nu", "elvish", "xonsh"];
 const ROWS: usize = 30;
 
-pub fn main(p: &util::Paths) {
-    // nothing focused (every window parked, an empty workspace): said so, and the shell keeps showing the
-    // repository last worked in
+/// What the revision schedule letters; `{"focused": false}` with nothing focused, so whatever is on the
+/// sheet stays there.
+pub fn json(p: &util::Paths) -> Value {
     if focused_pid().is_none() {
-        println!("{{\"focused\":false}}");
-        return;
+        return json!({ "focused": false });
     }
-    println!("{}", util::dumps(&revisions(p).unwrap_or_else(|| json!({}))));
+    revisions(p).unwrap_or_else(|| json!({}))
+}
+
+pub fn main(p: &util::Paths) {
+    println!("{}", util::dumps(&json(p)));
 }
 
 fn revisions(p: &util::Paths) -> Option<Value> {
