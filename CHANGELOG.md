@@ -5,6 +5,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- A schedule's and the graph's window is made when it is called up and let go 20 s after it goes: each is
+  a window of its own with its scene graph and drawing context, some 25 MB a screen, and a sheet whose
+  schedules are never called up pays nothing for them (the shell: about 20 MB less in use).
 - An idle desktop costs almost nothing: the compositor drew again every refresh whether anything had
   changed or not (and rebuilt what it tells the shell after each), about 5% of a core and the GPU woken 60
   times a second with nothing moving. It now draws when something may have changed (a client, input, the

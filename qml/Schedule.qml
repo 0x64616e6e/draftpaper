@@ -138,157 +138,168 @@ Item {
     function ix(u) { return Math.round((x0 + u * mm) * dpr) / dpr - sx }
     function iy(v) { return Math.round((y0 + v * mm) * dpr) / dpr - sy }
 
-    PanelWindow {
-        screen: sched.edge.screen
-        visible: sched.fade > 0
-        anchors { top: true; left: true }
-        margins { top: sched.sy; left: sched.sx }
-        implicitWidth: Math.ceil(sched.ix(sched.wMm)) + 1
-        implicitHeight: Math.max(1, Math.ceil(sched.iy(sched.hMm)) + 1)
-        exclusionMode: ExclusionMode.Ignore
-        aboveWindows: false
-        focusable: false
-        color: "transparent"
-        WlrLayershell.namespace: "draftpaper-schedule"
+    // its window is made when it is called up, and let go a while after it goes: a window of its own, with
+    // its scene graph and its drawing context, is some 25 MB a screen, held for nothing while it is away
+    property bool windowUp: false
+    onShownChanged: { if (shown) { windowUp = true; drop.stop() } else drop.restart() }
+    Timer { id: drop; interval: 20000; onTriggered: sched.windowUp = false }
 
-        Item {
-            anchors.fill: parent
-            opacity: sched.fade
+    LazyLoader {
+        active: sched.windowUp
+        component: Component {
+            PanelWindow {
+                screen: sched.edge.screen
+                visible: sched.fade > 0
+                anchors { top: true; left: true }
+                margins { top: sched.sy; left: sched.sx }
+                implicitWidth: Math.ceil(sched.ix(sched.wMm)) + 1
+                implicitHeight: Math.max(1, Math.ceil(sched.iy(sched.hMm)) + 1)
+                exclusionMode: ExclusionMode.Ignore
+                aboveWindows: false
+                focusable: false
+                color: "transparent"
+                WlrLayershell.namespace: "draftpaper-schedule"
 
-            Rectangle {     // over a wallpaper: the paper under it, to be read
-                x: sched.ix(0); y: sched.iy(0); width: sched.ix(sched.wMm) - x; height: sched.iy(sched.hMm) - y
-                visible: sched.theme.pictured
-                color: Qt.rgba(sched.theme.paper.r, sched.theme.paper.g, sched.theme.paper.b, Math.max(0.8, sched.theme.titleTint))
-            }
-            // the heading: what it is, and of what
-            Text {
-                x: sched.ix(sched.pad); y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
-                verticalAlignment: Text.AlignVCenter
-                text: sched.title
-                font.family: Fonts.mono; font.pixelSize: 2.8 * sched.mm; font.bold: true; font.letterSpacing: 0.25 * sched.mm
-                color: sched.ink
-            }
-            Text {
-                x: sched.ix(sched.wMm - sched.pad) - width; y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
-                verticalAlignment: Text.AlignVCenter
-                text: sched.meta
-                font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
-                color: sched.faint
-            }
-            Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink }
-            // the columns' heads
-            Repeater {
-                model: sched.columns.length
-                Text {
-                    required property int index
-                    readonly property var c: sched.columns[index]
-                    x: c.right ? sched.ix(sched.colX[index] + sched.colW(index) - 1.6) - width : sched.ix(sched.colX[index] + (index === 0 ? sched.pad : 1.6))
-                    y: sched.iy(sched.headMm); height: sched.iy(sched.headMm + 5) - y
-                    verticalAlignment: Text.AlignVCenter
-                    text: c.name
-                    font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
-                    color: sched.faint
-                }
-            }
-            Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm + 5); width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.ink }
-            Repeater {
-                model: sched.laid
                 Item {
-                    id: line
-                    required property var modelData
-                    readonly property var row: modelData.row
-                    // a row that does something (its `action`): a faint tint under the pointer, as the title block's cells
-                    Rectangle {
-                        visible: !!line.row.action && sched.hoverRow === line.row
-                        x: sched.ix(0); y: sched.iy(line.modelData.yMm); width: sched.ix(sched.wMm) - x; height: sched.iy(line.modelData.yMm + line.modelData.hMm) - y
-                        color: Qt.rgba(sched.ink.r, sched.ink.g, sched.ink.b, 0.07)
+                    anchors.fill: parent
+                    opacity: sched.fade
+
+                    Rectangle {     // over a wallpaper: the paper under it, to be read
+                        x: sched.ix(0); y: sched.iy(0); width: sched.ix(sched.wMm) - x; height: sched.iy(sched.hMm) - y
+                        visible: sched.theme.pictured
+                        color: Qt.rgba(sched.theme.paper.r, sched.theme.paper.g, sched.theme.paper.b, Math.max(0.8, sched.theme.titleTint))
                     }
-                    // the rule under it (none under the last: no outline); a heavier one above a group
-                    Rectangle {
-                        visible: line.modelData !== sched.laid[sched.laid.length - 1]
-                        x: sched.ix(0); y: sched.iy(line.modelData.yMm + line.modelData.hMm)
-                        width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.rule
+                    // the heading: what it is, and of what
+                    Text {
+                        x: sched.ix(sched.pad); y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
+                        verticalAlignment: Text.AlignVCenter
+                        text: sched.title
+                        font.family: Fonts.mono; font.pixelSize: 2.8 * sched.mm; font.bold: true; font.letterSpacing: 0.25 * sched.mm
+                        color: sched.ink
                     }
-                    Rectangle {
-                        visible: !!line.row.heavyAbove
-                        x: sched.ix(0); y: sched.iy(line.modelData.yMm); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink
+                    Text {
+                        x: sched.ix(sched.wMm - sched.pad) - width; y: sched.iy(sched.headMm - 7); height: sched.iy(sched.headMm) - y
+                        verticalAlignment: Text.AlignVCenter
+                        text: sched.meta
+                        font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
+                        color: sched.faint
                     }
+                    Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink }
+                    // the columns' heads
                     Repeater {
                         model: sched.columns.length
-                        Item {
-                            id: cell
+                        Text {
                             required property int index
                             readonly property var c: sched.columns[index]
-                            readonly property real fromMm: sched.colX[index] + (index === 0 ? sched.pad : 1.6)
-                            readonly property real toMm: sched.colX[index] + sched.colW(index) - 1.6
-                            readonly property bool bar: index === sched.barCol && line.row.share !== undefined
-                            Text {
-                                x: cell.c.right ? sched.ix(cell.toMm) - width : sched.ix(cell.fromMm)
-                                y: sched.iy(line.modelData.yMm + 1.4)
-                                width: cell.c.right ? implicitWidth : sched.ix(cell.toMm) - sched.ix(cell.fromMm)
-                                text: line.row.cells[cell.index] || ""
-                                elide: cell.c.right ? Text.ElideNone : Text.ElideRight
-                                font.family: Fonts.mono; font.pixelSize: (cell.index === 0 ? 2.5 : 2.6) * sched.mm; font.bold: cell.index === 0
-                                color: cell.bar && line.row.share >= sched.alertAt ? sched.theme.alert : sched.ink
-                            }
-                            // the share as a bar ruled to the millimetre, 10 mm long, before the figure
+                            x: c.right ? sched.ix(sched.colX[index] + sched.colW(index) - 1.6) - width : sched.ix(sched.colX[index] + (index === 0 ? sched.pad : 1.6))
+                            y: sched.iy(sched.headMm); height: sched.iy(sched.headMm + 5) - y
+                            verticalAlignment: Text.AlignVCenter
+                            text: c.name
+                            font.family: Fonts.mono; font.pixelSize: 2.0 * sched.mm; font.letterSpacing: 0.3 * sched.mm
+                            color: sched.faint
+                        }
+                    }
+                    Rectangle { x: sched.ix(0); y: sched.iy(sched.headMm + 5); width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.ink }
+                    Repeater {
+                        model: sched.laid
+                        Item {
+                            id: line
+                            required property var modelData
+                            readonly property var row: modelData.row
+                            // a row that does something (its `action`): a faint tint under the pointer, as the title block's cells
                             Rectangle {
-                                visible: cell.bar
-                                x: sched.ix(cell.fromMm); y: sched.iy(line.modelData.yMm + 2); width: sched.ix(cell.fromMm + 10) - x; height: sched.iy(line.modelData.yMm + 4) - y
-                                color: "transparent"; border.width: sched.hair; border.color: sched.rule
-                                Rectangle {
-                                    width: parent.width * Math.max(0, Math.min(1, line.row.share || 0)); height: parent.height
-                                    color: (line.row.share || 0) >= sched.alertAt ? sched.theme.alert : sched.ink
-                                }
+                                visible: !!line.row.action && sched.hoverRow === line.row
+                                x: sched.ix(0); y: sched.iy(line.modelData.yMm); width: sched.ix(sched.wMm) - x; height: sched.iy(line.modelData.yMm + line.modelData.hMm) - y
+                                color: Qt.rgba(sched.ink.r, sched.ink.g, sched.ink.b, 0.07)
                             }
-                            Text {
-                                visible: cell.index === sched.noteCol && !!line.row.note
-                                x: sched.ix(cell.fromMm); y: sched.iy(line.modelData.yMm + 5); width: sched.ix(cell.toMm) - x
-                                text: line.row.note || ""
-                                elide: Text.ElideRight
-                                font.family: Fonts.mono; font.pixelSize: 2.1 * sched.mm
-                                color: sched.faint
+                            // the rule under it (none under the last: no outline); a heavier one above a group
+                            Rectangle {
+                                visible: line.modelData !== sched.laid[sched.laid.length - 1]
+                                x: sched.ix(0); y: sched.iy(line.modelData.yMm + line.modelData.hMm)
+                                width: sched.ix(sched.wMm) - x; height: sched.hair; color: sched.rule
+                            }
+                            Rectangle {
+                                visible: !!line.row.heavyAbove
+                                x: sched.ix(0); y: sched.iy(line.modelData.yMm); width: sched.ix(sched.wMm) - x; height: sched.heavy; color: sched.ink
+                            }
+                            Repeater {
+                                model: sched.columns.length
+                                Item {
+                                    id: cell
+                                    required property int index
+                                    readonly property var c: sched.columns[index]
+                                    readonly property real fromMm: sched.colX[index] + (index === 0 ? sched.pad : 1.6)
+                                    readonly property real toMm: sched.colX[index] + sched.colW(index) - 1.6
+                                    readonly property bool bar: index === sched.barCol && line.row.share !== undefined
+                                    Text {
+                                        x: cell.c.right ? sched.ix(cell.toMm) - width : sched.ix(cell.fromMm)
+                                        y: sched.iy(line.modelData.yMm + 1.4)
+                                        width: cell.c.right ? implicitWidth : sched.ix(cell.toMm) - sched.ix(cell.fromMm)
+                                        text: line.row.cells[cell.index] || ""
+                                        elide: cell.c.right ? Text.ElideNone : Text.ElideRight
+                                        font.family: Fonts.mono; font.pixelSize: (cell.index === 0 ? 2.5 : 2.6) * sched.mm; font.bold: cell.index === 0
+                                        color: cell.bar && line.row.share >= sched.alertAt ? sched.theme.alert : sched.ink
+                                    }
+                                    // the share as a bar ruled to the millimetre, 10 mm long, before the figure
+                                    Rectangle {
+                                        visible: cell.bar
+                                        x: sched.ix(cell.fromMm); y: sched.iy(line.modelData.yMm + 2); width: sched.ix(cell.fromMm + 10) - x; height: sched.iy(line.modelData.yMm + 4) - y
+                                        color: "transparent"; border.width: sched.hair; border.color: sched.rule
+                                        Rectangle {
+                                            width: parent.width * Math.max(0, Math.min(1, line.row.share || 0)); height: parent.height
+                                            color: (line.row.share || 0) >= sched.alertAt ? sched.theme.alert : sched.ink
+                                        }
+                                    }
+                                    Text {
+                                        visible: cell.index === sched.noteCol && !!line.row.note
+                                        x: sched.ix(cell.fromMm); y: sched.iy(line.modelData.yMm + 5); width: sched.ix(cell.toMm) - x
+                                        text: line.row.note || ""
+                                        elide: Text.ElideRight
+                                        font.family: Fonts.mono; font.pixelSize: 2.1 * sched.mm
+                                        color: sched.faint
+                                    }
+                                }
                             }
                         }
                     }
+                    // the columns' rules, between them only, from the heads down
+                    Repeater {
+                        model: Math.max(0, sched.columns.length - 1)
+                        Rectangle {
+                            required property int index
+                            x: sched.ix(sched.colX[index + 1]); y: sched.iy(sched.headMm); width: sched.hair; height: sched.iy(sched.hMm) - y; color: sched.rule
+                        }
+                    }
                 }
-            }
-            // the columns' rules, between them only, from the heads down
-            Repeater {
-                model: Math.max(0, sched.columns.length - 1)
-                Rectangle {
-                    required property int index
-                    x: sched.ix(sched.colX[index + 1]); y: sched.iy(sched.headMm); width: sched.hair; height: sched.iy(sched.hMm) - y; color: sched.rule
-                }
-            }
-        }
 
-        // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release; a row with an
-        // action clicked (pressed and let go without moving it) does that
-        MouseArea {
-            anchors.fill: parent
-            enabled: sched.shown
-            hoverEnabled: true
-            cursorShape: pressed ? Qt.ClosedHandCursor : sched.hoverRow ? Qt.PointingHandCursor : Qt.OpenHandCursor
-            onExited: sched.hoverRow = null
-            property point from
-            property var start: null
-            property bool moved: false
-            onPressed: e => { from = mapToGlobal(e.x, e.y); moved = false; start = { x: Math.round(sched.xMm), y: Math.round(sched.yMm) }; keep.stop(); sched.dragged = start }
-            onPositionChanged: e => {
-                if (!pressed || !start) { sched.hoverRow = sched.rowAt(e.y); return }
-                const p = mapToGlobal(e.x, e.y)
-                if (Math.abs(p.x - from.x) + Math.abs(p.y - from.y) > 0.5 * sched.mm) moved = true
-                const x = start.x + Math.round((p.x - from.x) / sched.mm), y = start.y + Math.round((p.y - from.y) / sched.mm)
-                if (sched.clear(x, y)) sched.dragged = { x: x, y: y }
+                // dragged a whole millimetre at a time to a clear place; config.toml keeps it on release; a row with an
+                // action clicked (pressed and let go without moving it) does that
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: sched.shown
+                    hoverEnabled: true
+                    cursorShape: pressed ? Qt.ClosedHandCursor : sched.hoverRow ? Qt.PointingHandCursor : Qt.OpenHandCursor
+                    onExited: sched.hoverRow = null
+                    property point from
+                    property var start: null
+                    property bool moved: false
+                    onPressed: e => { from = mapToGlobal(e.x, e.y); moved = false; start = { x: Math.round(sched.xMm), y: Math.round(sched.yMm) }; keep.stop(); sched.dragged = start }
+                    onPositionChanged: e => {
+                        if (!pressed || !start) { sched.hoverRow = sched.rowAt(e.y); return }
+                        const p = mapToGlobal(e.x, e.y)
+                        if (Math.abs(p.x - from.x) + Math.abs(p.y - from.y) > 0.5 * sched.mm) moved = true
+                        const x = start.x + Math.round((p.x - from.x) / sched.mm), y = start.y + Math.round((p.y - from.y) / sched.mm)
+                        if (sched.clear(x, y)) sched.dragged = { x: x, y: y }
+                    }
+                    onReleased: {
+                        const d = sched.dragged
+                        if (d && start && (d.x !== start.x || d.y !== start.y)) sched.shell.setConfig(["sheet.schedule_at=[" + d.x + ", " + d.y + "]"])
+                        keep.restart()
+                    }
+                    onClicked: e => { const r = sched.rowAt(e.y); if (r && !moved) r.action() }
+                }
+                Timer { id: keep; interval: 1500; onTriggered: sched.dragged = null }
             }
-            onReleased: {
-                const d = sched.dragged
-                if (d && start && (d.x !== start.x || d.y !== start.y)) sched.shell.setConfig(["sheet.schedule_at=[" + d.x + ", " + d.y + "]"])
-                keep.restart()
-            }
-            onClicked: e => { const r = sched.rowAt(e.y); if (r && !moved) r.action() }
         }
-        Timer { id: keep; interval: 1500; onTriggered: sched.dragged = null }
     }
 }
