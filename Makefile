@@ -6,11 +6,13 @@ CARGO ?= cargo
 QSB ?= /usr/lib/qt6/bin/qsb
 COMPOSITOR = compositor/target/release/draftpaper-compositor
 CLI = cli/target/release/draftpaper
+# the sheet's own client (docs/sheet-client.md): built and tested, not installed until it letters the sheet
+SHEET = sheet/target/release/draftpaper-sheet
 SHADERS = qml/board.frag.qsb
 
 all: build
 
-build: $(COMPOSITOR) $(CLI) $(SHADERS)
+build: $(COMPOSITOR) $(CLI) $(SHEET) $(SHADERS)
 
 # the shell's shaders (the theme picker's board), for every graphics API Qt may use
 %.frag.qsb: %.frag
@@ -18,12 +20,15 @@ build: $(COMPOSITOR) $(CLI) $(SHADERS)
 
 # the programs: always handed to cargo, which rebuilds what changed and does nothing otherwise (as plain file
 # targets they were never rebuilt once there, and `make pixels` could test a stale build)
-.PHONY: $(COMPOSITOR) $(CLI)
+.PHONY: $(COMPOSITOR) $(CLI) $(SHEET)
 $(COMPOSITOR):
 	cd compositor && $(CARGO) build --release --locked
 
 $(CLI):
 	cd cli && $(CARGO) build --release --locked
+
+$(SHEET):
+	cd sheet && $(CARGO) build --release --locked
 
 install: $(COMPOSITOR) $(CLI) $(SHADERS)
 	# the programs
@@ -60,7 +65,7 @@ check: $(CLI)
 # a PAM service of the test's own, and a session saved and restored (compositor/tests/pixels.sh,
 # zones.sh, launcher.sh, scale.sh, revisions.sh, hatch.sh, keyplan.sh, rulers.sh, greeter.sh, lock.sh,
 # session.sh)
-pixels: $(COMPOSITOR) $(CLI)
+pixels: $(COMPOSITOR) $(CLI) $(SHEET)
 	cd compositor && $(CARGO) build --release --locked --example sheetcheck --example fakegreetd --example gammaset --example iccwarm
 	compositor/tests/pixels.sh
 	compositor/tests/zones.sh
@@ -80,6 +85,7 @@ pixels: $(COMPOSITOR) $(CLI)
 	compositor/tests/lock.sh
 	compositor/tests/session.sh
 	compositor/tests/idle.sh
+	compositor/tests/sheet.sh
 
 # the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
 screenshots: $(COMPOSITOR) $(CLI)

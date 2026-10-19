@@ -1,6 +1,6 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: proposed, 2026-10-19. Nothing of this is built. Measured against 0.7.4.
+Status: stage 0 built, 2026-10-19; the rest proposed. Measured against 0.7.4.
 
 ## Why
 
@@ -134,9 +134,16 @@ not discovered halfway.
 Each stage ends with something that runs and is tested. The client is a new crate, `sheet/`, in the
 workspace.
 
-0. **A surface and nothing on it.** Layer shell, one transparent surface per margin per display, placed
-   from the compositor's geometry, reconfigured when displays change. Verified with
-   `draftpaper-compositor msg outputs`: the layers are listed where the shell's were.
+0. **A surface and nothing on it.** *(done)* Layer shell, one surface per margin per display, placed from
+   the compositor's geometry and laid out again when the displays change. Each margin carries one rule a
+   physical pixel wide, 50 mm from the frame's corner, and `compositor/tests/sheet.sh` (part of `make
+   pixels`) measures it at scales 1, 1.25, 1.5, 1.75 and 2, and on two displays of different densities.
+   Fractional scale is handled as planned: the buffer is in physical pixels and a `wp_viewport` maps it to
+   the logical size, so the rule is one pixel wide and on its pixel at 1.25 and 1.75 as much as at 1.
+   Two displays, one of them 4K: **1 MB of memory, one thread, no measurable CPU**, an 836 KB binary —
+   against the shell's 204 MB and 69 threads for the same two. Nothing is lettered yet, so this is the
+   floor rather than the finished cost, but the per-window drawing contexts that the 40 MB a display went
+   on are simply not there.
 1. **Text, and the title block.** Font loading from the theme, a glyph cache, the twelve cells lettered
    from `readings` in process. Verified against `make pixels`, which already checks the title block's
    lettering and its edges at five scales.

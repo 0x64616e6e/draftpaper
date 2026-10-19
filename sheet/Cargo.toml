@@ -1,0 +1,22 @@
+[package]
+name = "draftpaper-sheet"
+version = "0.7.5"
+edition = "2021"
+description = "Draftpaper's sheet: the margins and the title block, drawn on the processor"
+license = "MIT"
+
+[[bin]]
+name = "draftpaper-sheet"
+path = "src/main.rs"
+
+[dependencies]
+smithay-client-toolkit = "0.21"
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

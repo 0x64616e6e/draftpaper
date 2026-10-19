@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- The sheet's own client begins (`sheet/`, docs/sheet-client.md stage 0): a Wayland client in Rust that
+  puts a layer surface on each of the sheet's four margins on every display, drawn on the processor into
+  shared memory with no drawing context on the GPU. Nothing is lettered yet; each margin carries one rule
+  a physical pixel wide, which `make pixels` measures at five scales and on two displays, because taking
+  fractional scale for granted is what would sink the whole idea. It is built and tested, not installed.
 - The revisions ask git only when the repository's head has moved. The shell polls them every four
   seconds while they are up, and each poll ran git twice; the repository is now found by walking up for
   `.git`, its head read from `.git` itself, and the last rows kept beside the theme until that head
