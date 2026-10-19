@@ -485,18 +485,23 @@ impl Sheet {
             // the label
             let label_px = 2.2 * mm;
             face.draw(canvas, x + 2.0 * mm, y + 1.2 * mm + face.ascent(label_px), cell.label, label_px, 0.3 * mm, faint.premultiplied());
-            // the reading: the tall cell (the clock) letters it large, the rest at reading size
+            // the reading: the clock letters it large, every other cell at the one reading size that
+            // holds the block together — not at whatever its measured height would allow
             if cell.value.is_empty() {
                 continue;
             }
-            let mut px = if at.3 / s.mm > 12.0 { 9.0 * mm } else { 3.6 * mm };
+            let mut px = if cell.large { 9.0 * mm } else { 3.6 * mm };
             let room = w - 4.0 * mm;
             let least = 2.4 * mm;
             while px > least && face.width(&cell.value, px, 0.0) > room {
                 px -= 0.2 * mm;
             }
             let colour = if cell.alert { alert } else { ink };
-            face.draw(canvas, x + 2.0 * mm, y + h - 1.6 * mm, &cell.value, px.max(least), 0.0, colour.premultiplied());
+            // 1.6 mm above the cell's foot is where the shell's text *box* ends, so the baseline stands
+            // its descent above that — otherwise the clock, whose descent is a couple of millimetres,
+            // sits visibly lower than the shell set it
+            let px = px.max(least);
+            face.draw(canvas, x + 2.0 * mm, y + h - 1.6 * mm - face.descent(px), &cell.value, px, 0.0, colour.premultiplied());
         }
     }
 

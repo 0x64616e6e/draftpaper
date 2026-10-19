@@ -77,10 +77,10 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 let at = band.here(start + (i as f64 + 0.5) * slot);
                 let text = number.to_string();
                 let w = face.width(&text, px, 0.0);
-                let colour = if *focused { ink } else { soft };
+                // the one in use is lit in whatever the theme lights things with, as the shell lights it
+                let colour = if *focused { theme.strong } else { soft };
                 face.draw(canvas, (at * scale) as f32 - w / 2.0, middle(&band, scale, face, px), &text, px, 0.0, colour.premultiplied());
             }
-            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2));
             // the newest notification, in the zone before the last, with how many wait behind it
             if let Some(text) = told.notices.last() {
                 let (start, end) = band.zone(band.zones.saturating_sub(2));
@@ -122,6 +122,11 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                     at = face.draw(canvas, at, middle(&band, scale, face, px), text, px, 0.0, colour.premultiplied()) + gap;
                 }
             }
+            // the columns' numbers, in every zone past the workspaces' that nothing else has taken
+            // (qml/ZoneNumbers.qml): a sheet with nothing to say carries them to the frame's corner
+            let notice = told.notices.is_empty().then_some(band.zones).unwrap_or(band.zones.saturating_sub(2));
+            let status = if row.is_empty() { band.zones } else { band.zones.saturating_sub(1) };
+            numbers(canvas, face, &band, scale, px, soft, 1, band.zones, |k| k == notice || k == status);
         }
         Side::Bottom => {
             // Bluetooth in the first zone, as the shell letters it
@@ -129,7 +134,7 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             let bt = if told.bluetooth.is_empty() { "BT -".to_string() } else { format!("BT {}", told.bluetooth.join(", ")) };
             face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
             // the figures over the scale bar's rules, and the theme's name in the last zone
-            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2));
+            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), |_| false);
             figures(canvas, face, s, scale, px, soft);
             let (start, _) = band.zone(band.zones.saturating_sub(1));
             let name = theme.label.to_uppercase();
@@ -254,8 +259,8 @@ fn middle(band: &Band, scale: f64, face: &Face, px: f32) -> f32 {
 }
 
 /// The columns numbered from the left, one in the middle of every zone between `from` and `to`.
-fn numbers(canvas: &mut Canvas, face: &mut Face, band: &Band, scale: f64, px: f32, ink: crate::paint::Ink, from: u32, to: u32) {
-    for k in from..to {
+fn numbers(canvas: &mut Canvas, face: &mut Face, band: &Band, scale: f64, px: f32, ink: crate::paint::Ink, from: u32, to: u32, taken: impl Fn(u32) -> bool) {
+    for k in (from..to).filter(|k| !taken(*k)) {
         let (start, end) = band.zone(k);
         let text = (k + 1).to_string();
         let w = face.width(&text, px * 0.8, 0.0);

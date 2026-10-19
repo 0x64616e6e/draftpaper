@@ -204,6 +204,8 @@ pub struct Theme {
     pub label: String,
     /// the accent, for the mark under the pointer
     pub accent: Ink,
+    /// what the theme lights: the workspace in use along the top margin (qml/shell.qml's `strong`)
+    pub strong: Ink,
     /// the paper, for the lettering a drawing breaks its lines to make room for
     pub paper: Ink,
     /// how strongly the theme sets ink on paper: what is lettered is lettered in full, and only the
@@ -231,6 +233,7 @@ impl Theme {
             drawn: s("title", "drawn"),
             label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
             accent: Ink::parse(v.get("accent").and_then(Value::as_str).unwrap_or("#b4701a"), 1.0),
+            strong: Ink::parse(v.get("strong").and_then(Value::as_str).or_else(|| v.get("accent").and_then(Value::as_str)).unwrap_or("#b4701a"), 1.0),
             paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),
             ink_alpha: alpha,
         }

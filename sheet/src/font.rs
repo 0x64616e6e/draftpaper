@@ -93,6 +93,12 @@ impl Face {
         self.read.first().and_then(|f| f.horizontal_line_metrics(px)).map(|m| m.ascent).unwrap_or(px * 0.8)
     }
 
+    /// How far the line reaches below the baseline. Qt sets a block of text by its box, not its
+    /// baseline, so a reading anchored to the foot of a cell stands this much above it.
+    pub fn descent(&self, px: f32) -> f32 {
+        self.read.first().and_then(|f| f.horizontal_line_metrics(px)).map(|m| -m.descent).unwrap_or(px * 0.2)
+    }
+
     /// Letter `text` with its baseline at `y`, starting at `x`, in `colour` (which carries its own
     /// alpha). Returns where the pen ended.
     pub fn draw(&mut self, canvas: &mut Canvas, x: f32, y: f32, text: &str, px: f32, spacing: f32, colour: u32) -> f32 {

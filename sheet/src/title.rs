@@ -15,22 +15,27 @@ pub struct Cell {
     pub value: String,
     /// read beyond what the theme calls alarming: lettered in the alert ink
     pub alert: bool,
+    /// the clock, and only the clock: lettered large. The shell decides this from the cell's height in
+    /// the table it lays the block out from (qml/TitleBlock.qml), which is 24 mm for the clock and 12 mm
+    /// for every other cell — not from the height the cell is measured at, which the block's own
+    /// proportions stretch past 12 mm for the top row as well.
+    pub large: bool,
 }
 
 /// The twelve cells, in the order the compositor measured them.
 pub fn cells(theme: &crate::sheet::Theme, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>) -> Vec<Cell> {
-    let cell = |label, value: String| Cell { label, value, alert: false };
+    let cell = |label, value: String| Cell { label, value, alert: false, large: false };
     let (date, time) = clock(now);
     let text = |v: Option<&Value>| v.and_then(Value::as_str).unwrap_or("-").to_string();
     let temps = r.get("temps").and_then(Value::as_array).cloned().unwrap_or_default();
     let named = |which: &str| temps.iter().find(|t| t.get("label").and_then(Value::as_str) == Some(which)).map(|t| text(t.get("value")));
     vec![
-        cell("TIME", time),
+        Cell { label: "TIME", value: time, alert: false, large: true },
         cell("DATE", date),
         cell("SHEET", workspace.to_string()),
         cell("PROJECT", theme.project.to_uppercase()),
         cell("POWER", power(&r)),
-        Cell { label: "BATTERY", value: battery(&r), alert: r.get("battery_low").and_then(Value::as_bool).unwrap_or(false) },
+        Cell { label: "BATTERY", value: battery(&r), alert: r.get("battery_low").and_then(Value::as_bool).unwrap_or(false), large: false },
         cell("PROFILE", text(r.get("profile")).to_lowercase()),
         cell("CPU / MEMORY", {
             let pct = |v: Option<f64>| v.map(|v| format!("{}%", (v * 100.0).round())).unwrap_or_else(|| "-".into());
@@ -41,6 +46,7 @@ pub fn cells(theme: &crate::sheet::Theme, workspace: u64, now: std::time::System
             label: "TEMPERATURE · FAN",
             value: ["CPU", "NVME", "FAN"].iter().filter_map(|k| named(k).map(|v| format!("{k} {v}"))).collect::<Vec<_>>().join(" ").trim().to_string(),
             alert: r.get("hot").and_then(Value::as_bool).unwrap_or(false),
+            large: false,
         },
         cell("PROCESSES", r.get("processes").and_then(Value::as_u64).map(|n| n.to_string()).unwrap_or_else(|| "-".into())),
         cell("DRAWN", theme.drawn.clone()),
@@ -119,6 +125,7 @@ mod tests {
             drawn: "dann".into(),
             label: "Soft Glow".into(),
             accent: crate::paint::Ink::parse("#b4701a", 1.0),
+            strong: crate::paint::Ink::parse("#b4701a", 1.0),
             paper: crate::paint::Ink::parse("#ffffff", 1.0),
             ink_alpha: 1.0,
         }
@@ -170,6 +177,17 @@ mod tests {
         assert_eq!(by("SHEET").value, "3");
         assert_eq!(by("PROJECT").value, "SIGNAL");
         assert_eq!(by("DRAWN").value, "dann");
+    }
+
+    #[test]
+    fn only_the_clock_is_lettered_large() {
+        // qml/TitleBlock.qml sizes the reading from the cell's height in its own table — 24 mm for the
+        // clock, 12 mm for the other eleven — so the clock alone is lettered at 9 mm and the rest at
+        // 3.6 mm. Reading it off the measured cell instead makes the whole top row large, because the
+        // block's proportions stretch those cells past 12 mm.
+        let cells = cells(&theme(), 1, std::time::SystemTime::now(), &serde_json::Value::Null, None);
+        let large: Vec<&str> = cells.iter().filter(|c| c.large).map(|c| c.label).collect();
+        assert_eq!(large, ["TIME"]);
     }
 
     #[test]
