@@ -11,6 +11,7 @@
 //! The geometry is the compositor's (sheet.rs); this client works out none of it.
 
 mod font;
+mod graph;
 mod margins;
 mod notices;
 mod schedule;
@@ -63,10 +64,12 @@ pub enum Side {
     Title,
     /// whichever schedule is out, in the title block's column
     Schedule,
+    /// a year of a reading, level with the title block
+    Graph,
 }
 
 impl Side {
-    const ALL: [Side; 6] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title, Side::Schedule];
+    const ALL: [Side; 7] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title, Side::Schedule, Side::Graph];
 
     fn anchor(self) -> Anchor {
         match self {
@@ -77,6 +80,7 @@ impl Side {
             Side::Right => Anchor::RIGHT | Anchor::TOP | Anchor::BOTTOM,
             Side::Title => Anchor::BOTTOM | Anchor::RIGHT,
             Side::Schedule => Anchor::TOP | Anchor::LEFT,
+            Side::Graph => Anchor::TOP | Anchor::LEFT,
         }
     }
 
@@ -88,6 +92,7 @@ impl Side {
         match self {
             Side::Title => "draftpaper-title-block",
             Side::Schedule => "draftpaper-schedule",
+            Side::Graph => "draftpaper-load",
             _ => "draftpaper-margin",
         }
     }
@@ -141,6 +146,9 @@ struct Sheet {
     /// which schedule is out (Mod+i takes the next), and the one worked out for it
     showing: schedule::Which,
     schedule: Option<schedule::Schedule>,
+    /// the reading plotted, and the store it is plotted from
+    plotting: graph::Domain,
+    readings_over_time: Option<graph::Readings>,
     notices: std::sync::Arc<notices::Notices>,
     /// when the backlight was last seen to move
     brightness_at: u64,
@@ -190,6 +198,8 @@ fn main() {
         levels: sheet::Levels::default(),
         showing: schedule::Which::None,
         schedule: None,
+        plotting: graph::Domain::None,
+        readings_over_time: None,
         notices: std::sync::Arc::new(notices::Notices::default()),
         brightness_at: 0,
         exit: false,
@@ -324,6 +334,23 @@ impl Sheet {
             // the band covers the margin; the frame's line is the compositor's to draw. Whole logical
             // pixels, rounded up so nothing of the paper shows through between the band and the frame.
             let thick = s.margin.ceil().max(1.0) as u32;
+            if band.side == Side::Graph {
+                let (plotting, Some(s)) = (self.plotting, self.screens.get(&band.screen)) else {
+                    band.layer.set_size(1, 1);
+                    band.layer.commit();
+                    continue;
+                };
+                let at = (plotting != graph::Domain::None).then(|| graph::place(s)).flatten();
+                match at {
+                    Some(at) => {
+                        band.layer.set_size((at.width * s.mm).ceil().max(1.0) as u32, (at.height * s.mm).ceil().max(1.0) as u32);
+                        band.layer.set_margin(at.y.round() as i32, 0, 0, at.x.round() as i32);
+                    }
+                    None => band.layer.set_size(1, 1),
+                }
+                band.layer.commit();
+                continue;
+            }
             if band.side == Side::Schedule {
                 let (Some(what), Some(s)) = (self.schedule.as_ref(), self.screens.get(&band.screen)) else {
                     band.layer.set_size(1, 1);
@@ -386,7 +413,13 @@ impl Sheet {
         };
         let mut canvas = paint::Canvas::new(canvas, pw, ph);
         let hover = self.over.as_ref().filter(|(o, _, _)| o == surface).map(|(_, x, y)| (*x, *y));
-        if side == Side::Schedule {
+        if side == Side::Graph {
+            if let (Some(face), Some(at)) = (self.face.as_mut(), graph::place(&s)) {
+                if let Some(r) = self.readings_over_time.as_ref() {
+                    graph::draw(&mut canvas, face, self.plotting, r, &at, &s, &self.theme, scale);
+                }
+            }
+        } else if side == Side::Schedule {
             if let (Some(what), Some(face)) = (self.schedule.as_ref(), self.face.as_mut()) {
                 if let Some(at) = what.place(&s) {
                     schedule::draw(&mut canvas, face, what, &at, &s, &self.theme, scale, None);
@@ -565,6 +598,14 @@ impl Sheet {
         };
     }
 
+    /// The reading the sheet plots, and the store it is plotted from. The store is read again every
+    /// time, since it is a file the keeper rewrites every five seconds.
+    fn reread_graph(&mut self) {
+        let wanted = self.screens.values().map(|s| s.graph.as_str()).find(|w| !w.is_empty()).unwrap_or("");
+        self.plotting = graph::Domain::of(wanted);
+        self.readings_over_time = (self.plotting != graph::Domain::None).then(graph::Readings::read).flatten();
+    }
+
     /// The workspaces and the windows, read again: what the margins letter changes with them.
     fn reread_margins(&mut self, qh: &QueueHandle<Self>) {
         self.spaces = sheet::workspaces();
@@ -572,6 +613,7 @@ impl Sheet {
         self.parked = shown.into_iter().flat_map(sheet::parked).collect();
         self.reread(qh);
         self.reread_schedule();
+        self.reread_graph();
         self.lay_out();
         // the compositor hatches a parked cell, and breaks that hatching around what is lettered there
         if let Some(face) = self.face.as_mut() {
@@ -591,6 +633,14 @@ impl Sheet {
     fn reread_machine(&mut self) {
         self.readings = draftpaper::readings::json(&draftpaper::util::Paths::new());
         self.busy = self.cpu.busy();
+        if self.plotting != graph::Domain::None {
+            self.readings_over_time = graph::Readings::read();
+            let surfaces: Vec<wl_surface::WlSurface> =
+                self.bands.iter_mut().filter(|b| b.side == Side::Graph).map(|b| { b.drawn = false; b.layer.wl_surface().clone() }).collect();
+            for surface in surfaces {
+                self.draw(&surface);
+            }
+        }
         let surfaces: Vec<wl_surface::WlSurface> =
             self.bands.iter_mut().filter(|b| b.side == Side::Title).map(|b| { b.drawn = false; b.layer.wl_surface().clone() }).collect();
         for surface in surfaces {
@@ -738,6 +788,9 @@ enum Act {
     Park(usize, u64),
     /// the next power profile
     Profile,
+    /// a schedule, or a reading's year plotted
+    Schedule(&'static str),
+    Graph(&'static str),
 }
 
 impl Sheet {
@@ -755,8 +808,20 @@ impl Sheet {
         let s = self.screens.get(&band.screen)?;
         if band.side == Side::Title {
             let block = s.title.as_ref()?;
-            let (_, live) = title::under(block, x, y)?;
-            return live.then_some(Act::Profile);
+            let (cell, _) = title::under(block, x, y)?;
+            // the cells that open something: the project its equipment, the processes theirs, a reading
+            // its year plotted, the profile the next profile
+            return match cell {
+                3 => Some(Act::Schedule("equipment")),
+                4 => Some(Act::Graph("power")),
+                5 => Some(Act::Graph("battery")),
+                6 => Some(Act::Profile),
+                7 => Some(Act::Graph("load")),
+                8 => Some(Act::Graph("network")),
+                9 => Some(Act::Graph("temperature")),
+                10 => Some(Act::Schedule("processes")),
+                _ => None,
+            };
         }
         let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
         match margins::under(s, band.side, x, y, &spaces, &self.parked)? {
@@ -772,6 +837,8 @@ impl Sheet {
             Some(Act::Workspace(n)) => sheet::action(&format!("workspace {n}")),
             Some(Act::Unpark(id)) => sheet::action(&format!("unpark {id}")),
             Some(Act::Park(cell, workspace)) => sheet::action(&format!("park_at {cell} {workspace}")),
+            Some(Act::Schedule(which)) => sheet::ask(&serde_json::json!({ "request": "schedule", "which": which }).to_string()),
+            Some(Act::Graph(which)) => sheet::ask(&serde_json::json!({ "request": "graph", "which": which }).to_string()),
             Some(Act::Profile) => {
                 let now = self.readings.get("profile").and_then(serde_json::Value::as_str).unwrap_or("");
                 let next = title::next_profile(now);

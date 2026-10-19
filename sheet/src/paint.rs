@@ -65,6 +65,25 @@ impl<'a> Canvas<'a> {
         p[3] = over(sa, p[3]);
     }
 
+    /// A line from one point to another, `wide` physical pixels across, drawn by stepping along it: the
+    /// sheet's lines are short and few, so nothing cleverer is called for.
+    pub fn line(&mut self, from: (f32, f32), to: (f32, f32), wide: f32, colour: u32) {
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let steps = dx.abs().max(dy.abs()).ceil().max(1.0);
+        let half = (wide / 2.0).max(0.5);
+        for i in 0..=steps as i32 {
+            let t = i as f32 / steps;
+            let (x, y) = (from.0 + dx * t, from.1 + dy * t);
+            // across the line, so a thick one is thick
+            let (ax, ay) = if dx.abs() > dy.abs() { (0.0, 1.0) } else { (1.0, 0.0) };
+            let mut k = -half;
+            while k <= half {
+                canvas_dot(self, x + ax * k, y + ay * k, colour);
+                k += 1.0;
+            }
+        }
+    }
+
     /// A rectangle, filled.
     pub fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, colour: u32) {
         for row in y..y + h {
@@ -105,5 +124,17 @@ mod tests {
         let mut canvas = Canvas::new(&mut pixels, 4, 4);
         canvas.fill(-2, -2, 10, 10, ink);
         assert_eq!(pixels.iter().skip(3).step_by(4).filter(|a| **a == 255).count(), 16);
+    }
+}
+
+/// One pixel of a line, with the coverage its sub-pixel place deserves, so a line between millimetres
+/// does not look ragged.
+fn canvas_dot(canvas: &mut Canvas, x: f32, y: f32, colour: u32) {
+    let (fx, fy) = (x.floor(), y.floor());
+    let (ax, ay) = (x - fx, y - fy);
+    for (dx, dy, cover) in [(0.0, 0.0, (1.0 - ax) * (1.0 - ay)), (1.0, 0.0, ax * (1.0 - ay)), (0.0, 1.0, (1.0 - ax) * ay), (1.0, 1.0, ax * ay)] {
+        if cover > 0.004 {
+            canvas.blend((fx + dx) as i32, (fy + dy) as i32, colour, (cover * 255.0) as u8);
+        }
     }
 }

@@ -119,6 +119,7 @@ mod tests {
             drawn: "dann".into(),
             label: "Soft Glow".into(),
             accent: crate::paint::Ink::parse("#b4701a", 1.0),
+            paper: crate::paint::Ink::parse("#ffffff", 1.0),
         }
     }
 

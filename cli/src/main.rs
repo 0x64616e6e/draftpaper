@@ -42,6 +42,9 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper menu [--prompt TEXT]
                               a menu of stdin's lines in the launcher's register; the choice on stdout
                               (exit 1: closed without one)
+  draftpaper graph load|temperature|power|battery|network|disk|hide
+                              a reading's year plotted on the sheet, or away again (a click on its cell
+                              in the title block does the same)
   draftpaper volume up|down|mute
                               the default output's volume, and the sheet told what it now is (the sheet's
                               own client watches $XDG_RUNTIME_DIR/draftpaper/volume.json)
@@ -160,6 +163,16 @@ fn main() {
         ["processes", ..] => processes::main(40),
         ["metrics", "keep", ..] => metrics::keep(&p),
         ["metrics", ..] => print!("{}", util::read(&metrics::runtime_file(&p))),
+        ["graph", rest @ ..] => {
+            // a reading's year on the sheet, or away: the compositor keeps which, as it does the schedule
+            let which = rest.first().copied().unwrap_or("load");
+            if !["load", "temperature", "power", "battery", "network", "disk", "hide"].contains(&which) {
+                util::die("draftpaper graph load|temperature|power|battery|network|disk|hide");
+            }
+            let which = if which == "hide" { "" } else { which };
+            let said = util::ask(&json!({ "request": "graph", "which": which }).to_string());
+            std::process::exit(if said.is_some() { 0 } else { 1 });
+        }
         ["schedule", rest @ ..] => {
             // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
             let which = rest.first().copied().unwrap_or("next");

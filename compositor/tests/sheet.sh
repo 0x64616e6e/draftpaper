@@ -304,6 +304,20 @@ sleep 2
 ok "the next takes its place" "$(layer_sched)" "1"
 run "$repo/cli/target/release/draftpaper" schedule hide > /dev/null 2>&1
 sleep 2
+# the graph: a reading's year, called up by name and by its cell in the title block
+run "$repo/cli/target/release/draftpaper" graph load > /dev/null 2>&1
+sleep 2
+ok "a reading's year comes up" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs 2>/dev/null | grep -c '"draftpaper-load"')" "1"
+ok "and the compositor keeps which" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].graph')" "load"
+run "$repo/cli/target/release/draftpaper" graph hide > /dev/null 2>&1
+sleep 1.5
+ok "away again" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].graph')" ""
+# the title block's CPU / MEMORY cell plots the load
+cx=$(o 0 '.title.cells[7] | .x + .width / 2'); cy=$(o 0 '.title.cells[7] | .y + .height / 2')
+act pointer "$cx" "$cy"; sleep 0.4
+act button left down; sleep 0.1
+act button left up; sleep 1.5
+ok "a click on its cell plots it" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].graph')" "load"
 ok "and hide takes it away" "$(env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].schedule')" ""
 kill $started 2>/dev/null
 stop

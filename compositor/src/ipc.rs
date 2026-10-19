@@ -276,6 +276,14 @@ impl Draftpaper {
                 self.touched = true;
                 Ok(json!(self.schedule))
             }
+            // which reading the sheet plots, for the sheet's own client, as the schedule above
+            "graph" => {
+                let which = request.get("which").and_then(Value::as_str).unwrap_or("");
+                self.graph = if self.graph == which { String::new() } else { which.to_string() };
+                self.graph_on = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();
+                self.touched = true;
+                Ok(json!(self.graph))
+            }
             "sheet" => {
                 // the shell's merged cells: {"output": NAME, "merged": {"top": [[FROM, TO], ...], ...}},
                 // zone ranges counted from the frame's corner; the ticks inside each are not drawn
@@ -397,6 +405,7 @@ impl Draftpaper {
                         // the layer surfaces on it, by namespace (the shell's: draftpaper-title-block...)
                         // the schedule the sheet carries, where it is this screen's
                         "schedule": if self.schedule_on == s.output.name() { self.schedule.clone() } else { String::new() },
+                        "graph": if self.graph_on == s.output.name() { self.graph.clone() } else { String::new() },
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
                 })

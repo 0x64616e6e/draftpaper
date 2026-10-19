@@ -47,16 +47,8 @@ pub enum Which {
 }
 
 impl Which {
-    /// The order Mod+i goes round: the equipment, the processes, the revisions, then none.
-    pub fn next(self) -> Which {
-        match self {
-            Which::None => Which::Equipment,
-            Which::Equipment => Which::Processes,
-            Which::Processes => Which::Revisions,
-            Which::Revisions => Which::None,
-        }
-    }
-
+    /// Which schedule the compositor says the sheet carries; it keeps the order they take turns in
+    /// (compositor/src/ipc.rs), so the sheet only has to letter what it is told.
     pub fn of(name: &str) -> Which {
         match name {
             "equipment" => Which::Equipment,
@@ -66,14 +58,6 @@ impl Which {
         }
     }
 
-    pub fn name(self) -> &'static str {
-        match self {
-            Which::Equipment => "equipment",
-            Which::Processes => "processes",
-            Which::Revisions => "revisions",
-            Which::None => "",
-        }
-    }
 }
 
 pub struct Schedule {
@@ -403,18 +387,16 @@ pub fn revisions(sheet: u64) -> Schedule {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
 
     #[test]
-    fn the_schedules_take_their_turn() {
-        assert_eq!(Which::None.next(), Which::Equipment);
-        assert_eq!(Which::Equipment.next(), Which::Processes);
-        assert_eq!(Which::Processes.next(), Which::Revisions);
-        assert_eq!(Which::Revisions.next(), Which::None);
+    fn the_schedule_is_whichever_the_compositor_names() {
+        assert_eq!(Which::of("equipment"), Which::Equipment);
         assert_eq!(Which::of("processes"), Which::Processes);
+        assert_eq!(Which::of("revisions"), Which::Revisions);
+        assert_eq!(Which::of(""), Which::None);
         assert_eq!(Which::of("nothing of the sort"), Which::None);
-        assert_eq!(Which::Equipment.name(), "equipment");
     }
 
     #[test]
@@ -422,6 +404,10 @@ mod tests {
         assert_eq!(up(90.0), "up 1 min");
         assert_eq!(up(3700.0), "up 1 h 1 min");
         assert_eq!(up(200_000.0), "up 2 d 7 h");
+    }
+
+    pub fn tests_screen() -> Screen {
+        sheet()
     }
 
     fn sheet() -> Screen {
@@ -440,6 +426,7 @@ mod tests {
             parking: Vec::new(),
             bar: None,
             schedule: String::new(),
+            graph: String::new(),
         }
     }
 

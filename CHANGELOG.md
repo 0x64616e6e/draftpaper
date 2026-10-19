@@ -7,7 +7,8 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 - The sheet's own client (`sheet/`, docs/sheet-client.md): a Wayland client in Rust that draws the
   sheet's margins and letters its title block, on the processor into shared memory, with no drawing
-  context on the GPU. It letters the margins too: the workspaces, the columns' numbers, a letter at the
+  context on the GPU. It carries the schedules and plots a reading's year as well, and letters the
+  margins: the workspaces, the columns' numbers, a letter at the
   head of every row with the title of a parked window running up the margin, the scale bar's figures and
   the theme's name. The face the theme names is found and rasterised in the client; the twelve cells
   are lettered from the readings taken in its own process, `cli/` now building a library as well as a

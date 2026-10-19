@@ -38,8 +38,9 @@ pub struct Screen {
     pub parking: Vec<(f64, f64, f64, f64)>,
     /// the scale bar's rules and the rows left above them for its figures
     pub bar: Option<Bar>,
-    /// the schedule this screen carries, as the compositor keeps it ("" for none)
+    /// the schedule this screen carries, and the reading it plots, as the compositor keeps them
     pub schedule: String,
+    pub graph: String,
 }
 
 /// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
@@ -71,7 +72,7 @@ impl Screen {
 
 /// Every display's sheet, asked of the compositor; empty where it cannot be reached.
 pub fn screens() -> Vec<Screen> {
-    let Some(reply) = ask("{\"request\": \"outputs\"}") else { return Vec::new() };
+    let Some(reply) = request_reply("{\"request\": \"outputs\"}") else { return Vec::new() };
     let Some(outputs) = reply.get("reply").and_then(Value::as_array) else { return Vec::new() };
     outputs
         .iter()
@@ -99,6 +100,7 @@ pub fn screens() -> Vec<Screen> {
                     .unwrap_or_default(),
                 bar: bar(o.get("scale_bar"), n("x")?, n("y")?),
                 schedule: o.get("schedule").and_then(Value::as_str).unwrap_or("").to_string(),
+                graph: o.get("graph").and_then(Value::as_str).unwrap_or("").to_string(),
             })
         })
         .collect()
@@ -138,7 +140,7 @@ fn bar(value: Option<&Value>, ox: f64, oy: f64) -> Option<Bar> {
 
 /// The workspaces of one display, and the windows parked on the one it shows.
 pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
-    let Some(reply) = ask("{\"request\": \"workspaces\"}") else { return Vec::new() };
+    let Some(reply) = request_reply("{\"request\": \"workspaces\"}") else { return Vec::new() };
     reply
         .get("reply")
         .and_then(Value::as_array)
@@ -160,7 +162,7 @@ pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
 /// Every window parked on `workspace`: which cell it is in, what to letter up the margin, and the id to
 /// call it back by.
 pub fn parked(workspace: u64) -> Vec<(usize, String, u64)> {
-    let Some(reply) = ask("{\"request\": \"windows\"}") else { return Vec::new() };
+    let Some(reply) = request_reply("{\"request\": \"windows\"}") else { return Vec::new() };
     reply
         .get("reply")
         .and_then(Value::as_array)
@@ -192,6 +194,8 @@ pub struct Theme {
     pub label: String,
     /// the accent, for the mark under the pointer
     pub accent: Ink,
+    /// the paper, for the lettering a drawing breaks its lines to make room for
+    pub paper: Ink,
 }
 
 impl Theme {
@@ -214,6 +218,7 @@ impl Theme {
             drawn: s("title", "drawn"),
             label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
             accent: Ink::parse(v.get("accent").and_then(Value::as_str).unwrap_or("#b4701a"), 1.0),
+            paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),
         }
         .with_alpha(alpha)
     }
@@ -285,8 +290,7 @@ impl Levels {
 
 /// Do one of the compositor's own actions, as a key binding would (compositor/src/config.rs).
 pub fn action(what: &str) {
-    let request = serde_json::json!({ "request": "action", "action": what });
-    let _ = ask(&request.to_string());
+    ask(&serde_json::json!({ "request": "action", "action": what }).to_string());
 }
 
 /// Tell the compositor which stretches of the side margins carry lettering, so its hatching of a parked
@@ -298,8 +302,13 @@ pub fn set_clear(output: &str, left: &[(f64, f64)], right: &[(f64, f64)]) {
     let _ = ask(&request.to_string());
 }
 
+/// One request on the compositor's socket, when the reply does not matter.
+pub fn ask(request: &str) {
+    let _ = request_reply(request);
+}
+
 /// One request on the compositor's socket, one reply.
-fn ask(request: &str) -> Option<Value> {
+fn request_reply(request: &str) -> Option<Value> {
     let path = std::env::var_os("DRAFTPAPER_SOCKET")?;
     let mut socket = UnixStream::connect(path).ok()?;
     let timeout = Some(std::time::Duration::from_secs(2));
@@ -316,7 +325,7 @@ mod tests {
     use super::*;
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new() }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new() }
     }
 
     #[test]

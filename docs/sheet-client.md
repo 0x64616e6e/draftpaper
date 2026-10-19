@@ -1,6 +1,7 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stages 0 to 5 built, 2026-10-19 (without the tray, by decision); stage 6 proposed.
+Status: built, 2026-10-19, without the system tray by decision. The sheet is the client's; the
+settings, the launcher and the rulers are still Quickshell's, started for them and gone when closed.
 Measured against 0.7.4.
 
 ## Why
@@ -189,7 +190,13 @@ workspace.
    of their own (DRAFTPAPER_TOOLS names which), drawing none of the sheet and opening that tool at once —
    a Quickshell with no window of its own would have nothing to do and would go again straight away. It
    goes as soon as the tool is closed. The client is installed beside the shell either way.
-6. **The schedules and the graph**, moved across. Only after everything else is steady.
+6. **The schedules and the graph**, moved across. *(done)* The equipment, the processes and the
+   revisions in the title block's column; a year of a reading plotted level with the title block, on the
+   logarithmic time axis, with the bold reading's least to most a band beneath it and the line broken
+   where nothing was kept. The compositor keeps which schedule is out and which reading is plotted, as
+   it keeps the rest of the sheet: the client has no socket of its own, so `draftpaper schedule` and
+   `draftpaper graph` tell the compositor, and every subscriber hears at once. The title block's cells
+   open them, as they did under the shell.
 
 Stages 0–3 are the sheet. 4 is the plumbing. 5 is the day the memory is actually saved.
 
