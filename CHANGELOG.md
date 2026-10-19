@@ -3,22 +3,48 @@
 What changed in each release, newest first. The Debian package's own record, with every detail, is
 `debian/changelog`.
 
-## Unreleased
+## 0.7.5 (2026-10-19)
 
-- The readings ask the daemons themselves instead of starting a program for each: BlueZ,
-  power-profiles-daemon and NetworkManager over D-Bus, in place of `bluetoothctl`, `busctl` and `nmcli`
-  twice. Every five seconds that was four processes started and thrown away, about 35 ms of a core each
-  time — the largest cost of an idle desktop. Now none, and 6 ms. Without a daemon, or without a system
-  bus at all, the reading is simply left out as before.
-- A schedule's and the graph's window is made when it is called up and let go 20 s after it goes: each is
-  a window of its own with its scene graph and drawing context, some 25 MB a screen, and a sheet whose
-  schedules are never called up pays nothing for them (the shell: about 20 MB less in use).
-- An idle desktop costs almost nothing: the compositor drew again every refresh whether anything had
-  changed or not (and rebuilt what it tells the shell after each), about 5% of a core and the GPU woken 60
-  times a second with nothing moving. It now draws when something may have changed (a client, input, the
-  shell, a display, the config), never faster than the display's refresh, and otherwise looks once a
-  second. Idle, headless with two displays and the shell: 0.15% of a core, 4 wakeups a second.
-  `draftpaper-compositor msg frames` counts the frames drawn; `make pixels` checks an idle desktop.
+A desktop that costs almost nothing while you are not using it. Idle on two displays, the compositor
+went from about 5% of a core to 0.15% and from 67 wakeups a second to 4; the readings stopped starting
+four programs every five seconds. Nothing about the sheet changed: this release is all measurement and
+what it found.
+
+- **The compositor draws only when something may have changed.** After a frame in which nothing had
+  changed it looked again a refresh later, and again, forever: element lists built and compared 60 times
+  a second for each display, frame callbacks sent each time, the GPU woken. With nothing moving that was
+  about 5% of a core. Now a display whose frame did not change goes idle, and every source that can
+  change the picture — a client, input, an IPC request, a display coming or going, the session, Xwayland,
+  config.toml, a signal, a key held down — wakes it again, never sooner than a refresh after its last
+  frame, so a client asking for frame after frame still gets the display's rate and no more. Idle, a
+  display looks again once a second as a safety net.
+- **What the compositor tells the shell is built only when something may have changed.** After every turn
+  of its event loop it built the displays, the workspaces and the windows as JSON and compared each with
+  what it last sent — after every frame drawn or retried as well, a sixth of an idle compositor's time.
+- **The readings ask the daemons themselves.** `draftpaper readings`, which the shell runs every five
+  seconds, started `bluetoothctl`, `busctl` and `nmcli` twice to ask three daemons three questions: four
+  processes thrown away each time, about 35 ms of a core, and invisible in the shell's own figures
+  because they were its grandchildren. All three answer on D-Bus, so one system bus connection now asks
+  BlueZ for the devices connected, power-profiles-daemon for the profile (under either of its names) and
+  NetworkManager for the access point and the wired address. 35 ms a run became 6 ms, and about 69,000
+  processes a day became none. Without a daemon, or without a system bus at all, the reading is left out
+  as it was when the program was missing, and the sensors are never held up by one that does not answer.
+- **A schedule's and the graph's window is made when it is called up**, and let go 20 s after it goes.
+  Each is a window of its own with its scene graph and its drawing context on the GPU, some 25 MB a
+  screen, and they were all made with the shell whether or not they were ever shown. A sheet whose
+  schedules and graph stay away now pays nothing for them, and in use the shell holds about 20 MB less
+  over two displays.
+- **An idle desktop is tested.** `compositor/tests/idle.sh` (part of `make pixels`) puts the shell on two
+  displays of different scales and checks that each draws only the frames something changed, that the
+  compositor stays under 1.5% of a core and 20 wakeups a second, and that a workspace switch is still
+  drawn within 0.3 s. `draftpaper-compositor msg frames` counts the frames drawn with a change, per
+  display.
+- **A plan for the sheet's own client** (`docs/sheet-client.md`): the margins and the title block drawn by
+  a small Rust client into shared memory instead of Quickshell, which costs about 40 MB and 26 threads a
+  display for lettering that changes a few times a second. Measured, staged and costed; nothing built.
+  Two cheaper ways out were tried and turned down — software rendering (two and a half times the CPU on
+  every repaint) and one render thread (the title block's lettering crossed the frame's line at scale
+  1.25).
 
 ## 0.7.4 (2026-10-19)
 
