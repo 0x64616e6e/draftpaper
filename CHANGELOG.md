@@ -5,6 +5,9 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- Firefox's menus open again on a display whose window's shadow reaches the display beside it (Firefox at
+  the left margin of the 4K display, next to the panel): they were kept inside the panel, where the window
+  is not drawn, and never showed.
 - The network's and the disks' throughput on the graph, over the same year: a click on NETWORK in the
   title block shows received and sent, a click on STORAGE in the equipment schedule read and written, on a
   logarithmic scale from 1 kB/s (bytes to gigabytes a second). Counted on the machine's own interfaces and

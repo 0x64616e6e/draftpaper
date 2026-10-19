@@ -172,14 +172,13 @@ impl Draftpaper {
         let Ok(root) = find_popup_root_surface(&PopupKind::Xdg(popup.clone())) else {
             return;
         };
-        // the parent's place (global) and the output it is on
+        // the parent's place (global) and the output it is on: its own (home_output), not the first its
+        // surface touches: Firefox's shadow, at the left margin of the 4K display, reaches onto the panel
+        // beside it, and its menus were kept inside the panel, where the window is not drawn: they never showed
         let window = self.space.elements().find(|w| w.wl_surface().as_deref() == Some(&root)).cloned();
         let placed = match window {
             Some(window) => self.space.element_geometry(&window).and_then(|geometry| {
-                let output = self.space.outputs_for_element(&window).into_iter().next().or_else(|| {
-                    let centre = geometry.loc + geometry.size.downscale(2).to_point();
-                    self.space.outputs().find(|o| self.space.output_geometry(o).is_some_and(|g| g.contains(centre))).cloned()
-                })?;
+                let output = self.home_output(&window)?;
                 Some((geometry.loc, self.space.output_geometry(&output)?))
             }),
             None => self.space.outputs().find_map(|output| {
