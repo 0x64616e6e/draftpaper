@@ -127,16 +127,25 @@ fn main() {
         ["audio", how, ..] => audio(&p, how),
         ["audio"] => util::die("draftpaper audio save|restore"),
         ["settings" | "picker", ..] => {
+            if tools(&p, "settings") {
+                return;
+            }
             // the shell's IpcHandler "settings" (qml/shell.qml); `picker` is the name it had
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "settings", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
         ["launcher", ..] => {
+            if tools(&p, "launcher") {
+                return;
+            }
             // the shell's IpcHandler "launcher" (qml/shell.qml)
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "launcher", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
         ["rulers", ..] => {
+            if tools(&p, "rulers") {
+                return;
+            }
             // the shell's IpcHandler "rulers" (qml/shell.qml): out, or put away
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "rulers", "toggle"]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
@@ -311,8 +320,33 @@ fn wallpaper_json(p: &Paths) {
     println!("{}", util::dumps(&Value::Object(out)));
 }
 
-/// The shell, in the foreground: the session's service keeps it running.
+/// Whether the sheet is lettered by its own client (sheet/, docs/sheet-client.md) or by the shell:
+/// `[sheet] lettering = "client"` chooses the first. The shell is still the default, and is what draws
+/// the schedules and the graph until the client does.
+fn lettering(p: &Paths) -> String {
+    let cfg = crate::config::load(p);
+    cfg.get("sheet")
+        .and_then(|s| s.get("lettering"))
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .unwrap_or_else(|| "shell".into())
+}
+
+/// The sheet's lettering, in the foreground: the session's service keeps it running.
 fn start(p: &Paths) {
+    if lettering(p) == "client" {
+        theme::apply(p, None, true);
+        let err = Command::new("draftpaper-sheet")
+            .env("DRAFTPAPER_CACHE", &p.cache)
+            .env("DRAFTPAPER_RUNTIME", &p.runtime)
+            .exec();
+        util::die(format!("draftpaper: draftpaper-sheet: {err}"));
+    }
+    start_shell(p)
+}
+
+/// Quickshell, drawing the whole sheet.
+fn start_shell(p: &Paths) {
     if util::which("qs").is_none() {
         util::die("draftpaper: quickshell (qs) is not installed");
     }
@@ -352,6 +386,33 @@ fn volume(p: &Paths, how: &str) {
         &p.runtime.join("volume.json"),
         &util::dumps(&json!({ "volume": c[1].parse::<f64>().unwrap_or(0.0), "muted": c.get(2).is_some(), "at": at })),
     );
+}
+
+/// Where the sheet's own client letters the sheet, the settings, the launcher and the rulers are still
+/// Quickshell's: one is started for them when none is running, drawing nothing of the sheet itself
+/// (DRAFTPAPER_TOOLS, qml/shell.qml), and it goes as soon as the tool is closed.
+fn tools(p: &Paths, which: &str) -> bool {
+    if lettering(p) != "client" {
+        return false;
+    }
+    // one already up (another tool is open): it takes the call as it always did
+    let up = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "settings", "state"]).stdout(Stdio::null()).stderr(Stdio::null()).status();
+    if up.map(|s| s.success()).unwrap_or(false) {
+        return false;
+    }
+    let _ = Command::new("qs")
+        .args(["-p"])
+        .arg(p.qml())
+        .arg("-n")
+        .env("DRAFTPAPER_TOOLS", which)
+        .env("DRAFTPAPER_BIN", std::env::current_exe().ok().and_then(|e| e.canonicalize().ok()).map(|e| e.display().to_string()).unwrap_or_else(|| "draftpaper".into()))
+        .env("DRAFTPAPER_CACHE", &p.cache)
+        .env("DRAFTPAPER_RUNTIME", &p.runtime)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    // it opens the tool itself as it starts, so nothing more is asked of it
+    true
 }
 
 /// Keep the default output's volume and mute across sessions. Logging out hands the sound card to the

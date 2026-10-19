@@ -1,6 +1,6 @@
 # The sheet's own client: letting go of Quickshell for the always-on sheet
 
-Status: stages 0 to 4 built, 2026-10-19 (without the tray, by decision); the rest proposed.
+Status: stages 0 to 5 built, 2026-10-19 (without the tray, by decision); stage 6 proposed.
 Measured against 0.7.4.
 
 ## Why
@@ -181,8 +181,14 @@ workspace.
    **The tray is not built**, by decision: StatusNotifierItem and DBusMenu are poorly specified and
    widely varied, and a drafting sheet is a poor place for other people's icons. A tray applet that only
    appears there has no home on this desktop; anything that matters should say so in a notification.
-5. **The swap.** `draftpaper start` runs the client instead of Quickshell; the settings, launcher and
-   rulers are started on demand and exit when closed. The session's service file changes with it.
+5. **The swap.** *(done, as a choice rather than a change)* `[sheet] lettering = "client"` in
+   config.toml makes `draftpaper start` run the client; left out, or `"shell"`, nothing changes and the
+   shell letters the sheet as before. The default stays the shell until the schedules and the graph move
+   (stage 6), since choosing the client today gives them up.
+   With the client lettering the sheet, `draftpaper settings`, `launcher` and `rulers` start a Quickshell
+   of their own (DRAFTPAPER_TOOLS names which), drawing none of the sheet and opening that tool at once —
+   a Quickshell with no window of its own would have nothing to do and would go again straight away. It
+   goes as soon as the tool is closed. The client is installed beside the shell either way.
 6. **The schedules and the graph**, moved across. Only after everything else is steady.
 
 Stages 0–3 are the sheet. 4 is the plumbing. 5 is the day the memory is actually saved.

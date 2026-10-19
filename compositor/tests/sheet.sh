@@ -68,6 +68,7 @@ start() {
 stop() { kill $sheet 2>/dev/null; sleep 0.3; kill $nest 2>/dev/null; wait 2>/dev/null; sleep 0.5; pids=; }
 layers() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs 2>/dev/null | grep -c '"draftpaper-margin"'; }
 blocks() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs 2>/dev/null | grep -c '"draftpaper-title-block"'; }
+tool_layers() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs 2>/dev/null | grep -c '"draftpaper-settings"'; }
 o() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r ".[$1] | $2"; }
 # every display as it is drawn, to $t/shot-<output>.png
 shots() {
@@ -254,6 +255,40 @@ printf '{"volume":0.42,"muted":false,"at":%s}\n' "$(date +%s)" > "$t/run/volume.
 sleep 2
 shots 1
 ok "the volume said while it is fresh" "$([ "$(inked "$vol_a" 0 "$vol_b" "$mg")" -gt $((before + 20)) ] && echo said || echo quiet)" "said"
+stop
+
+# the swap: `draftpaper start` letters the sheet with its own client where the config says so, and the
+# settings are still Quickshell's, started for them and gone once closed
+cat > "$t/.config/draftpaper/config.toml" <<'TOML'
+theme = "softglow"
+margin = 6
+[sheet]
+lettering = "client"
+TOML
+start 1920x1200 1.5 6.4 4
+run() {
+    env -u DISPLAY HOME="$t" XDG_CONFIG_HOME="$t/.config" WAYLAND_DISPLAY="$wl" DRAFTPAPER_SOCKET="$sock" \
+        DRAFTPAPER_ROOT="$repo" DRAFTPAPER_CACHE="$t/.cache/draftpaper" DRAFTPAPER_RUNTIME="$t/run" \
+        PATH="$repo/sheet/target/release:$PATH" "$@"
+}
+# the client the test already started is this one; stop it and let `draftpaper start` choose
+kill $sheet 2>/dev/null; sleep 1
+run "$repo/cli/target/release/draftpaper" start > "$t/start.log" 2>&1 &
+started=$!
+pids="$nest $started"
+i=0
+until [ "$(layers)" = "4" ] || [ $i -gt 150 ]; do sleep 0.1; i=$((i + 1)); done
+ok "draftpaper start letters the sheet with its own client" "$(layers)/$(blocks)" "4/1"
+ok "and nothing of the shell is on the sheet" "$(tool_layers)" "0"
+# the settings: a Quickshell of their own, drawing none of the sheet
+run "$repo/cli/target/release/draftpaper" settings > /dev/null 2>&1
+sleep 2
+ok "the settings open on a shell started for them" "$(tool_layers)" "1"
+ok "and the sheet is still the client's" "$(layers)/$(blocks)" "4/1"
+run "$repo/cli/target/release/draftpaper" settings > /dev/null 2>&1
+sleep 3
+ok "closed, the settings go with their shell" "$(tool_layers)" "0"
+kill $started 2>/dev/null
 stop
 
 [ "$fail" = 0 ] && echo "sheet: ok" || echo "sheet: FAILED"

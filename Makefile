@@ -6,7 +6,8 @@ CARGO ?= cargo
 QSB ?= /usr/lib/qt6/bin/qsb
 COMPOSITOR = compositor/target/release/draftpaper-compositor
 CLI = cli/target/release/draftpaper
-# the sheet's own client (docs/sheet-client.md): built and tested, not installed until it letters the sheet
+# the sheet's own client (docs/sheet-client.md): installed beside the shell, and chosen with
+# [sheet] lettering = "client"
 SHEET = sheet/target/release/draftpaper-sheet
 SHADERS = qml/board.frag.qsb
 
@@ -30,9 +31,10 @@ $(CLI):
 $(SHEET):
 	cd sheet && $(CARGO) build --release --locked
 
-install: $(COMPOSITOR) $(CLI) $(SHADERS)
+install: $(COMPOSITOR) $(CLI) $(SHEET) $(SHADERS)
 	# the programs
 	install -Dm755 $(CLI) $(DESTDIR)$(PREFIX)/bin/draftpaper
+	install -Dm755 $(SHEET) $(DESTDIR)$(PREFIX)/bin/draftpaper-sheet
 	install -Dm755 $(COMPOSITOR) $(DESTDIR)$(PREFIX)/bin/draftpaper-compositor
 	install -Dm755 compositor/session/draftpaper-session $(DESTDIR)$(PREFIX)/bin/draftpaper-session
 	install -Dm755 compositor/session/draftpaper-as $(DESTDIR)$(PREFIX)/bin/draftpaper-as

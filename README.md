@@ -204,6 +204,8 @@ mono_size = 11             #   wins), foot, Emacs, the sheet's lettering; taken 
 [sheet]                    # the notes on the sheet (#49): Mod+i brings the schedules in turn, a click on a
 schedule_at = [10, 10]     #   reading's cell its graph (beside the title block); where the schedule goes: [x, y]
                            #   mm from the frame's corner, or a zone ("C1": 7 mm in), as dragging it leaves it
+lettering = "shell"        #   who letters the sheet: the shell, or "client" for the sheet's own (a tenth of
+                           #   the memory; no schedules, graph or tray yet — docs/sheet-client.md)
 
 [rulers]                   # see Rulers; the settings' Rulers page
 step = 1                   # mm the crossing and the pointer move (step_shift = 10 with Shift)

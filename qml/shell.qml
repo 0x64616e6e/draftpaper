@@ -283,6 +283,8 @@ ShellRoot {
     Settings { id: settings; shell: root }
     IpcHandler {
         target: "settings"
+        // also what `draftpaper settings` asks to find out whether a shell is listening at all
+        function state(): string { return settings.visible ? "open" : "" }
         function toggle(): void { settings.visible ? settings.cancel() : settings.open() }
         // what the keys do, for scripts: a row (0 the drawings, 1 and on the builder's), a step along it
         function row(n: int): void {
@@ -362,8 +364,26 @@ ShellRoot {
         function onMutedChanged() { if (root.settled) { root.volumeLit = true; volumeOff.restart() } }
     }
 
+    // DRAFTPAPER_TOOLS=1: started for one of the tools (the settings, the launcher, the rulers) while the
+    // sheet is lettered by its own client (sheet/, docs/sheet-client.md), so none of the sheet itself is
+    // drawn here and the process goes once the tool is closed
+    // DRAFTPAPER_TOOLS names the tool this shell was started for, and it opens at once: a Quickshell with
+    // no window of its own would have nothing to do and would go again straight away
+    readonly property string toolsOnly: Quickshell.env("DRAFTPAPER_TOOLS") || ""
+    property bool toolWasOpen: false
+    readonly property bool toolOpen: settings.visible || launcher.visible || rulers.visible
+    onToolOpenChanged: {
+        if (toolOpen) toolWasOpen = true
+        else if (toolsOnly !== "" && toolWasOpen) Qt.quit()
+    }
+    Component.onCompleted: {
+        if (toolsOnly === "settings") settings.open()
+        else if (toolsOnly === "launcher") launcher.open()
+        else if (toolsOnly === "rulers") rulers.open()
+    }
+
     Variants {
-        model: Quickshell.screens
+        model: root.toolsOnly !== "" ? [] : Quickshell.screens
 
         Scope {         // one screen: its sheet's geometry (logical pixels) and workspaces, from the compositor
             id: edge
