@@ -5,6 +5,10 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- The revisions ask git only when the repository's head has moved. The shell polls them every four
+  seconds while they are up, and each poll ran git twice; the repository is now found by walking up for
+  `.git`, its head read from `.git` itself, and the last rows kept beside the theme until that head
+  changes. git runs on a commit, a checkout or a pull instead of nine hundred times an hour.
 - The equipment schedule reads what `lspci` and `df` told it: the display controllers from
   /sys/bus/pci, named from the same list of PCI ids `lspci` itself reads, and the root file system from
   the mount table and the kernel. Quickshell's version is kept in the cache, keyed by its binary, rather

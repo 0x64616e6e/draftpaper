@@ -156,7 +156,7 @@ fn main() {
         ["lock-on-sleep", how, ..] => lock_on_sleep(&p, how),
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
-        ["revisions", ..] => revisions::main(),
+        ["revisions", ..] => revisions::main(&p),
         ["machine", ..] => machine::main(&p),
         ["processes", ..] => processes::main(40),
         ["metrics", "keep", ..] => metrics::keep(&p),
