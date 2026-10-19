@@ -5,6 +5,11 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 ## Unreleased
 
+- The readings ask the daemons themselves instead of starting a program for each: BlueZ,
+  power-profiles-daemon and NetworkManager over D-Bus, in place of `bluetoothctl`, `busctl` and `nmcli`
+  twice. Every five seconds that was four processes started and thrown away, about 35 ms of a core each
+  time — the largest cost of an idle desktop. Now none, and 6 ms. Without a daemon, or without a system
+  bus at all, the reading is simply left out as before.
 - A schedule's and the graph's window is made when it is called up and let go 20 s after it goes: each is
   a window of its own with its scene graph and drawing context, some 25 MB a screen, and a sheet whose
   schedules are never called up pays nothing for them (the shell: about 20 MB less in use).

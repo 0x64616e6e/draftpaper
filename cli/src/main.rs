@@ -4,6 +4,7 @@
 
 mod apps;
 mod config;
+mod dbus;
 mod greeter;
 mod machine;
 mod metrics;

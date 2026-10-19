@@ -65,7 +65,8 @@ opened a few times a week.
 - **`cosmic-text`** for text, with a font database holding only the families the theme names, never the
   whole system. Shaping is not needed for monospace Latin, but the sheet letters `°`, `·`, `×`, `″` and,
   when `[glyphs]` is on, Nerd Font glyphs from the private use area.
-- **`zbus`** for the DBus services below.
+- **`zbus`** for the DBus services below. Already a dependency of the CLI since the readings stopped
+  starting `nmcli`, `bluetoothctl` and `busctl`.
 - **The `draftpaper` crate itself**, as a library. `readings`, `machine`, `processes` and `revisions` are
   already Rust in `cli/src`; the client calls them in process. No `draftpaper readings` is forked every
   five seconds, which removes the last of the shell's child processes.
