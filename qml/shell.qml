@@ -131,12 +131,10 @@ ShellRoot {
         showSchedule(which)
         scheduleOn = screenName
     }
-    // Mod+i: the equipment, the processes, the revisions, none (with [title] revisions = true, "none" shows
-    // the revisions of the focused window's repository by themselves)
-    function nextSchedule() {
-        const order = theme.title.revisions === true ? ["", "equipment", "processes"] : ["", "equipment", "processes", "revisions"]
-        showSchedule(order[(order.indexOf(schedule) + 1) % order.length])
-    }
+    // Mod+i goes through them in turn, but which schedules there are is `draftpaper schedule next`'s to
+    // say (docs/sheet-content.md): the three the sheet comes with and whatever the user has added. This
+    // is left for anything still calling it, and it asks the same way the key does.
+    function nextSchedule() { root.run([root.bin, "schedule", "next"]) }
 
     // the graph: which readings ("", "load", "temperature", "power", "battery", "network", "disk") on which
     // screen; a click on their cell in the title block (the disks: the STORAGE row of the equipment schedule)

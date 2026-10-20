@@ -477,6 +477,27 @@ pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
     said
 }
 
+/// Every schedule that can be called up: the three the sheet comes with, then the user's own. An
+/// extension counts as one where what it last printed was a schedule, or where it has not been asked
+/// yet — a new one is pickable at once rather than after its first answer.
+pub fn schedule_names(p: &crate::util::Paths) -> Vec<String> {
+    let mut names: Vec<String> = ["equipment", "processes", "revisions"].map(str::to_string).to_vec();
+    for (key, _) in declared(p) {
+        let Some(name) = key.strip_prefix("ext-") else { continue };
+        let note = p.cache.join("extensions").join(format!("{key}.json"));
+        let said = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
+        let is_schedule = match said.as_ref().and_then(|v| v.get("out")).and_then(Value::as_str) {
+            None => true,
+            Some("") => true,
+            Some(out) => serde_json::from_str::<Value>(out.trim()).is_ok_and(|v| v.get("rows").is_some()),
+        };
+        if is_schedule {
+            names.push(name.to_string());
+        }
+    }
+    names
+}
+
 /// A schedule of the user's own, where an extension of that name printed one. It is read the same way
 /// a cell of theirs is — no oftener than its interval asks, killed if it hangs — and what it printed is
 /// taken as a schedule of this document (docs/sheet-content.md): a heading, columns and rows.

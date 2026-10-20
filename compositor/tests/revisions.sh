@@ -86,10 +86,13 @@ hy=$(awk -v f="$(o .frame.y)" -v m="$(o .px_per_mm)" 'BEGIN { printf "%d", int((
 ok "its heading's rule 13 mm under the frame's top" "$([ "$("$check" "$t/shown.png" 1.5 6.4 6 lum "$hx" "$hy")" -lt 110 ] && echo exact)" "exact"
 "$check" "$t/shown.png" 1.5 6.4 6 revisions none | sed 's/^/  /' || fail=1
 sched() { run qs ipc -p "$repo/qml/shell.qml" call schedules "$@" 2> /dev/null; }
+# `next` is `draftpaper schedule next`'s to work out (docs/sheet-content.md), so it is a process away
+# rather than inside the shell: asked for one, wait for it to arrive rather than reading straight back
+settles() { i=0; until [ "$(sched state)" = "$1" ] || [ $i -gt 40 ]; do sleep 0.1; i=$((i + 1)); done; sched state; }
 sched next
-ok "Mod+i: the equipment in its place" "$(layer 1 30)/$(sched state)" "1/equipment"
-sched next; sched next
-ok "and none: the revisions back by themselves" "$(layer 1 50)/$(sched state)" "1/"
+ok "Mod+i: the equipment in its place" "$(settles equipment)/$(layer 1 30)" "equipment/1"
+sched next; settles processes > /dev/null; sched next
+ok "and none: the revisions back by themselves" "$(settles "")/$(layer 1 50)" "/1"
 
 # parked: nothing focused, the rows stay
 act park

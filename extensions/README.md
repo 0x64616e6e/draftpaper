@@ -10,6 +10,11 @@ draftpaper schedule disks       # up, where the equipment schedule goes
 draftpaper schedule hide        # away again
 ```
 
+Or reach for it without typing: **Mod+i** goes through the schedules in turn — the three the sheet comes
+with, then yours, then none — and **Mod+Shift+i** picks one straight out of the launcher's register,
+which is the way to do it once you have more than a couple. `draftpaper schedule list` names them all.
+A new extension joins both the moment its file appears.
+
 Nothing here is installed or runs by itself. They are files to take a copy of.
 
 | | what it says | wants |

@@ -78,8 +78,8 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               of a processor, memory and processor time
   draftpaper metrics [keep]   the readings over time (the graph's): keep samples them every 5 s into six periods
                               (draftpaper-metrics.service); without it, the store as JSON
-  draftpaper schedule [next|equipment|processes|revisions|hide]
-                              the schedules on the sheet (Mod+i: next): equipment, processes, revisions, none
+  draftpaper schedule [next|pick|list|hide|NAME]
+                              the schedules on the sheet: next (Mod+i), pick (Mod+Shift+i), list, hide, NAME
   draftpaper lock             lock the screen (the lock screen, qml/lock.qml); returns once locked
   draftpaper lock-on-sleep [on|off|toggle]
                               lock before every suspend (the lid) until turned off or the next login
@@ -186,27 +186,50 @@ fn main() {
             let said = util::ask(&json!({ "request": "graph", "which": which }).to_string());
             std::process::exit(if said.is_some() { 0 } else { 1 });
         }
-        ["schedule", rest @ ..] => {
-            // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
-            let which = rest.first().copied().unwrap_or("next");
-            // a schedule of the user's own is named by its extension's file (docs/sheet-content.md)
-            let mine = p.config_dir.join("draftpaper/extensions").join(format!("{which}.toml"));
-            if !["next", "equipment", "processes", "revisions", "hide"].contains(&which) && !mine.exists() {
-                util::die("draftpaper schedule next|equipment|processes|revisions|hide|NAME");
+        ["schedule", "list", ..] => {
+            for name in content::schedule_names(&p) {
+                println!("{name}");
             }
+        }
+        ["schedule", rest @ ..] => {
+            let asked = rest.first().copied().unwrap_or("next");
+            // which schedules there are is settled in one place, here, and both renderers only obey:
+            // the three the sheet comes with, then the user's own (docs/sheet-content.md). The shell
+            // and the compositor each used to keep a list of their own, and neither had ever heard of
+            // an extension.
+            let which = match asked {
+                "next" => {
+                    // with [title] revisions = true the revisions are out whenever nothing else is, so
+                    // going through them in turn would show them twice over; they are still callable
+                    // by name, and by the picker
+                    let by_itself = config::load(&p).get("title").and_then(|t| t.get("revisions")) == Some(&json!(true));
+                    let mut order = vec![String::new()];
+                    order.extend(content::schedule_names(&p).into_iter().filter(|n| !(by_itself && n == "revisions")));
+                    let now = showing(&p);
+                    let i = order.iter().position(|w| *w == now).unwrap_or(0);
+                    order[(i + 1) % order.len()].clone()
+                }
+                "pick" => match choose(&p) {
+                    Some(name) => name,
+                    None => std::process::exit(1),
+                },
+                "hide" => String::new(),
+                name => {
+                    if !content::schedule_names(&p).iter().any(|n| n == name) {
+                        util::die("draftpaper schedule next|pick|list|hide|NAME");
+                    }
+                    name.to_string()
+                }
+            };
             // the sheet's own client has no socket: the compositor keeps which schedule is out, and
             // every subscriber hears of it (compositor/src/ipc.rs)
             if lettering(&p) == "client" {
-                let said = util::ask(&json!({ "request": "schedule", "which": which }).to_string());
+                let said = util::ask(&json!({ "request": "schedule", "which": if which.is_empty() { "hide" } else { &which } }).to_string());
                 std::process::exit(if said.is_some() { 0 } else { 1 });
             }
-            // the handler answers the five it comes with by name; a schedule of the user's own goes
-            // through `show`, since the shell cannot have a function for a name it has never heard
-            let call: Vec<&str> = if ["next", "equipment", "processes", "revisions", "hide"].contains(&which) {
-                vec!["call", "schedules", which]
-            } else {
-                vec!["call", "schedules", "named", which]
-            };
+            // the handler answers `hide` by name and everything else through `named`, since the shell
+            // cannot have a function for a name it has never heard
+            let call: Vec<&str> = if which.is_empty() { vec!["call", "schedules", "hide"] } else { vec!["call", "schedules", "named", &which] };
             let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(call).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
@@ -491,6 +514,41 @@ fn audio(p: &Paths, how: &str) {
         }
         _ => util::die("draftpaper audio save|restore"),
     }
+}
+
+/// Which schedule is out now: the compositor keeps it where the sheet's own client letters, the shell
+/// keeps it where the shell does, and `next` has to know which it is before it can say what comes after.
+fn showing(p: &Paths) -> String {
+    if lettering(p) == "client" {
+        return util::ask("{\"request\": \"outputs\"}")
+            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+            .and_then(|v| v.get("reply").and_then(|r| r.as_array().cloned()))
+            .and_then(|a| a.iter().find_map(|o| o.get("schedule").and_then(|s| s.as_str()).filter(|s| !s.is_empty()).map(str::to_string)))
+            .unwrap_or_default();
+    }
+    util::run(&["qs", "ipc", "-p", &p.qml().display().to_string(), "call", "schedules", "state"], 3)
+        .map(|s| s.trim().to_string())
+        .unwrap_or_default()
+}
+
+/// A schedule chosen from the launcher's register (Mod+Shift+i): the three the sheet comes with, then
+/// the user's own, and "none" to take away whatever is out. None where the register was closed without
+/// a choice. The empty string is a choice — it means none.
+fn choose(p: &Paths) -> Option<String> {
+    use std::io::Write;
+    let mut names = vec!["none".to_string()];
+    names.extend(content::schedule_names(p));
+    let me = std::env::current_exe().ok()?;
+    let mut child = Command::new(me)
+        .args(["menu", "--prompt", "SCHEDULE"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .ok()?;
+    child.stdin.take()?.write_all(names.join("\n").as_bytes()).ok()?;
+    let out = child.wait_with_output().ok()?;
+    let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!chosen.is_empty()).then(|| if chosen == "none" { String::new() } else { chosen })
 }
 
 /// A menu of stdin's lines in the launcher's register (the shell's IpcHandler "launcher"): the choice

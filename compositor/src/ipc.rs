@@ -259,20 +259,15 @@ impl Draftpaper {
                 let p = self.seat.get_pointer().map(|p| p.current_location()).unwrap_or_default();
                 Ok(json!({ "x": p.x, "y": p.y }))
             }
-            // which schedule the sheet carries, for the sheet's own client (sheet/, docs/sheet-client.md),
-            // which has no socket of its own: the compositor keeps it, as it keeps the rest of the sheet,
-            // and every subscriber hears of it. "next" takes the one after this.
+            // which schedule is out, for the sheet's own client (sheet/, docs/sheet-client.md): whoever
+            // letters the sheet is told, and every subscriber hears of it. Which schedules there are,
+            // and so what comes after the one that is out, is `draftpaper schedule next`'s to say
+            // (docs/sheet-content.md) — the three the sheet comes with and whatever the user has added,
+            // which this has no way of knowing. It is sent a name and keeps it.
             "schedule" => {
                 let which = request.get("which").and_then(Value::as_str).unwrap_or("");
-                const ORDER: [&str; 4] = ["", "equipment", "processes", "revisions"];
                 self.schedule = match which {
-                    "next" => {
-                        let i = ORDER.iter().position(|w| *w == self.schedule).unwrap_or(0);
-                        ORDER[(i + 1) % ORDER.len()].to_string()
-                    }
                     "hide" => String::new(),
-                    // a name of the user's own is kept as it is: an extension that prints a schedule
-                    // is one, and the compositor does not know their names (docs/sheet-content.md)
                     other => other.to_string(),
                 };
                 self.schedule_on = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();

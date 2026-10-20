@@ -68,6 +68,9 @@ shot() {
     mv "$(ls "$t"/Pictures/*.png | head -n 1)" "$1"
 }
 sched() { run qs ipc -p "$repo/qml/shell.qml" call schedules "$@" 2> /dev/null; }
+# `next` is worked out by `draftpaper schedule next` (docs/sheet-content.md), so it is a process away
+# rather than inside the shell: asked for one, wait for it to arrive rather than reading straight back
+settles() { i=0; until [ "$(sched state)" = "$1" ] || [ $i -gt 40 ]; do sleep 0.1; i=$((i + 1)); done; sched state; }
 graph() { run qs ipc -p "$repo/qml/shell.qml" call graph "$@" 2> /dev/null; }
 o() { run "$comp" msg outputs | jq -r ".[0] | $1"; }
 mmL=$(o .px_per_mm); fxL=$(o .frame.x); fyL=$(o .frame.y)
@@ -84,7 +87,7 @@ rule() {
 sleep 1
 ok "nothing until asked" "$(layers schedule)$(layers load)" "00"
 sched next
-ok "Mod+i: the equipment" "$(waitlayers schedule 1)/$(sched state)" "1/equipment"
+ok "Mod+i: the equipment" "$(settles equipment)/$(waitlayers schedule 1)" "equipment/1"
 sleep 1
 shot "$t/notes.png"
 # in the title block's column, from the top: its first column's rule 9 mm from the title block's left rule,
@@ -98,11 +101,11 @@ hy=$(rowAt 13); hx=$(awk -v t="$tx" 'BEGIN { printf "%d", t * 1.5 + 100 }')
 ok "its heading's rule 13 mm under the frame's top (6 mm in, 7 of heading)" "$([ "$(lum "$hx" "$hy")" -lt 110 ] && [ "$(lum "$hx" $((hy - 2)))" -gt 130 ] && echo exact || echo "off: $(lum "$hx" $((hy - 2))) $(lum "$hx" "$hy")")" "exact"
 sched next
 sleep 0.5
-ok "again: the processes, in its place" "$(waitlayers schedule 1)/$(sched state)" "1/processes"
+ok "again: the processes, in its place" "$(settles processes)/$(waitlayers schedule 1)" "processes/1"
 sched next
-ok "again: the revisions (no repository focused here: nothing to show)" "$(waitlayers schedule 0)/$(sched state)" "0/revisions"
+ok "again: the revisions (no repository focused here: nothing to show)" "$(settles revisions)/$(waitlayers schedule 0)" "revisions/0"
 sched next
-ok "again: none" "$(waitlayers schedule 0)/$(sched state)" "0/"
+ok "again: none" "$(settles "")/$(waitlayers schedule 0)" "/0"
 # a reading's graph: its cell shows it, again puts it away; from the keeper's first samples
 i=0; until [ -s "$t/run/metrics.json" ] || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done; sleep 1
 ok "the readings kept: every period" "$(run "$cli" metrics | jq "[.tiers[] | select(.slots | length > 0)] | length")" "6"

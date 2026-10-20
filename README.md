@@ -233,8 +233,10 @@ on where no Nerd Font is installed, and the theme's alert ink. Nothing else: an 
 and the sheet sets them, so it cannot letter in a face of its own, a colour off the palette, or anywhere
 but the slot it was given (docs/sheet-content.md).
 
-Print a schedule instead of a line and the extension is one: `draftpaper schedule NAME` calls it up where
-the equipment and the processes go, by the name of its file.
+Print a schedule instead of a line and the extension is one, called up by the name of its file. Mod+i
+goes through the schedules in turn — the three the sheet comes with, then yours, then none — and
+Mod+Shift+i picks one straight out of the launcher's register, which is the way to reach it when you
+have more than a couple. `draftpaper schedule list` names them all.
 
 ```json
 {"title": "DEPARTURES", "meta": "PLATFORM 4",

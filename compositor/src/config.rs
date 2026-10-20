@@ -164,6 +164,7 @@ const DEFAULT_BINDINGS: &[(&str, &str)] = &[
     ("Mod+r", "spawn draftpaper rulers"),
     // the schedules on the sheet in turn: the equipment, the processes, neither (qml/Schedule.qml)
     ("Mod+i", "spawn draftpaper schedule next"),
+    ("Mod+Shift+i", "spawn draftpaper schedule pick"),
     ("Mod+Shift+q", "close"),
     ("Mod+Shift+e", "quit"),
     // screenshots through screencopy: a region picked with slurp into swappy (annotate, save, copy), the
