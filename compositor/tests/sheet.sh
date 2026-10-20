@@ -299,6 +299,10 @@ run "$repo/cli/target/release/draftpaper" settings > /dev/null 2>&1
 sleep 2
 ok "the settings open on a shell started for them" "$(tool_layers)" "1"
 ok "and the sheet is still the client's" "$(layers)/$(blocks)" "4/1"
+# the Displays page is built from the outputs as they stand when the settings open, and a shell started
+# for the settings alone opens them the moment it starts: it must wait for the compositor to answer
+# first, or that page comes up with no display on it
+ok "the Displays page knows about the display" "$(run qs ipc -p "$repo/qml" call settings displays 2>/dev/null | tr -d '\r\n')" "1"
 run "$repo/cli/target/release/draftpaper" settings > /dev/null 2>&1
 sleep 3
 ok "closed, the settings go with their shell" "$(tool_layers)" "0"

@@ -297,6 +297,10 @@ ShellRoot {
         function step(n: int): void { if (settings.visible) settings.step(n) }
         function keep(): void { if (settings.visible) settings.keep() }
         function cancel(): void { if (settings.visible) settings.cancel() }
+        // how many displays the Displays page was built from. The page is a snapshot of the outputs as
+        // they stood when the settings opened, so a shell started for the settings alone must wait for
+        // the compositor to answer before opening them; this is how the test sees that it did.
+        function displays(): int { return settings.dispOutputs.length }
     }
     // the launcher (Mod+d: `draftpaper launcher`) and the menu (`draftpaper menu`), Launcher.qml
     // the schedules on the sheet (Mod+i: `draftpaper schedule next`), and the graph of a reading (its cell)
@@ -376,10 +380,25 @@ ShellRoot {
         if (toolOpen) toolWasOpen = true
         else if (toolsOnly !== "" && toolWasOpen) Qt.quit()
     }
-    Component.onCompleted: {
-        if (toolsOnly === "settings") settings.open()
-        else if (toolsOnly === "launcher") launcher.open()
-        else if (toolsOnly === "rulers") rulers.open()
+    // ...but not before the compositor has answered. The Displays page is built from the outputs as
+    // they stand when the settings open (Settings.qml), and at startup they have not arrived yet: the
+    // socket is opened and subscribed to in the same breath as this. Opening straight away left that
+    // page with no display on it at all. A tool opens anyway after a moment, so one still comes up
+    // where there is no compositor to answer.
+    Timer {
+        interval: 25
+        repeat: true
+        running: root.toolsOnly !== ""
+        property int waited: 0
+        onTriggered: {
+            waited += interval
+            if (Compositor.outputs.length === 0 && waited < 2000)
+                return
+            running = false
+            if (root.toolsOnly === "settings") settings.open()
+            else if (root.toolsOnly === "launcher") launcher.open()
+            else if (root.toolsOnly === "rulers") rulers.open()
+        }
     }
 
     Variants {
