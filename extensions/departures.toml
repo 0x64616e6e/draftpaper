@@ -1,18 +1,38 @@
-# Aircraft off an airport in the last six hours, from the OpenSky Network, which wants no key:
-# `draftpaper schedule departures`.
+# Aircraft off an airport in the last six hours, from the OpenSky Network: `draftpaper schedule
+# departures`.
 #
-# AIRPORT is an ICAO code — LROP is Bucharest Otopeni, EGLL Heathrow, KJFK New York. FILTER keeps only
-# the callsigns starting with it: leave it empty for all of them, or set it to an airline's prefix (ROT
-# for Tarom, BAW for British Airways).
+# `airport` is an ICAO code — LROP is Bucharest Otopeni, EGLL Heathrow, KJFK New York. `filter` keeps
+# only the callsigns starting with it: leave it empty for all of them, or set it to an airline's prefix
+# (ROT for Tarom, BAW for British Airways).
+#
+# OpenSky answers an account-less request with 429 more often than not now, so make an API client —
+# opensky-network.org, your account, API clients — and put its two halves below. Anyone holding them
+# can use your quota, so keep the file to yourself: chmod 600. Without them this still asks, and says
+# "no answer" on the sheet when it is turned away.
 interval = 300
+airport = "LROP"
+filter = ""
+client_id = ""
+client_secret = ""
 command = ["sh", "-c", '''
-AIRPORT=LROP
-FILTER=
 say() { printf '{"title": "DEPARTURES", "meta": "%s", "rows": []}' "$1"; exit 0; }
 end=$(date +%s); begin=$((end - 21600))
-flights=$(curl -sf --max-time 15 "https://opensky-network.org/api/flights/departure?airport=$AIRPORT&begin=$begin&end=$end") || flights=
-[ -n "$flights" ] || say "no answer for $AIRPORT"
-printf '%s' "$flights" | jq -c --arg airport "$AIRPORT" --arg filter "$FILTER" '{
+url="https://opensky-network.org/api/flights/departure?airport=$DRAFTPAPER_AIRPORT&begin=$begin&end=$end"
+if [ -n "$DRAFTPAPER_CLIENT_ID" ] && [ -n "$DRAFTPAPER_CLIENT_SECRET" ]; then
+  # the secret goes in on standard input rather than in the command line, where anything that can read
+  # /proc would see it; the half-hour token it buys is a header, and is asked for again every reading
+  token=$(printf 'grant_type=client_credentials&client_id=%s&client_secret=%s' \
+            "$DRAFTPAPER_CLIENT_ID" "$DRAFTPAPER_CLIENT_SECRET" |
+          curl -sf --max-time 15 -d @- \
+            https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token |
+          jq -r '.access_token // empty')
+  [ -n "$token" ] || say "opensky would not take the client in departures.toml"
+  flights=$(curl -sf --max-time 15 -H "Authorization: Bearer $token" "$url") || flights=
+else
+  flights=$(curl -sf --max-time 15 "$url") || flights=
+fi
+[ -n "$flights" ] || say "no answer for $DRAFTPAPER_AIRPORT"
+printf '%s' "$flights" | jq -c --arg airport "$DRAFTPAPER_AIRPORT" --arg filter "$DRAFTPAPER_FILTER" '{
   title: "DEPARTURES · \($airport)",
   meta: (if $filter == "" then "LAST SIX HOURS" else "LAST SIX HOURS · \($filter)" end),
   columns: [{name: "OFF", mm: 18}, {name: "FLIGHT", mm: 26}, {name: "FOR", mm: 0},
