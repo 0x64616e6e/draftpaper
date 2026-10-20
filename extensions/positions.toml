@@ -1,0 +1,70 @@
+# What your positions are worth: `draftpaper schedule positions`.
+#
+# One [[holding]] for each. A coin says the `id` CoinGecko knows it by — bitcoin, ethereum, solana, the
+# last part of its address there — and is priced for you, from an endpoint that wants no key. Anything
+# with no quote to fetch, a share you follow by hand, an ounce of gold in a drawer, says its own
+# `price` instead and is lettered faint, since it is only as true as you last made it.
+#
+# `units` is how many you hold and `cost` what you paid for one of them, both in `currency`. Nothing
+# here is advice and nothing here is a broker: it is arithmetic on figures you declared, drawn as a
+# schedule.
+#
+# This is the example to read for a list of tables. The holdings cannot reach a command through an
+# environment variable of their own, so they come as JSON in $DRAFTPAPER_EXTENSION, which is the whole
+# of this file but the command (extensions/README.md).
+interval = 300
+currency = "usd"
+cycle = false
+command = ["sh", "-c", '''
+say() { printf '{"title": "POSITIONS", "meta": "%s", "rows": []}' "$1"; exit 0; }
+held=$(printf '%s' "$DRAFTPAPER_EXTENSION" | jq -c '[.holding // [] | .[] | select(.units)]')
+[ "$held" != "[]" ] || say "no [[holding]] in positions.toml"
+ids=$(printf '%s' "$held" | jq -r '[.[].id | select(.)] | unique | join(",")')
+quoted='{}'
+if [ -n "$ids" ]; then
+  got=$(curl -sf --max-time 15 "https://api.coingecko.com/api/v3/simple/price?ids=$ids&vs_currencies=$DRAFTPAPER_CURRENCY") || got=
+  [ -n "$got" ] || say "no answer for $ids"
+  quoted=$got
+fi
+printf '%s' "$quoted" | jq -c --argjson held "$held" --arg cur "$DRAFTPAPER_CURRENCY" '
+  . as $quoted
+  | def money: if . == null then "—" else (. * 100 | round) / 100 | tostring end;
+    def signed: if . == null then "—" elif . >= 0 then "+\(. | round)" else "\(. | round)" end;
+    ($held | map(. + {at: (if .id then $quoted[.id][$cur] else .price end)})
+           | map(. + {worth: (if .at == null then null else .at * .units end),
+                      gain: (if .at == null or .cost == null then null else (.at - .cost) * .units end)})
+           | sort_by(-(.worth // 0))) as $rows
+  | ($rows | map(.worth // 0) | add) as $sum
+  | ($rows | map(.gain // 0) | add) as $won
+  | {title: "POSITIONS",
+     meta: "\($cur | ascii_upcase) \($sum | round) · \($won | signed)",
+     columns: [{name: "HOLDING", mm: 26}, {name: "UNITS", mm: 18, right: true},
+               {name: "PRICE", mm: 24, right: true}, {name: "VALUE", mm: 26, right: true},
+               {name: "P/L", mm: 22, right: true}, {name: "SHARE", mm: 0, right: true}],
+     bar: 5,
+     rows: ($rows | map({
+       cells: [(.symbol // .id // "?"), (.units | tostring), (.at | money), (.worth | money), (.gain | signed),
+               (if $sum > 0 then "\((.worth // 0) * 100 / $sum | round)%" else "—" end)],
+       share: (if $sum > 0 then (.worth // 0) / $sum else 0 end),
+       ink: (if .gain != null and .gain < 0 then "alert" elif .id == null then "faint" else "" end)}))}
+'
+''']
+
+[[holding]]
+id = "bitcoin"
+symbol = "BTC"
+units = 0.25
+cost = 61000
+
+[[holding]]
+id = "ethereum"
+symbol = "ETH"
+units = 4
+cost = 2100
+
+# one with no quote to fetch: its price is whatever you last set here, and it is lettered faint
+[[holding]]
+symbol = "XAU (1 oz)"
+units = 2
+price = 2680
+cost = 1950
