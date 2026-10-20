@@ -102,9 +102,10 @@ impl Schedule {
             laid.push((at, h));
             at += h;
         }
-        if laid.is_empty() {
-            return None;
-        }
+        // a schedule with nothing in it is still a schedule: the heading and the columns' heads are
+        // lettered, as the shell lettered them. Called up over a repository that is not one, or a
+        // reading not yet taken, it says so by standing there empty rather than by not appearing —
+        // which reads as the sheet having ignored the asking.
         // more rows than fit: the millimetres over go to the heading, so the last row ends GAP above the
         // title block, as the graph keeps from it
         let head = 7.0 + if laid.len() < self.rows.len() { (room - at).max(0.0) } else { 0.0 };
@@ -472,6 +473,24 @@ pub mod tests {
         // and its last row ends where the one that fits would have ended: GAP above the title block
         let foot = (many.y + many.height * s.mm - 930.0).abs();
         assert!(foot <= GAP * s.mm + s.mm, "the last row does not end GAP above the block: {foot}");
+    }
+
+    #[test]
+    fn a_schedule_with_nothing_in_it_still_stands_on_the_sheet() {
+        // called up over a window that is not in a repository, the revisions schedule has no rows; the
+        // sheet letters its heading and its columns' heads all the same, or the asking looks ignored
+        let s = sheet();
+        let schedule = Schedule {
+            title: "REVISIONS".into(),
+            meta: "SHEET 1".into(),
+            columns: vec![Column { name: "REV", mm: 16.0, right: false }, Column { name: "DESCRIPTION", mm: 0.0, right: false }],
+            rows: Vec::new(),
+            note_col: -1,
+            bar_col: -1,
+        };
+        let at = schedule.place(&s).expect("an empty schedule is still placed");
+        assert!(at.rows.is_empty());
+        assert!(at.height > 0.0, "it takes up the heading and the columns' heads");
     }
 
     #[test]

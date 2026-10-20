@@ -226,6 +226,14 @@ fn main() {
             calloop::timer::TimeoutAction::ToDuration(READ_EVERY)
         })
         .expect("the reading timer");
+    // a schedule that is a note of something moving — the processes, the revisions — is taken again
+    // while it stands on the sheet, and nothing is read while none does
+    handle
+        .insert_source(calloop::timer::Timer::from_duration(SCHEDULE_EVERY), |_, _, state: &mut Sheet| {
+            state.refresh_schedule();
+            calloop::timer::TimeoutAction::ToDuration(SCHEDULE_EVERY)
+        })
+        .expect("the schedule timer");
     // the volume and the backlight move between readings, and the sheet says so while they do
     handle
         .insert_source(calloop::timer::Timer::from_duration(LEVELS_EVERY), |_, _, state: &mut Sheet| {
@@ -279,6 +287,8 @@ fn main() {
 
 /// How often the machine is read again for the title block.
 const READ_EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+/// as the shell polled the process schedule while it was shown (qml/ProcessSchedule.qml)
+const SCHEDULE_EVERY: std::time::Duration = std::time::Duration::from_secs(2);
 /// How often a notification is looked at for having had its while.
 const NOTICE_EVERY: std::time::Duration = std::time::Duration::from_secs(1);
 /// How often the volume and the backlight are looked at: two small files, as the shell looked at them.
@@ -606,6 +616,34 @@ impl Sheet {
             schedule::Which::Processes => Some(schedule::processes()),
             schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
         };
+    }
+
+    /// The schedule read again while it stands on the sheet. The process schedule is a live note of
+    /// what the machine is doing — the shell polled it every two seconds while it was shown
+    /// (qml/ProcessSchedule.qml), and the revisions followed the repository the focused window is in —
+    /// so both are taken again here. The equipment schedule is the machine itself, which does not
+    /// change under the sheet, and nothing is read for it.
+    fn refresh_schedule(&mut self) {
+        let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
+        self.schedule = match self.showing {
+            schedule::Which::Processes => Some(schedule::processes()),
+            schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
+            _ => return,
+        };
+        // the rows it carries settle how tall it stands, so it is laid out again before it is drawn
+        self.lay_out();
+        let surfaces: Vec<wl_surface::WlSurface> = self
+            .bands
+            .iter_mut()
+            .filter(|b| b.side == Side::Schedule)
+            .map(|b| {
+                b.drawn = false;
+                b.layer.wl_surface().clone()
+            })
+            .collect();
+        for surface in surfaces {
+            self.draw(&surface);
+        }
     }
 
     /// The reading the sheet plots, and the store it is plotted from. The store is read again every
