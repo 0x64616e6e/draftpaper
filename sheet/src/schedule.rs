@@ -293,6 +293,7 @@ pub mod tests {
             bar: None,
             schedule: String::new(),
             graph: String::new(),
+            legend: false,
         }
     }
 

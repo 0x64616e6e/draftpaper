@@ -98,6 +98,11 @@ render() {
     if [ "$1" = shell ]; then
         env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs > "$t/outputs.json"
     fi
+    # the legend out before the shot: Mod cannot be held in a headless compositor, so the test
+    # asks for it the way a binding of one's own would (docs/keyboard.md). It stands on the
+    # sheet's free side, clear of the margins and the title block the other checks look at.
+    env DRAFTPAPER_SOCKET="$sock" "$comp" msg legend > /dev/null 2>&1
+    sleep 1
     kill -USR1 $nest
     i=0
     until [ "$(ls "$t"/Pictures/*.png 2> /dev/null | wc -l)" -ge 1 ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done
@@ -181,6 +186,16 @@ while [ "$i" -lt "$n" ]; do
     compare "title cell $i" "$cx" "$cy" "$((cx + cw))" "$((cy + ch))"
     i=$((i + 1))
 done
+
+# the legend: the keymap lettered over the sheet's free side while Mod is held. The box is the whole
+# of the side it may use, from the frame's corner to the title block, so neither renderer's legend can
+# fall outside it; both see the same blank paper around it, and the trace is normalised, so a
+# generous box compares them as fairly as a tight one would.
+lx0=$(px "$(awk -v f="$(o .frame.x)" -v m="$(o .px_per_mm)" 'BEGIN { print f + 6 * m }')")
+ly0=$(px "$(awk -v f="$(o .frame.y)" -v m="$(o .px_per_mm)" 'BEGIN { print f + 6 * m }')")
+lx1=$(px "$(awk -v f="$(o .frame.x)" -v w="$(o .frame.width)" -v m="$(o .px_per_mm)" 'BEGIN { print f + w - 6 * m }')")
+ly1=$(px "$(awk -v y="$(o .title.rect.y)" -v m="$(o .px_per_mm)" 'BEGIN { print y - 6 * m }')")
+compare "the legend" "$lx0" "$ly0" "$lx1" "$ly1"
 
 if [ $fail -eq 0 ]; then echo "lettering: ok"; else echo "lettering: FAILED"; fi
 exit $fail

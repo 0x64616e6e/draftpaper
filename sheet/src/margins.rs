@@ -200,7 +200,7 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
                 face.draw_up(canvas, (band.thick * scale) as f32 / 2.0 + px * 0.4, foot, &text, px, 0.0, ink.premultiplied());
             }
         }
-        Side::Title | Side::Schedule | Side::Graph => {}
+        Side::Title | Side::Schedule | Side::Graph | Side::Legend => {}
     }
 }
 

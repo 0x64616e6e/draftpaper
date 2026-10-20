@@ -87,6 +87,9 @@ ShellRoot {
         interval: root.schedule === "processes" ? 2000 : root.schedule === "revisions" ? 4000 : 5000
     }
     readonly property var doc: { try { return JSON.parse(sheetPoll.output).displays || {} } catch (e) { return {} } }
+    // the legend's millimetres, the same for every display and for both renderers (docs/keyboard.md):
+    // the document keeps them so that neither renderer has a copy of its own to drift
+    readonly property var legendMm: { try { return JSON.parse(sheetPoll.output).legend || null } catch (e) { return null } }
     // the backlight's own path never changes while the session lasts, so it is asked for rarely
     Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 60000 }
     readonly property var readings: { try { return JSON.parse(readingsPoll.output) } catch (e) { return {} } }
@@ -419,7 +422,7 @@ ShellRoot {
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
             // Mod held alone long enough: the keymap lettered on the sheet's free side, gone the moment
             // it is let go. The compositor says when; the keys are its own (docs/keyboard.md).
-            Legend { shell: root; edge: edge; wanted: Compositor.legend; keys: Compositor.keys; avoid: sched }
+            Legend { shell: root; edge: edge; wanted: Compositor.legend; keys: Compositor.keys; avoid: sched; mmFrom: root.legendMm }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----
             Margin {

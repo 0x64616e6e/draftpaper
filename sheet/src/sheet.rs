@@ -41,6 +41,8 @@ pub struct Screen {
     /// the schedule this screen carries, and the reading it plots, as the compositor keeps them
     pub schedule: String,
     pub graph: String,
+    /// whether the keymap is to be lettered over this sheet: Mod is being held (legend.rs)
+    pub legend: bool,
 }
 
 /// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
@@ -111,6 +113,7 @@ pub fn parse(outputs: &Value) -> Vec<Screen> {
                 bar: bar(o.get("scale_bar")),
                 schedule: o.get("schedule").and_then(Value::as_str).unwrap_or("").to_string(),
                 graph: o.get("graph").and_then(Value::as_str).unwrap_or("").to_string(),
+                legend: o.get("legend").and_then(Value::as_bool).unwrap_or(false),
             })
         })
         .collect()
@@ -193,6 +196,10 @@ pub struct Theme {
     pub strong: Ink,
     /// the paper, for the lettering a drawing breaks its lines to make room for
     pub paper: Ink,
+    /// whether a wallpaper stands behind the sheet, and how strongly the lettering lays paper over it
+    /// to be read (the title block and the legend do; qml/TitleBlock.qml, qml/Legend.qml)
+    pub pictured: bool,
+    pub title_tint: f32,
     /// whether the sheet sets a glyph before a reading where it can (config [text] glyphs)
     pub glyphs: bool,
     /// how strongly the theme sets ink on paper: what is lettered is lettered in full, and only the
@@ -222,6 +229,8 @@ impl Theme {
             paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),
             ink_alpha: alpha,
             glyphs: v.get("glyphs").and_then(Value::as_bool).unwrap_or(true),
+            pictured: v.get("pictured").and_then(Value::as_bool).unwrap_or(false),
+            title_tint: v.get("titleTint").and_then(Value::as_f64).unwrap_or(0.7) as f32,
         }
     }
 
@@ -375,7 +384,7 @@ mod tests {
     }
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new() }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new(), legend: false }
     }
 
     #[test]

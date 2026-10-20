@@ -943,7 +943,25 @@ pub fn document(p: &crate::util::Paths, want: Option<(&str, &str)>) -> Value {
         }
         displays_out.insert(name.to_string(), d);
     }
-    json!({ "version": 1, "displays": displays_out })
+    json!({ "version": 1, "displays": displays_out, "legend": legend() })
+}
+
+/// The legend's measurements (docs/keyboard.md): the millimetres both renderers set it out on.
+///
+/// Not its contents — the keys are the compositor's and whoever letters the sheet asks it for them, the
+/// one account of a keymap being the table that acts on it. What is here is the arrangement, and it is
+/// here for the reason everything else on the sheet is: two renderers that each kept their own copy of
+/// these seven numbers would letter two different legends the day one of them was edited.
+pub fn legend() -> Value {
+    json!({
+        "gap": 6,       // in from the frame's corner, and clear of the title block
+        "head": 10,     // the heading and its rule
+        "row": 6,       // a key and what it does
+        "key": 28,      // the key's column
+        "inner": 2,     // between a key and what it does
+        "act": 35,      // what it does
+        "gutter": 3,    // between one pair of columns and the next
+    })
 }
 
 pub fn main(p: &crate::util::Paths, args: &[&str]) {

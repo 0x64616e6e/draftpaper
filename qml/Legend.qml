@@ -36,7 +36,7 @@ Item {
     // ---- where ----
     // the sheet's free side: in from the frame's top-left corner, down to the title block or the frame.
     // The schedules keep to the title block's column on the right, so the two do not meet.
-    readonly property int gap: 6
+    readonly property int gap: mmFrom ? mmFrom.gap : 6
     readonly property int xMm: gap
     readonly property int yMm: gap
     // across: the whole free width of the sheet, stopping short of a schedule where one is out, since
@@ -56,12 +56,13 @@ Item {
     // a drawing's legend is a table, and this one is as many columns of it as the sheet's free side will
     // take: each pair is a key and what it does. The tail that will not fit is counted, not dropped
     // silently — "a crowded sheet gets a shorter legend, not a broken overlay".
-    readonly property int headMm: 10
-    readonly property int rowMm: 6
-    readonly property int keyMm: 28                 // the key's column
-    readonly property int actMm: 35                 // what it does
-    readonly property int innerMm: 2                // between the key and what it does
-    readonly property int pairMm: keyMm + innerMm + actMm + 3
+    property var mmFrom: null                       // the document's measurements (docs/keyboard.md)
+    readonly property int headMm: mmFrom ? mmFrom.head : 10
+    readonly property int rowMm: mmFrom ? mmFrom.row : 6
+    readonly property int keyMm: mmFrom ? mmFrom.key : 28
+    readonly property int actMm: mmFrom ? mmFrom.act : 35
+    readonly property int innerMm: mmFrom ? mmFrom.inner : 2
+    readonly property int pairMm: keyMm + innerMm + actMm + (mmFrom ? mmFrom.gutter : 3)
     readonly property int cols: Math.max(1, Math.floor(wMm / pairMm))
     readonly property int rowsPerCol: Math.max(0, Math.floor((roomMm - headMm) / rowMm))
     readonly property int room: cols * rowsPerCol
@@ -157,7 +158,10 @@ Item {
                                 verticalAlignment: Text.AlignVCenter
                                 elide: Text.ElideRight      // XF86AudioRaiseVolume and its like
                                 text: modelData.keys
-                                font.family: Fonts.mono; font.pixelSize: 2.2 * legend.mm; font.bold: true
+                                // not bold: the client letters in one weight, and a hierarchy the two
+                                // renderers cannot both draw is a hierarchy the sheet should not use.
+                                // The key is in full ink and what it does is faint; that is the contrast.
+                                font.family: Fonts.mono; font.pixelSize: 2.2 * legend.mm
                                 color: legend.ink
                             }
                             Text {      // what it does

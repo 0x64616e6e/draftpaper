@@ -13,6 +13,7 @@
 mod font;
 mod glyph;
 mod graph;
+mod legend;
 mod margins;
 mod notices;
 mod schedule;
@@ -67,10 +68,12 @@ pub enum Side {
     Schedule,
     /// a year of a reading, level with the title block
     Graph,
+    /// the keymap while Mod is held (legend.rs, docs/keyboard.md)
+    Legend,
 }
 
 impl Side {
-    const ALL: [Side; 7] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title, Side::Schedule, Side::Graph];
+    const ALL: [Side; 8] = [Side::Top, Side::Bottom, Side::Left, Side::Right, Side::Title, Side::Schedule, Side::Graph, Side::Legend];
 
     fn anchor(self) -> Anchor {
         match self {
@@ -82,6 +85,7 @@ impl Side {
             Side::Title => Anchor::BOTTOM | Anchor::RIGHT,
             Side::Schedule => Anchor::TOP | Anchor::LEFT,
             Side::Graph => Anchor::TOP | Anchor::LEFT,
+            Side::Legend => Anchor::TOP | Anchor::LEFT,
         }
     }
 
@@ -94,6 +98,7 @@ impl Side {
             Side::Title => "draftpaper-title-block",
             Side::Schedule => "draftpaper-schedule",
             Side::Graph => "draftpaper-load",
+            Side::Legend => "draftpaper-legend",
             _ => "draftpaper-margin",
         }
     }
@@ -159,6 +164,8 @@ struct Sheet {
     /// is told
     showing: String,
     schedule: Option<schedule::Schedule>,
+    /// the compositor's keymap, asked for once: what the legend letters while Mod is held (legend.rs)
+    keymap: Vec<legend::Key>,
     /// the reading plotted, and the store it is plotted from
     plotting: graph::Domain,
     readings_over_time: Option<graph::Readings>,
@@ -214,6 +221,7 @@ fn main() {
         marked: None,
         levels: sheet::Levels::default(),
         showing: String::new(),
+        keymap: legend::keys(),
         schedule: None,
         plotting: graph::Domain::None,
         readings_over_time: None,
@@ -378,6 +386,27 @@ impl Sheet {
                 band.layer.commit();
                 continue;
             }
+            if band.side == Side::Legend {
+                let at = self
+                    .screens
+                    .get(&band.screen)
+                    .filter(|s| s.legend)
+                    .and_then(|s| {
+                        // the schedule's left edge, where one stands here: worked out from the fields
+                        // rather than through a method, which would borrow the whole of self in this loop
+                        let left = (!s.schedule.is_empty()).then(|| self.schedule.as_ref().and_then(|w| w.place(s))).flatten().map(|a| (a.x - s.frame.0) / s.mm);
+                        legend::place(s, self.keymap.len(), left)
+                    });
+                match (at, self.screens.get(&band.screen)) {
+                    (Some(at), Some(s)) => {
+                        band.layer.set_size((at.width * s.mm).ceil().max(1.0) as u32, (at.height * s.mm).ceil().max(1.0) as u32);
+                        band.layer.set_margin(at.y.round() as i32, 0, 0, at.x.round() as i32);
+                    }
+                    _ => band.layer.set_size(1, 1),
+                }
+                band.layer.commit();
+                continue;
+            }
             if band.side == Side::Schedule {
                 let (Some(what), Some(s)) = (self.schedule.as_ref(), self.screens.get(&band.screen).filter(|s| !s.schedule.is_empty())) else {
                     band.layer.set_size(1, 1);
@@ -449,6 +478,15 @@ impl Sheet {
             } else if let (Some(face), Some(at)) = (self.face.as_mut(), graph::place(&s)) {
                 if let Some(r) = self.readings_over_time.as_ref() {
                     graph::draw(&mut canvas, face, self.plotting, r, &at, &s, &self.theme, scale);
+                }
+            }
+        } else if side == Side::Legend {
+            let left = self.schedule_left(&s);
+            if !s.legend {
+                // Mod is not being held
+            } else if let Some(face) = self.face.as_mut() {
+                if let Some(at) = legend::place(&s, self.keymap.len(), left) {
+                    legend::draw(&mut canvas, face, &self.keymap, &at, &s, &self.theme, scale);
                 }
             }
         } else if side == Side::Schedule {
@@ -586,6 +624,17 @@ impl Sheet {
 
     /// The schedule the sheet carries, worked out again where the compositor says it has changed. It is
     /// read fresh each time it is called up: a schedule is a note of how things stand, not a live meter.
+    /// Where a schedule's left edge is, in millimetres from the frame's corner, when one stands on this
+    /// sheet. The legend stops short of it: the schedules keep to the title block's column, and the
+    /// legend takes the free side (legend.rs).
+    fn schedule_left(&self, s: &crate::sheet::Screen) -> Option<f64> {
+        if s.schedule.is_empty() {
+            return None;
+        }
+        let at = self.schedule.as_ref()?.place(s)?;
+        Some((at.x - s.frame.0) / s.mm)
+    }
+
     fn reread_schedule(&mut self) {
         let wanted = self.screens.values().map(|s| s.schedule.clone()).find(|w| !w.is_empty()).unwrap_or_default();
         if wanted == self.showing && self.schedule.is_some() == !wanted.is_empty() {
