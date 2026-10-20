@@ -117,7 +117,17 @@ fn battery() -> (Option<f64>, bool) {
 }
 
 /// What the sheet letters, as JSON: the sensors, the daemons, and how many processes there are.
+/// What the sheet letters, as JSON. `DRAFTPAPER_READINGS` names a file to take instead of the machine,
+/// so that two renderers can be set the same sheet and compared (compositor/tests/lettering.sh); like
+/// `DRAFTPAPER_SHEET_RULE` it is for the tests and is never set on a sheet anyone is looking at.
 pub fn json(p: &Paths) -> Value {
+    if let Some(given) = std::env::var_os("DRAFTPAPER_READINGS") {
+        if let Ok(text) = std::fs::read_to_string(given) {
+            if let Ok(v) = serde_json::from_str(&text) {
+                return v;
+            }
+        }
+    }
     // the three daemons are asked on one bus connection, in a thread, while the sensors are read here
     // (dbus.rs). A daemon that does not answer is left out: the thread goes with the process.
     let (sent, daemons) = std::sync::mpsc::channel();

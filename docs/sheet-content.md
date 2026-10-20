@@ -1,6 +1,6 @@
 # The sheet's content: one account of what the drawing says
 
-Status: stages 0 to 3 built, 2026-10-20; stages 4 and 5 proposed. The sheet is lettered by the shell again
+Status: stages 0 to 4 built, 2026-10-20; stage 5 proposed. The sheet is lettered by the shell again
 (`[sheet] lettering = "shell"`); the client in `sheet/` stays in the tree and still passes its tests.
 
 ## Why
@@ -168,8 +168,12 @@ Each one leaves the sheet working and the tests green.
 3. **The shell letters from it.** ✅ Built 2026-10-20. The poll changed, and the twelve-row table, the
    dozen text properties and the three schedule components went. The second account no longer exists:
    the ten defects above are impossible rather than fixed, and PROJECT now reads the same on both.
-4. **The diff harness as a test.** One document, both renderers, headless, screenshots compared. It can
-   only be written while both exist.
+4. **The diff harness as a test.** ✅ Built 2026-10-20, compositor/tests/lettering.sh. One document, both
+   renderers, headless, screenshots compared band by band and cell by cell — not pixel for pixel, which
+   would fail on every glyph edge, but on where the ink falls across each region. It found, on its first
+   run, that the Nerd Font glyphs come out smaller in the client than in the shell: the same character,
+   asked for at the same size, out of the same file, whose metrics the two agree on exactly. That is
+   still open.
 5. **Extensions.** A program or a file that contributes `Text` entries to `bottom.cells`, or a whole
    `Schedule`. The shape is already settled by then, and an extension that can only supply words cannot
    break the grid, the face, the ink or the pixel snapping.

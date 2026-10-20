@@ -80,6 +80,9 @@ pub fn title(theme: &Value, workspace: u64, now: std::time::SystemTime, r: &Valu
             .map(str::to_string)
     };
     let of = |a: &str, b: &str| theme.get(a).and_then(|x| x.get(b)).and_then(Value::as_str).unwrap_or("").to_string();
+    // a processor reading given in the readings wins over one taken here: it is how a test freezes the
+    // machine for two renderers at once (cli/src/readings.rs)
+    let cpu = r.get("cpu").and_then(Value::as_f64).or(cpu);
     let pct = |v: Option<f64>| v.map(|v| format!("{}%", (v * 100.0).round())).unwrap_or_else(|| "-".into());
 
     // the clock is the one cell lettered large, and it is said here rather than worked out from the
@@ -201,6 +204,12 @@ fn network(r: &Value) -> (String, Option<String>) {
 /// The clock, as the title block letters it: "Mon 19 Oct 2026" and "18:45", in the machine's own time
 /// zone (the system's, through localtime_r, so a change of zone or of summer time is followed).
 fn clock(now: std::time::SystemTime) -> (String, String) {
+    // the same reason as DRAFTPAPER_READINGS: a test that compares two renderers wants the same clock
+    // on both, and they are not drawn in the same second
+    let now = match std::env::var("DRAFTPAPER_NOW").ok().and_then(|s| s.parse::<u64>().ok()) {
+        Some(secs) => std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs),
+        None => now,
+    };
     const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const WEEK: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     let secs = now.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as libc::time_t).unwrap_or(0);

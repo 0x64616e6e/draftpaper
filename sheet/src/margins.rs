@@ -134,18 +134,25 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones, |k| k == notice || k == status);
         }
         Side::Bottom => {
-            // what is connected over Bluetooth, in the first zone
-            let (start, _) = band.zone(0);
+            // what is connected over Bluetooth, in the middle of the first zone
+            let (start, end) = band.zone(0);
             let bt = pick(face, &doc["bottom"]["start"]);
-            face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
-            // the figures over the scale bar's rules, and the theme's name in the last zone
+            let w = face.width(&bt, px, 0.0);
+            let at = (band.here((start + end) / 2.0) * scale) as f32 - w / 2.0;
+            face.draw(canvas, at, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
+            // the figures over the scale bar's rules
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), |_| false);
             figures(canvas, face, s, scale, px, soft);
-            let (start, _) = band.zone(band.zones.saturating_sub(1));
-            // the screenshot is the shell's to run still, so only the theme's name is lettered here
-            if let Some(name) = doc["bottom"]["end"].as_array().and_then(|a| a.last()) {
-                let name = pick(face, name);
-                face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &name, px, 0.2 * mm, soft.premultiplied());
+            // the last zone: the screenshot and the theme's name, a row of them centred in it
+            let row: Vec<String> = doc["bottom"]["end"].as_array().unwrap_or(&empty).iter().map(|e| crate::glyph::pick(face, theme.glyphs, e)).collect();
+            if !row.is_empty() {
+                let gap = 4.0 * mm;
+                let total: f32 = row.iter().map(|t| face.width(t, px, 0.0)).sum::<f32>() + gap * (row.len() - 1) as f32;
+                let (start, end) = band.zone(band.zones.saturating_sub(1));
+                let mut at = (band.here((start + end) / 2.0) * scale) as f32 - total / 2.0;
+                for text in &row {
+                    at = face.draw(canvas, at, middle(&band, scale, face, px), text, px, 0.0, soft.premultiplied()) + gap;
+                }
             }
         }
         Side::Left | Side::Right => {

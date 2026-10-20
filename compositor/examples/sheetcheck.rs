@@ -4,6 +4,9 @@
 //! `make pixels` takes the screenshots (a nested session at each scale) and runs this on them.
 //!
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM [ambient] [windows]
+//!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM trace X0 Y0 X1 Y1 [DEPTH]
+//!         what is lettered in a rectangle — the ink altogether, and the box it sits in — for comparing
+//!         one renderer with another (tests/lettering.sh)
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM lens BEFORE.png X Y
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM scale bar|nts|none
 //!     sheetcheck SCREENSHOT.png SCALE PX_PER_MM MARGIN_MM revisions shown|none
@@ -86,6 +89,108 @@ fn main() {
             }
         }
         println!("{inked}");
+        return;
+    }
+    if args.get(5).is_some_and(|a| a == "diff") {
+        // how differently two renderers set the same rectangle, 0 (the same) to 100 (nothing in common).
+        //
+        // Not pixel against pixel: the shell's glyphs are filtered for a subpixel display and hinted and
+        // the client's are neither, so every glyph edge differs and one is half again as heavy as the
+        // other — which says nothing about whether the right words are in the right places. What is
+        // compared is where the ink falls across the rectangle: the ink in each column, as a share of
+        // all of it. Two renderings of the same words in the same places agree closely however heavily
+        // either sets them, and a word that is missing, moved or resized moves its share at once.
+        let other: RgbaImage = image::open(args.get(6).expect("diff OTHER.png X0 Y0 X1 Y1")).expect("the other screenshot").to_rgba8();
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<i64>().ok()).expect("diff OTHER.png X0 Y0 X1 Y1");
+        let depth = args.get(11).and_then(|v| v.parse::<f64>().ok()).unwrap_or(40.0);
+        let columns = |img: &RgbaImage| -> Vec<f64> {
+            let (x0, y0) = (v(7).max(0), v(8).max(0));
+            let (x1, y1) = (v(9).min(img.width() as i64 - 1), v(10).min(img.height() as i64 - 1));
+            let lum = |x: i64, y: i64| {
+                let p = img.get_pixel(x as u32, y as u32);
+                0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+            };
+            let mut lightest = 0.0f64;
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    lightest = lightest.max(lum(x, y));
+                }
+            }
+            let mut p = vec![0.0; (x1 - x0 + 1).max(1) as usize];
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let d = lightest - lum(x, y);
+                    if d > depth {
+                        p[(x - x0) as usize] += d;
+                    }
+                }
+            }
+            // softened across five columns before it is compared: a glyph set a pixel to one side is the
+            // two renderers rounding differently, not disagreeing, and without this every small word
+            // would read as a difference. A word that is missing or the wrong size survives the
+            // softening, because it moves ink over far more than five columns.
+            let soft: Vec<f64> = (0..p.len())
+                .map(|i| {
+                    let (lo, hi) = (i.saturating_sub(2), (i + 2).min(p.len() - 1));
+                    p[lo..=hi].iter().sum::<f64>() / (hi - lo + 1) as f64
+                })
+                .collect();
+            let mut p = soft;
+            let total: f64 = p.iter().sum();
+            if total > 0.0 {
+                for c in p.iter_mut() {
+                    *c /= total;
+                }
+            }
+            p
+        };
+        let (a, b) = (columns(&img), columns(&other));
+        if a.iter().sum::<f64>() == 0.0 || b.iter().sum::<f64>() == 0.0 {
+            // one of them lettered nothing at all, which is as different as it gets
+            println!("100");
+            return;
+        }
+        let apart: f64 = a.iter().zip(&b).map(|(x, y)| (x - y).abs()).sum::<f64>() / 2.0;
+        println!("{:.0}", 100.0 * apart);
+        return;
+    }
+    if args.get(5).is_some_and(|a| a == "trace") {
+        // what is lettered in a rectangle, as two renderers can be compared on: how much ink there is
+        // altogether, and the box it sits in. Neither is troubled by one renderer antialiasing its
+        // glyphs differently from the other — which they do, and always will — but both move at once
+        // if a word goes missing, changes size, or is set in the wrong place or the wrong ink.
+        let v = |i: usize| args.get(i).and_then(|v| v.parse::<i64>().ok()).expect("trace X0 Y0 X1 Y1");
+        let (x0, y0) = (v(6).max(0), v(7).max(0));
+        let (x1, y1) = (v(8).min(img.width() as i64 - 1), v(9).min(img.height() as i64 - 1));
+        let lum = |x: i64, y: i64| {
+            let p = img.get_pixel(x as u32, y as u32);
+            0.2126 * p[0] as f64 + 0.7152 * p[1] as f64 + 0.0722 * p[2] as f64
+        };
+        let depth = args.get(10).and_then(|v| v.parse::<f64>().ok()).unwrap_or(40.0);
+        let mut lightest = 0.0f64;
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                lightest = lightest.max(lum(x, y));
+            }
+        }
+        let (mut mass, mut bx0, mut by0, mut bx1, mut by1) = (0.0f64, i64::MAX, i64::MAX, i64::MIN, i64::MIN);
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let d = lightest - lum(x, y);
+                if d > depth {
+                    mass += d;
+                    bx0 = bx0.min(x);
+                    by0 = by0.min(y);
+                    bx1 = bx1.max(x);
+                    by1 = by1.max(y);
+                }
+            }
+        }
+        if bx0 == i64::MAX {
+            println!("0 0 0 0 0");
+        } else {
+            println!("{:.0} {} {} {} {}", mass, bx0 - x0, by0 - y0, bx1 - x0, by1 - y0);
+        }
         return;
     }
     if args.get(5).is_some_and(|a| a == "rulers") {
