@@ -349,6 +349,18 @@ fn status(r: &Value) -> Vec<Value> {
     row
 }
 
+/// What a cell or an extension last printed, without asking it again.
+fn kept(p: &crate::util::Paths, key: &str) -> Option<String> {
+    let note = p.cache.join("extensions").join(format!("{key}.json"));
+    let v: Value = serde_json::from_str(&std::fs::read_to_string(note).ok()?).ok()?;
+    v.get("out").and_then(Value::as_str).map(str::to_string)
+}
+
+/// Whether what it printed is a schedule rather than a cell's line.
+fn is_schedule(out: &str) -> bool {
+    serde_json::from_str::<Value>(out.trim()).is_ok_and(|v| v.get("rows").is_some())
+}
+
 /// One cell or extension run, no oftener than it asks for. What it printed last is kept beside the
 /// theme with the second it was printed in and given back until its time is up; one that hangs is
 /// killed after a second and the last answer stands.
@@ -362,7 +374,7 @@ fn ran(p: &crate::util::Paths, key: &str, d: &Value) -> Option<String> {
     let note = kept.join(format!("{key}.json"));
     let before: Value = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
     let stamp = before.get("stamp").and_then(Value::as_u64).unwrap_or(0);
-    let mut out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
+    let out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     if now.saturating_sub(stamp) >= every {
         // asked again, and not waited for. A sheet is drawn from what the last asking left behind, so
@@ -449,10 +461,14 @@ fn declared(p: &crate::util::Paths) -> Vec<(String, Value)> {
 pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
     let mut said = Vec::new();
     for (key, d) in declared(p) {
+        // one that printed a schedule is not a cell, and is not asked again here: it is read when it is
+        // called up by name (`mine_schedule`), not every time the sheet is drawn. Otherwise one that
+        // asks the network would go on asking for ever with nothing of it anywhere on the sheet.
+        if kept(p, &key).is_some_and(|o| is_schedule(&o)) {
+            continue;
+        }
         let Some(out) = ran(p, &key, &d) else { continue };
-        // one that printed a schedule is not a cell: it stands on the sheet when it is called up by
-        // name (`draftpaper schedule NAME`), and nothing of it goes in the margins
-        if serde_json::from_str::<Value>(out.trim()).is_ok_and(|v| v.get("rows").is_some()) {
+        if is_schedule(&out) {
             continue;
         }
         let line = out.lines().next().unwrap_or("").trim().to_string();
@@ -484,14 +500,9 @@ pub fn schedule_names(p: &crate::util::Paths) -> Vec<String> {
     let mut names: Vec<String> = ["equipment", "processes", "revisions"].map(str::to_string).to_vec();
     for (key, _) in declared(p) {
         let Some(name) = key.strip_prefix("ext-") else { continue };
-        let note = p.cache.join("extensions").join(format!("{key}.json"));
-        let said = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok());
-        let is_schedule = match said.as_ref().and_then(|v| v.get("out")).and_then(Value::as_str) {
-            None => true,
-            Some("") => true,
-            Some(out) => serde_json::from_str::<Value>(out.trim()).is_ok_and(|v| v.get("rows").is_some()),
-        };
-        if is_schedule {
+        // one that has not been asked yet counts, so a new extension is pickable the moment its file
+        // appears rather than after its first answer
+        if kept(p, &key).is_none_or(|o| o.trim().is_empty() || is_schedule(&o)) {
             names.push(name.to_string());
         }
     }

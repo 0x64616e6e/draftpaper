@@ -76,6 +76,10 @@ the sheet is allowed to be the reason it stops being drawn.
 Two things follow from it. The first time you call an extension up it will be empty, and right the time
 after. And a command that takes longer than twenty seconds is killed, with the last answer left standing.
 
+A schedule is only asked while it is the one on the sheet. A cell is asked whenever the sheet is drawn,
+because a cell is always on it; a schedule that is not out is not asked at all, so the ones here that
+talk to the network cost nothing while they are put away.
+
 What it printed is kept in `~/.cache/draftpaper/extensions/`. Editing a command does not take effect
 until its interval is up; delete the file to see it at once.
 
