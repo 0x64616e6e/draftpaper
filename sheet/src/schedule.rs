@@ -111,7 +111,7 @@ impl Schedule {
         let head = 7.0 + if laid.len() < self.rows.len() { (room - at).max(0.0) } else { 0.0 };
         let rows: Vec<(f64, f64)> = laid.iter().map(|(y, h)| (y + head - 7.0, *h)).collect();
         let height = rows.last().map(|(y, h)| y + h).unwrap_or(head + 5.0);
-        Some(Placed { x, y, width, head, rows, height })
+        Some(Placed { x, y, width, head, rows, height, room })
     }
 }
 
@@ -126,6 +126,11 @@ pub struct Placed {
     /// each row's top and height, in millimetres from the schedule's corner
     pub rows: Vec<(f64, f64)>,
     pub height: f64,
+    /// the whole of the sheet the schedule has to stand in, whatever it has in it. The surface is cut
+    /// to this and not to `height`: a buffer of a new size takes a new slot in a pool that never gives
+    /// one back, so a schedule read again every two seconds would grow the sheet by twenty megabytes a
+    /// time if its rows settled how big it was.
+    pub room: f64,
 }
 
 impl Placed {
@@ -491,6 +496,25 @@ pub mod tests {
         let at = schedule.place(&s).expect("an empty schedule is still placed");
         assert!(at.rows.is_empty());
         assert!(at.height > 0.0, "it takes up the heading and the columns' heads");
+    }
+
+    #[test]
+    fn how_big_it_stands_does_not_depend_on_what_is_in_it() {
+        // the surface is cut to `room`. If the rows settled it, a schedule read again every two
+        // seconds would ask for a buffer of a new size each time, and every one of those takes a slot
+        // in a pool that never hands one back: twenty megabytes a refresh on a large display.
+        let s = sheet();
+        let of = |n: usize| {
+            Schedule { title: "T".into(), meta: String::new(), columns: vec![Column { name: "A", mm: 0.0, right: false }], rows: rows(n), note_col: -1, bar_col: -1 }
+                .place(&s)
+                .expect("placed")
+        };
+        let (few, many, none) = (of(1), of(40), of(0));
+        assert_eq!(few.room, many.room);
+        assert_eq!(few.room, none.room);
+        assert_eq!(few.width, many.width);
+        // what is drawn inside it does change with the rows; it is only the surface that does not
+        assert!(many.height > few.height);
     }
 
     #[test]

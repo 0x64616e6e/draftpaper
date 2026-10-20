@@ -373,7 +373,10 @@ impl Sheet {
                     band.layer.commit();
                     continue;
                 };
-                band.layer.set_size((at.width * s.mm).ceil().max(1.0) as u32, (at.height * s.mm).ceil().max(1.0) as u32);
+                // cut to the room it has, not to what it has in it: a schedule read again while it
+                // stands there would otherwise ask for a buffer of a new size every few seconds, and
+                // each one takes a slot in a pool that never hands one back
+                band.layer.set_size((at.width * s.mm).ceil().max(1.0) as u32, (at.room * s.mm).ceil().max(1.0) as u32);
                 band.layer.set_margin(at.y.round() as i32, 0, 0, at.x.round() as i32);
                 band.layer.commit();
                 continue;
@@ -630,8 +633,8 @@ impl Sheet {
             schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
             _ => return,
         };
-        // the rows it carries settle how tall it stands, so it is laid out again before it is drawn
-        self.lay_out();
+        // not laid out again: the surface is cut to the room the schedule has, which does not change
+        // with what is in it, so only the drawing is taken again
         let surfaces: Vec<wl_surface::WlSurface> = self
             .bands
             .iter_mut()
