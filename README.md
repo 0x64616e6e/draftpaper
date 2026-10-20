@@ -236,7 +236,8 @@ but the slot it was given (docs/sheet-content.md).
 Print a schedule instead of a line and the extension is one, called up by the name of its file. Mod+i
 goes through the schedules in turn — the three the sheet comes with, then yours, then none — and
 Mod+Shift+i picks one straight out of the launcher's register, which is the way to reach it when you
-have more than a couple. `draftpaper schedule list` names them all.
+have more than a couple. `draftpaper schedule list` names them all, and `cycle = false` in an
+extension's file keeps it out of the turn while leaving it in the register.
 
 ```json
 {"title": "DEPARTURES", "meta": "PLATFORM 4",

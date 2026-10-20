@@ -1,13 +1,19 @@
-# The repository's last runs on GitHub (needs `gh`, logged in): `draftpaper schedule ci`.
-# It reads whichever repository the working directory belongs to, so put a `cd` in front of the `gh`
-# to pin it to one.
+# The last runs of a repository on GitHub (needs `gh`, logged in): `draftpaper schedule ci`.
+#
+# Set REPO. Whatever letters the sheet runs from your home directory, not from a checkout, so `gh` has
+# no repository to guess from and nothing would be lettered at all.
 interval = 60
 command = ["sh", "-c", '''
-command -v gh > /dev/null || { printf '{"title": "CI", "meta": "gh is not installed", "rows": []}'; exit 0; }
-gh run list --limit 9 --json number,workflowName,headBranch,status,conclusion,startedAt,displayTitle 2> /dev/null |
-jq -c '{
+REPO=                                   # owner/name, as in 0x64616e6e/draftpaper
+say() { printf '{"title": "CI", "meta": "%s", "rows": []}' "$1"; exit 0; }
+command -v gh > /dev/null || say "gh is not installed"
+[ -n "$REPO" ] || say "set REPO in ci.toml"
+runs=$(gh run list --repo "$REPO" --limit 9 \
+         --json number,workflowName,headBranch,status,conclusion,startedAt,displayTitle 2> /dev/null) || runs=
+[ -n "$runs" ] && [ "$runs" != "[]" ] || say "no answer from $REPO"
+printf '%s' "$runs" | jq -c --arg repo "$REPO" '{
   title: "CI",
-  meta: "\(map(select(.conclusion == "failure")) | length) OF \(length) FAILED",
+  meta: "\($repo | ascii_upcase) · \(map(select(.conclusion == "failure")) | length) OF \(length) FAILED",
   columns: [{name: "RUN", mm: 14}, {name: "WORKFLOW", mm: 26}, {name: "BRANCH", mm: 26},
             {name: "WHAT", mm: 0}, {name: "RESULT", mm: 24, right: true}],
   note: 3,
@@ -16,5 +22,5 @@ jq -c '{
             (.displayTitle | if length > 46 then .[0:45] + "…" else . end),
             (if .status != "completed" then (.status | gsub("_"; " ")) else .conclusion end)],
     note: (.startedAt[0:16] | sub("T"; " "))})
-}' || printf '{"title": "CI", "meta": "no answer", "rows": []}'
+}'
 ''']

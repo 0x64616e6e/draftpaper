@@ -1,12 +1,16 @@
 # Today, from a calendar you can fetch as iCalendar: `draftpaper schedule calendar`.
+#
 # Put your feed's address in URL — in Google Calendar it is Settings → your calendar → "Secret address
 # in iCal format", and in Nextcloud the calendar's share link with ?export on the end. Anyone with that
 # address can read the calendar, so keep the file to yourself: chmod 600.
 interval = 600
 command = ["sh", "-c", '''
 URL=
-[ -n "$URL" ] || { printf '{"title": "TODAY", "meta": "no calendar set", "rows": []}'; exit 0; }
-curl -sf --max-time 15 "$URL" | tr -d '\r' | sed -e :a -e '$!N;s/\n //;ta' -e 'P;D' |
+say() { printf '{"title": "TODAY", "meta": "%s", "rows": []}' "$1"; exit 0; }
+[ -n "$URL" ] || say "set URL in calendar.toml"
+feed=$(curl -sf --max-time 15 "$URL") || feed=
+[ -n "$feed" ] || say "no answer"
+printf '%s' "$feed" | tr -d '\r' | sed -e :a -e '$!N;s/\n //;ta' -e 'P;D' |
 awk -v day="$(date +%Y%m%d)" '
   /^BEGIN:VEVENT/ { t = ""; s = ""; l = "" }
   /^DTSTART/      { v = $0; sub(/^[^:]*:/, "", v); t = v }
@@ -20,5 +24,5 @@ sort | jq -Rs '{
   note: 1,
   rows: (split("\n") | map(select(length > 0) | split("\t")
     | {cells: [.[0], .[1]], note: (.[2] // "")}))
-}' || printf '{"title": "TODAY", "meta": "no answer", "rows": []}'
+}'
 ''']

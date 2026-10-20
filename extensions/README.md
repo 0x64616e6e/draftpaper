@@ -13,7 +13,9 @@ draftpaper schedule hide        # away again
 Or reach for it without typing: **Mod+i** goes through the schedules in turn — the three the sheet comes
 with, then yours, then none — and **Mod+Shift+i** picks one straight out of the launcher's register,
 which is the way to do it once you have more than a couple. `draftpaper schedule list` names them all.
-A new extension joins both the moment its file appears.
+A new extension joins both the moment its file appears. `cycle = false` in its file keeps it out of
+Mod+i's turn while leaving it in the register and answering to its name, which is what to reach for once
+the turn has more stops in it than you want to go past.
 
 Nothing here is installed or runs by itself. They are files to take a copy of.
 
@@ -36,6 +38,7 @@ A program that prints what it has to say, and a file saying how to run it:
 
 ```toml
 interval = 60                      # seconds; it is not run oftener than this
+cycle = false                      # optional: keep it out of Mod+i's turn (still picked, still by name)
 command = ["sh", "-c", '''
   ... whatever prints the JSON ...
 ''']

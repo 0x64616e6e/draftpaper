@@ -204,7 +204,7 @@ fn main() {
                     // by name, and by the picker
                     let by_itself = config::load(&p).get("title").and_then(|t| t.get("revisions")) == Some(&json!(true));
                     let mut order = vec![String::new()];
-                    order.extend(content::schedule_names(&p).into_iter().filter(|n| !(by_itself && n == "revisions")));
+                    order.extend(content::cycled_names(&p).into_iter().filter(|n| !(by_itself && n == "revisions")));
                     let now = showing(&p);
                     let i = order.iter().position(|w| *w == now).unwrap_or(0);
                     order[(i + 1) % order.len()].clone()

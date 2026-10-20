@@ -493,6 +493,18 @@ pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
     said
 }
 
+/// The schedules Mod+i goes through: those below, less any extension whose file says `cycle = false`.
+/// One left out of the turn is still picked from the register and still answers to its own name — it is
+/// only kept out of the way of a key that has to go past everything to get anywhere.
+pub fn cycled_names(p: &crate::util::Paths) -> Vec<String> {
+    let skipped: Vec<String> = declared(p)
+        .iter()
+        .filter(|(_, d)| d.get("cycle") == Some(&json!(false)))
+        .filter_map(|(k, _)| k.strip_prefix("ext-").map(str::to_string))
+        .collect();
+    schedule_names(p).into_iter().filter(|n| !skipped.contains(n)).collect()
+}
+
 /// Every schedule that can be called up: the three the sheet comes with, then the user's own. An
 /// extension counts as one where what it last printed was a schedule, or where it has not been asked
 /// yet — a new one is pickable at once rather than after its first answer.
