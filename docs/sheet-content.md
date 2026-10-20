@@ -1,6 +1,6 @@
 # The sheet's content: one account of what the drawing says
 
-Status: stages 0 and 1 built, 2026-10-20; stages 2 to 5 proposed. The sheet is lettered by the shell again
+Status: stages 0 to 2 built, 2026-10-20; stages 3 to 5 proposed. The sheet is lettered by the shell again
 (`[sheet] lettering = "shell"`); the client in `sheet/` stays in the tree and still passes its tests.
 
 ## Why
@@ -162,8 +162,9 @@ Each one leaves the sheet working and the tests green.
 1. **The margins and the schedules.** ✅ Built 2026-10-20. The rest of the shape; the three schedule
    builders move out of `sheet/src/schedule.rs`, and the marks a workspace carries — which the client
    never had — come with them.
-2. **The client letters from it.** `sheet/src` keeps the font, the drawing and the placing, and decides
-   nothing about words. Its content tests move to the CLI with the code.
+2. **The client letters from it.** ✅ Built 2026-10-20. `sheet/src` keeps the font, the drawing and the
+   placing, and decides nothing about words. Its content tests moved to the CLI with the code, and the
+   `Theme` it reads lost `project`, `drawn` and `label`: nothing in the client reads them any more.
 3. **The shell letters from it.** The poll changes, the twelve-row table and the text properties go.
    This is where the second account stops existing, and where the ten defects above become impossible
    rather than fixed.

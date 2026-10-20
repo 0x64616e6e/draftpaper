@@ -148,54 +148,34 @@ fn bar(value: Option<&Value>) -> Option<Bar> {
     })
 }
 
-/// The workspaces of one display, and the windows parked on the one it shows.
-/// The compositor's outputs as it publishes them, unparsed: what the equipment schedule lists.
-pub fn outputs() -> Vec<Value> {
-    request_reply("{\"request\": \"outputs\"}")
+/// What the compositor publishes for one request, unparsed. The document is built from these
+/// (`draftpaper::content`), and what the sheet needs to find a thing under the pointer is read from
+/// the same arrays, so there is only ever one answer to who is where.
+pub fn raw(what: &str) -> Vec<Value> {
+    request_reply(&format!("{{\"request\": \"{what}\"}}"))
         .and_then(|v| v.get("reply").and_then(Value::as_array).cloned())
         .unwrap_or_default()
 }
 
-pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
-    let Some(reply) = request_reply("{\"request\": \"workspaces\"}") else { return Vec::new() };
-    reply
-        .get("reply")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter_map(|w| {
-                    Some((
-                        w.get("number")?.as_u64()?,
-                        w.get("focused")?.as_bool()?,
-                        w.get("shown")?.as_bool()?,
-                        w.get("output")?.as_str()?.to_string(),
-                    ))
-                })
-                .collect()
-        })
-        .unwrap_or_default()
+/// The compositor's outputs as it publishes them: what the equipment schedule lists.
+pub fn outputs() -> Vec<Value> {
+    raw("outputs")
 }
 
-/// Every window parked on `workspace`: which cell it is in, what to letter up the margin, and the id to
-/// call it back by.
-pub fn parked(workspace: u64) -> Vec<(usize, String, u64)> {
-    let Some(reply) = request_reply("{\"request\": \"windows\"}") else { return Vec::new() };
-    reply
-        .get("reply")
-        .and_then(Value::as_array)
-        .map(|a| {
-            a.iter()
-                .filter(|w| w.get("parked").and_then(Value::as_bool).unwrap_or(false))
-                .filter(|w| w.get("workspace").and_then(Value::as_u64) == Some(workspace))
-                .filter_map(|w| {
-                    let cell = w.get("cell")?.as_u64()? as usize;
-                    let title = w.get("title").and_then(Value::as_str).filter(|t| !t.is_empty());
-                    let name = title.or_else(|| w.get("app_id").and_then(Value::as_str)).unwrap_or("");
-                    Some((cell, name.to_string(), w.get("id")?.as_u64()?))
-                })
-                .collect()
+/// The workspaces, as the margins place them: their number, whether each is focused and shown, and the
+/// display it is on.
+pub fn workspaces(spaces: &[Value]) -> Vec<(u64, bool, bool, String)> {
+    spaces
+        .iter()
+        .filter_map(|w| {
+            Some((
+                w.get("number")?.as_u64()?,
+                w.get("focused")?.as_bool()?,
+                w.get("shown")?.as_bool()?,
+                w.get("output")?.as_str()?.to_string(),
+            ))
         })
-        .unwrap_or_default()
+        .collect()
 }
 
 /// The theme the sheet is lettered in: what the shell reads from the same file (qml/Theme.qml).
@@ -207,10 +187,6 @@ pub struct Theme {
     pub alert: Ink,
     /// the family the lettering asks for, where the config names one
     pub mono: Option<String>,
-    pub project: String,
-    pub drawn: String,
-    /// the theme's own name, lettered at the foot of the sheet
-    pub label: String,
     /// the accent, for the mark under the pointer
     pub accent: Ink,
     /// what the theme lights: the workspace in use along the top margin (qml/shell.qml's `strong`)
@@ -241,9 +217,6 @@ impl Theme {
             raw: v.clone(),
             alert: Ink::parse(v.get("alert").and_then(Value::as_str).unwrap_or("#aa0000"), 1.0),
             mono: Some(s("text", "monospace")).filter(|m| !m.is_empty()),
-            project: s("title", "project"),
-            drawn: s("title", "drawn"),
-            label: v.get("label").and_then(Value::as_str).unwrap_or("").to_string(),
             accent: Ink::parse(v.get("accent").and_then(Value::as_str).unwrap_or("#b4701a"), 1.0),
             strong: Ink::parse(v.get("strong").and_then(Value::as_str).or_else(|| v.get("accent").and_then(Value::as_str)).unwrap_or("#b4701a"), 1.0),
             paper: Ink::parse(v.get("paper").and_then(Value::as_str).unwrap_or("#ffffff"), 1.0),

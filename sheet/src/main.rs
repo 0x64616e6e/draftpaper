@@ -137,6 +137,12 @@ struct Sheet {
     /// the workspaces (number, focused, shown, display) and what is parked on the one in view
     spaces: Vec<(u64, bool, bool, String)>,
     parked: Vec<(usize, String, u64)>,
+    /// the workspaces and the windows as the compositor publishes them, which the document is built
+    /// from and which what is under the pointer is read from
+    raw_spaces: Vec<serde_json::Value>,
+    raw_windows: Vec<serde_json::Value>,
+    /// what the sheet says, by display (draftpaper::content)
+    content: HashMap<String, serde_json::Value>,
     seats: SeatState,
     pointer: Option<ThemedPointer>,
     /// the surface that is showing a mark under the pointer, so it can be drawn plain again
@@ -192,6 +198,9 @@ fn main() {
         busy: None,
         spaces: Vec::new(),
         parked: Vec::new(),
+        raw_spaces: Vec::new(),
+        raw_windows: Vec::new(),
+        content: HashMap::new(),
         seats: SeatState::new(&globals, &qh),
         pointer: None,
         over: None,
@@ -446,10 +455,10 @@ impl Sheet {
         } else if side == Side::Title {
             self.letter_title(&mut canvas, &s, scale, hover);
         } else if self.face.is_some() {
-            let spaces: Vec<(u64, bool)> = self.spaces.iter().filter(|(_, _, _, on)| on == &s.name).map(|(n, f, _, _)| (*n, *f)).collect();
             let told = self.told();
+            let doc = self.content.get(&s.name).cloned().unwrap_or(serde_json::Value::Null);
             let face = self.face.as_mut().expect("a face, just looked for");
-            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, s.workspace, &spaces, &self.parked, hover, &told);
+            margins::letter(&mut canvas, face, &s, &self.theme, side, scale, &doc, &self.parked, hover, &told);
             // DRAFTPAPER_SHEET_RULE: a rule a physical pixel wide, 50 mm from the frame's corner, which
             // tests/sheet.sh measures at every scale. It proves that the buffer is in physical pixels and
             // nothing is resampled — the one thing that would quietly spoil every word on the sheet — and
@@ -523,31 +532,13 @@ impl Sheet {
     /// A level is lettered for four seconds after it moves, as the shell lettered it.
     fn told(&self) -> margins::Told {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-        let r = &self.readings;
-        let temps = r.get("temps").and_then(serde_json::Value::as_array).cloned().unwrap_or_default();
-        let named = |which: &str| {
-            temps
-                .iter()
-                .find(|t| t.get("label").and_then(serde_json::Value::as_str) == Some(which))
-                .and_then(|t| t.get("value").and_then(serde_json::Value::as_str))
-                .map(str::to_string)
-        };
         margins::Told {
-            hot: r.get("hot").and_then(serde_json::Value::as_bool).unwrap_or(false),
-            temperature: named("CPU").unwrap_or_default(),
-            battery_low: r.get("battery_low").and_then(serde_json::Value::as_bool).unwrap_or(false),
-            battery: r.get("battery").and_then(serde_json::Value::as_f64),
             volume: self.levels.volume,
             muted: self.levels.muted,
             volume_lit: self.levels.volume_at + 4 >= now && self.levels.volume_at > 0,
             brightness: self.levels.brightness,
             brightness_lit: self.brightness_at + 4 >= now && self.brightness_at > 0,
             notices: self.notices.due().iter().map(|n| n.text()).collect(),
-            bluetooth: r
-                .get("bt")
-                .and_then(serde_json::Value::as_array)
-                .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
-                .unwrap_or_default(),
         }
     }
 
@@ -600,6 +591,30 @@ impl Sheet {
         self.schedule = schedule::of(wanted, sheet_number, &self.theme.raw, &sheet::outputs());
     }
 
+    /// What the sheet says, worked out again for every display from the one account of it
+    /// (`draftpaper::content`, docs/sheet-content.md). The windows parked down the sides come from it
+    /// too, so what is lettered in a cell and what a click on that cell does are the same list.
+    fn reread_content(&mut self) {
+        self.content = self
+            .screens
+            .values()
+            .map(|s| {
+                let doc = draftpaper::content::margins(&self.theme.raw, &self.readings, &self.raw_spaces, &self.raw_windows, &s.name, s.workspace);
+                (s.name.clone(), doc)
+            })
+            .collect();
+        self.parked = self
+            .content
+            .values()
+            .flat_map(|d| d["sides"].as_array().cloned().unwrap_or_default())
+            .filter_map(|w| {
+                let cell = w["cell"].as_u64()? as usize;
+                let id = w["action"].as_str()?.strip_prefix("window.")?.parse().ok()?;
+                Some((cell, w["text"].as_str().unwrap_or("").to_string(), id))
+            })
+            .collect();
+    }
+
     /// The schedule read again while it stands on the sheet. The process schedule is a live note of
     /// what the machine is doing — the shell polled it every two seconds while it was shown
     /// (qml/ProcessSchedule.qml), and the revisions followed the repository the focused window is in —
@@ -640,9 +655,10 @@ impl Sheet {
 
     /// The workspaces and the windows, read again: what the margins letter changes with them.
     fn reread_margins(&mut self, qh: &QueueHandle<Self>) {
-        self.spaces = sheet::workspaces();
-        let shown: Vec<u64> = self.screens.values().map(|s| s.workspace).collect();
-        self.parked = shown.into_iter().flat_map(sheet::parked).collect();
+        self.raw_spaces = sheet::raw("workspaces");
+        self.raw_windows = sheet::raw("windows");
+        self.spaces = sheet::workspaces(&self.raw_spaces);
+        self.reread_content();
         self.reread(qh);
         self.reread_schedule();
         self.reread_graph();

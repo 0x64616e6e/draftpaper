@@ -28,23 +28,13 @@ pub fn cells(theme: &crate::sheet::Theme, face: &mut crate::font::Face, workspac
         .iter()
         .map(|c| Cell {
             label: c["label"].as_str().unwrap_or("").to_string(),
-            value: lettered(face, theme.glyphs, c),
+            value: crate::glyph::pick(face, theme.glyphs, c),
             alert: c["ink"] == "alert",
             large: c["large"] == true,
         })
         .collect()
 }
 
-/// What the sheet can actually letter of one entry: its words where the config has turned glyphs off or
-/// no face installed has every character of `text`, else `text` itself.
-fn lettered(face: &mut crate::font::Face, glyphs: bool, c: &Value) -> String {
-    let text = c["text"].as_str().unwrap_or("");
-    let Some(words) = c["words"].as_str() else { return text.to_string() };
-    if !glyphs || !text.chars().all(|ch| ch.is_ascii() || face.has(ch)) {
-        return words.to_string();
-    }
-    text.to_string()
-}
 
 /// Which cell of the title block is at `x`, `y` in its surface (its own logical pixels, from the block's
 /// corner), and whether a click on it does anything yet. The schedules and the graph are the shell's
@@ -89,16 +79,4 @@ mod tests {
 
     // what each cell says is the document's and is tested with it (cli/src/content.rs). What is left
     // here is the one thing only a renderer can settle: whether this sheet can letter the glyphs.
-    #[test]
-    fn a_reading_keeps_its_glyphs_only_where_they_can_be_drawn() {
-        let Some(mut face) = crate::font::Face::load(None) else { return };
-        let reading = serde_json::json!({ "text": "\u{f140b} mains", "words": "mains" });
-        // turned off in the config, whatever is installed
-        assert_eq!(lettered(&mut face, false, &reading), "mains");
-        // a character no face installed has would come out an empty box: the words instead
-        let unknown = serde_json::json!({ "text": "\u{f8fff} x", "words": "x" });
-        assert_eq!(lettered(&mut face, true, &unknown), "x");
-        // and an entry with nothing to fall back to is lettered as it stands
-        assert_eq!(lettered(&mut face, true, &serde_json::json!({ "text": "04:28" })), "04:28");
-    }
 }

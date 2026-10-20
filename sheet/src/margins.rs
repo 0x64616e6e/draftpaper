@@ -11,6 +11,8 @@
 //! The notifications, the volume and brightness, the tray and Bluetooth are not here: they are what the
 //! daemons say, and they come with stage 4 (docs/sheet-client.md).
 
+use serde_json::Value;
+
 use crate::font::Face;
 use crate::paint::Canvas;
 use crate::sheet::{Screen, Theme};
@@ -61,24 +63,29 @@ impl Band {
 
 /// Letter one margin. `along` turns a place along the band and across it into the buffer's own physical
 /// pixels, the band having been drawn from its own corner.
-pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, workspace: u64, spaces: &[(u64, bool)], parked: &[(usize, String, u64)], hover: Option<(f64, f64)>, told: &Told) {
+/// Letter one margin from the document (docs/sheet-content.md). `doc` is what the sheet says on this
+/// display; `told` is the little that cannot be in it — the notifications, which belong to whoever took
+/// the name on the bus, and the levels lettered for a few seconds after they move.
+pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, side: Side, scale: f64, doc: &Value, parked: &[(usize, String, u64)], hover: Option<(f64, f64)>, told: &Told) {
     let band = Band::of(s, side);
     let mm = (s.mm * scale) as f32;
     let px = ((s.margin * 0.5).min(3.2 * s.mm) * scale) as f32;
     let ink = theme.ink;
     let soft = crate::paint::Ink { a: (ink.a * 0.8).min(1.0), ..ink };
+    let empty = Vec::new();
+    let pick = |face: &mut Face, e: &Value| crate::glyph::pick(face, theme.glyphs, e);
     match side {
         Side::Top => {
             // the workspaces share the first zone, each a slot of it, the one in use in the strong ink
             let (start, end) = band.zone(0);
-            let shown: Vec<&(u64, bool)> = spaces.iter().collect();
+            let shown = doc["top"]["workspaces"].as_array().unwrap_or(&empty);
             let slot = (end - start) / shown.len().max(1) as f64;
-            for (i, (number, focused)) in shown.iter().enumerate() {
+            for (i, space) in shown.iter().enumerate() {
                 let at = band.here(start + (i as f64 + 0.5) * slot);
-                let text = number.to_string();
+                let text = pick(face, space);
                 let w = face.width(&text, px, 0.0);
                 // the one in use is lit in whatever the theme lights things with, as the shell lights it
-                let colour = if *focused { theme.strong } else { soft };
+                let colour = if space["focused"] == true { theme.strong } else { soft };
                 face.draw(canvas, (at * scale) as f32 - w / 2.0, middle(&band, scale, face, px), &text, px, 0.0, colour.premultiplied());
             }
             // the newest notification, in the zone before the last, with how many wait behind it
@@ -99,26 +106,17 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             // the last zone: what wants saying now — a reading past its alarm, the volume or the
             // brightness just moved. The tray is the shell's still (docs/sheet-client.md).
             let mut row: Vec<(String, crate::paint::Ink)> = Vec::new();
-            if told.hot {
-                let g = crate::glyph::before(face, theme.glyphs, '\u{f061a}', "CPU ");
-                row.push((format!("{g}{}", told.temperature), theme.alert));
+            for e in doc["top"]["status"].as_array().unwrap_or(&empty) {
+                let colour = if e["ink"] == "alert" { theme.alert } else { ink };
+                row.push((pick(face, e), colour));
             }
-            if told.battery_low {
-                if let Some(b) = told.battery {
-                    let g = crate::glyph::before(face, theme.glyphs, '\u{f0083}', "BAT ");
-                    row.push((format!("{g}{}%", (b * 100.0).round()), theme.alert));
-                }
-            }
+            // the levels move faster than the document is asked for, so the sheet watches them itself;
+            // how they read is still the document's to say (draftpaper::content)
             if let Some(v) = told.volume.filter(|_| told.volume_lit || told.muted) {
-                let steps = ['\u{f057f}', '\u{f0580}', '\u{f057e}'];
-                let ch = if told.muted { '\u{f075f}' } else { crate::glyph::ramp(v, &steps) };
-                let g = crate::glyph::before(face, theme.glyphs, ch, "VOL ");
-                row.push((if told.muted { format!("{g}muted") } else { format!("{g}{}%", (v * 100.0).round()) }, ink));
+                row.push((pick(face, &draftpaper::content::volume(v, told.muted)), ink));
             }
             if let Some(b) = told.brightness.filter(|_| told.brightness_lit) {
-                let steps = ['\u{f00de}', '\u{f00df}', '\u{f00e0}'];
-                let g = crate::glyph::before(face, theme.glyphs, crate::glyph::ramp(b, &steps), "BRT ");
-                row.push((format!("{g}{}%", (b * 100.0).round()), ink));
+                row.push((pick(face, &draftpaper::content::brightness(b)), ink));
             }
             if !row.is_empty() {
                 let gap = 4.0 * mm;
@@ -136,29 +134,26 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones, |k| k == notice || k == status);
         }
         Side::Bottom => {
-            // Bluetooth in the first zone, as the shell letters it: the glyph says whether anything is
-            // connected, so without one the reading says "-" in words
+            // what is connected over Bluetooth, in the first zone
             let (start, _) = band.zone(0);
-            let connected = !told.bluetooth.is_empty();
-            let ch = if connected { '\u{f00b1}' } else { '\u{f00af}' };
-            let names = told.bluetooth.join(", ");
-            let bt = match crate::glyph::before(face, theme.glyphs, ch, "BT ") {
-                g if g == "BT " && !connected => "BT -".to_string(),
-                g => format!("{g}{names}"),
-            };
+            let bt = pick(face, &doc["bottom"]["start"]);
             face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
             // the figures over the scale bar's rules, and the theme's name in the last zone
             numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), |_| false);
             figures(canvas, face, s, scale, px, soft);
             let (start, _) = band.zone(band.zones.saturating_sub(1));
-            let name = theme.label.to_uppercase();
-            face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &name, px, 0.2 * mm, soft.premultiplied());
+            // the screenshot is the shell's to run still, so only the theme's name is lettered here
+            if let Some(name) = doc["bottom"]["end"].as_array().and_then(|a| a.last()) {
+                let name = pick(face, name);
+                face.draw(canvas, (band.here(start + 2.0 * s.mm) * scale) as f32, middle(&band, scale, face, px), &name, px, 0.2 * mm, soft.premultiplied());
+            }
         }
         Side::Left | Side::Right => {
             // a letter at the head of every row, and the window parked there lettered up the margin
             let first = if side == Side::Left { 0 } else { band.zones as usize };
             // the row under the pointer: a mark along the inner edge, as the shell marks it
-            if let Some(Spot::Cell { cell, .. }) = hover.and_then(|(x, y)| under(s, side, x, y, spaces, parked)) {
+            // a side margin: `under` reads the workspaces only along the top, so none are wanted here
+            if let Some(Spot::Cell { cell, .. }) = hover.and_then(|(x, y)| under(s, side, x, y, &[], parked)) {
                 let k = (cell - first.min(cell)) as u32;
                 let (start, end) = band.zone(k.min(band.zones.saturating_sub(1)));
                 let top = (band.here(start + 6.0 * s.mm) * scale) as i32;
@@ -186,25 +181,17 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
         }
         Side::Title | Side::Schedule | Side::Graph => {}
     }
-    let _ = workspace;
 }
 
-/// What the margins have to say beyond the sheet's own geometry: the readings that have passed their
-/// alarm, the levels just moved, and what Bluetooth is connected to.
+/// What the margins say that the document cannot: the notifications, which belong to whichever process
+/// took the name on the session bus, and the levels lettered for a few seconds after they move.
 #[derive(Debug, Clone, Default)]
 pub struct Told {
-    pub hot: bool,
-    /// the CPU's reading alone: what goes before it is settled where it is lettered, since that is
-    /// where the face is to hand to say whether its glyph can be drawn
-    pub temperature: String,
-    pub battery_low: bool,
-    pub battery: Option<f64>,
     pub volume: Option<f64>,
     pub muted: bool,
     pub volume_lit: bool,
     pub brightness: Option<f64>,
     pub brightness_lit: bool,
-    pub bluetooth: Vec<String>,
     /// what has come in and not yet gone, newest last
     pub notices: Vec<String>,
 }

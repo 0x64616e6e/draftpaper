@@ -8,6 +8,21 @@
 //! that is the whole reason every call here takes the word as well.
 
 use crate::font::Face;
+use serde_json::Value;
+
+/// What the sheet can letter of one entry of the document (docs/sheet-content.md): its `words` where
+/// the config has turned glyphs off or no face installed has every character of `text`, else `text`.
+///
+/// This is the whole of what a renderer decides about words, and it is a decision only a renderer can
+/// make: the document is written by something that does not know which faces are on the machine.
+pub fn pick(face: &mut Face, glyphs: bool, entry: &Value) -> String {
+    let text = entry["text"].as_str().unwrap_or("");
+    let Some(words) = entry["words"].as_str() else { return text.to_string() };
+    if !glyphs || !text.chars().all(|ch| ch.is_ascii() || face.has(ch)) {
+        return words.to_string();
+    }
+    text.to_string()
+}
 
 /// Every glyph the sheet sets, in one place. A Nerd Font is read for a glyph and let go of again
 /// (font.rs), so the reading draws all of these at once rather than once for each: the sheet wants a
@@ -26,42 +41,19 @@ pub const ALL: &[char] = &[
     '\u{f00de}', '\u{f00df}', '\u{f00e0}',                                   // the brightness, filling
 ];
 
-/// What goes before a reading: the glyph and the space after it where the sheet can letter it, else
-/// `word` (which carries its own trailing space where it needs one).
-pub fn before(face: &mut Face, on: bool, ch: char, word: &str) -> String {
-    if on && face.has(ch) {
-        format!("{ch} ")
-    } else {
-        word.to_string()
-    }
-}
-
-/// One of `gs` by a level in 0..1: the first for empty, the last for full (qml/shell.qml's `ramp`).
-pub fn ramp(v: f64, gs: &[char]) -> char {
-    let i = (v * gs.len() as f64).floor().max(0.0) as usize;
-    gs[i.min(gs.len() - 1)]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn a_ramp_runs_from_the_first_to_the_last() {
-        let gs = ['a', 'b', 'c', 'd', 'e'];
-        assert_eq!(ramp(0.0, &gs), 'a');
-        assert_eq!(ramp(0.5, &gs), 'c');
-        assert_eq!(ramp(1.0, &gs), 'e', "full is the last, not past the end");
-        // a reading past its scale, or one that makes no sense, still picks a glyph
-        assert_eq!(ramp(1.5, &gs), 'e');
-        assert_eq!(ramp(-1.0, &gs), 'a');
-    }
-
-    #[test]
-    fn with_glyphs_off_the_word_stands_in() {
+    fn a_reading_keeps_its_glyphs_only_where_they_can_be_drawn() {
         let Some(mut face) = Face::load(None) else { return };
-        assert_eq!(before(&mut face, false, '\u{f140b}', "PWR "), "PWR ");
-        // and a character no face has is the word too, however the config is set
-        assert_eq!(before(&mut face, true, '\u{10fffd}', "PWR "), "PWR ");
+        let reading = serde_json::json!({ "text": "\u{f140b} mains", "words": "mains" });
+        // turned off in the config, whatever is installed
+        assert_eq!(pick(&mut face, false, &reading), "mains");
+        // a character no face installed has would come out an empty box: the words instead
+        assert_eq!(pick(&mut face, true, &serde_json::json!({ "text": "\u{f8fff} x", "words": "x" })), "x");
+        // and an entry with nothing to fall back to is lettered as it stands
+        assert_eq!(pick(&mut face, true, &serde_json::json!({ "text": "04:28" })), "04:28");
     }
 }

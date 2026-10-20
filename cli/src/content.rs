@@ -329,6 +329,23 @@ fn status(r: &Value) -> Vec<Value> {
     row
 }
 
+/// The volume, and whether it is muted. The sheet letters this for a few seconds after it moves, so
+/// the level itself is whoever letters the sheet's to watch — but how it reads is said here, so that
+/// two renderers cannot come to letter it differently (docs/sheet-content.md).
+pub fn volume(level: f64, muted: bool) -> Value {
+    const STEPS: [char; 3] = ['\u{f057f}', '\u{f0580}', '\u{f057e}'];
+    let figure = if muted { "muted".to_string() } else { format!("{}%", (level * 100.0).round()) };
+    let ch = if muted { '\u{f075f}' } else { ramp(level, &STEPS) };
+    say(format!("{}{figure}", mark(ch)), Some(format!("VOL {figure}")))
+}
+
+/// The brightness, the same way.
+pub fn brightness(level: f64) -> Value {
+    const STEPS: [char; 3] = ['\u{f00de}', '\u{f00df}', '\u{f00e0}'];
+    let figure = format!("{}%", (level * 100.0).round());
+    say(format!("{}{figure}", mark(ramp(level, &STEPS))), Some(format!("BRT {figure}")))
+}
+
 /// The last zone of the foot: the screenshot, where the config names one to take, and the theme the
 /// sheet is drawn in.
 fn foot(theme: &Value) -> Vec<Value> {
