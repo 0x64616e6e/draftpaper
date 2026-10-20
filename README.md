@@ -243,11 +243,13 @@ extension's file keeps it out of the turn while leaving it in the register.
 {"title": "DEPARTURES", "meta": "PLATFORM 4",
  "columns": [{"name": "TIME", "mm": 18}, {"name": "FOR", "mm": 0}, {"name": "DUE", "mm": 24, "right": true}],
  "rows": [{"cells": ["09:14", "Cluj-Napoca", "on time"]},
-          {"cells": ["09:52", "Brasov", "4 min late"], "note": "awaiting a platform"}]}
+          {"cells": ["09:52", "Brasov", "cancelled"], "note": "awaiting a platform", "ink": "alert"}]}
 ```
 
 A column of `mm: 0` takes what is left; `note` is lettered under its row; `"bar": N` rules column N as a
-bar from each row's `share` (0 to 1), as the process schedule rules its processor column.
+bar from each row's `share` (0 to 1), as the process schedule rules its processor column. A row's `ink`
+says how it should read — `alert` for something wrong, `faint` for something said quietly, `strong` for
+the row to look at first — and the theme settles what each of those is on this paper.
 
 There are six worked examples in `extensions/` — the disks with a bar, the repository's runs on GitHub,
 an airport's departures, a calendar, what is running under Docker, the packages waiting — with a README

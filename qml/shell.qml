@@ -411,7 +411,7 @@ ShellRoot {
                 title: said ? said.title : ""
                 meta: said ? said.meta : ""
                 columns: said ? said.columns : []
-                rows: said ? said.rows.map(r => ({ cells: r.cells, note: r.note || "", heavyAbove: r.heavy === true, share: r.share, action: r.action })) : []
+                rows: said ? said.rows.map(r => ({ cells: r.cells, note: r.note || "", heavyAbove: r.heavy === true, share: r.share, action: r.action, ink: r.ink })) : []
                 noteCol: said ? said.note : -1
                 barCol: said ? said.bar : -1
             }

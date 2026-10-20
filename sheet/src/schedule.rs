@@ -34,30 +34,9 @@ pub struct Row {
     pub note: String,
     pub heavy_above: bool,
     pub share: Option<f64>,
-}
-
-/// Which schedule is out, if any. One at a time: Mod+i takes the next.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Which {
-    #[default]
-    None,
-    Equipment,
-    Processes,
-    Revisions,
-}
-
-impl Which {
-    /// Which schedule the compositor says the sheet carries; it keeps the order they take turns in
-    /// (compositor/src/ipc.rs), so the sheet only has to letter what it is told.
-    pub fn of(name: &str) -> Which {
-        match name {
-            "equipment" => Which::Equipment,
-            "processes" => Which::Processes,
-            "revisions" => Which::Revisions,
-            _ => Which::None,
-        }
-    }
-
+    /// the ink the row is lettered in, by the name the theme knows it under ("alert", "faint",
+    /// "strong"); empty for the sheet's own. A schedule of the user's own says which (extensions/)
+    pub ink: String,
 }
 
 pub struct Schedule {
@@ -189,6 +168,14 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
         if i + 1 < at.rows.len() {
             canvas.fill(0, px(top + high) as i32, wide as i32, hair as i32, rule.premultiplied());
         }
+        // the ink this row asks for, if it asks for one: a schedule of the user's own may letter a
+        // row in the theme's alert, faint or strong ink (docs/sheet-content.md)
+        let said = match row.ink.as_str() {
+            "alert" => Some(theme.alert),
+            "faint" => Some(theme.faint()),
+            "strong" => Some(theme.strong),
+            _ => None,
+        };
         for (c, column) in schedule.columns.iter().enumerate() {
             let Some(text) = row.cells.get(c) else { continue };
             if text.is_empty() {
@@ -197,7 +184,9 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
             let size = if c == 0 { 2.5 * mm } else { 2.6 * mm };
             let from = px(colx[c] + if c == 0 { 0.0 } else { 1.6 });
             let to = px(colx[c] + col_w(c) - 1.6);
-            let colour = if schedule.bar_col == c as isize && row.share.unwrap_or(0.0) >= 0.8 { theme.alert } else { ink };
+            // the row's own ink where it names one, else the sheet's — and the bar's column turns to
+            // the alert ink on its own once the share is most of the way along
+            let colour = said.unwrap_or(if schedule.bar_col == c as isize && row.share.unwrap_or(0.0) >= 0.8 { theme.alert } else { ink });
             let baseline = px(top + 1.4) + face.ascent(size);
             if column.right {
                 let w = face.width(text, size, 0.0);
@@ -216,7 +205,7 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
                     canvas.fill(x as i32, y as i32, hair as i32, h as i32, rule.premultiplied());
                     canvas.fill((x + w) as i32, y as i32, hair as i32, h as i32, rule.premultiplied());
                     let filled = (w * share.clamp(0.0, 1.0) as f32) as i32;
-                    let colour = if share >= 0.8 { theme.alert } else { ink };
+                    let colour = said.unwrap_or(if share >= 0.8 { theme.alert } else { ink });
                     canvas.fill(x as i32, y as i32, filled, h as i32, colour.premultiplied());
                 }
             }
@@ -260,6 +249,7 @@ pub fn of(which: &str, sheet: u64, theme: &Value, outputs: &[Value]) -> Option<S
         .map(|a| {
             a.iter()
                 .map(|r| Row {
+                    ink: text(r, "ink"),
                     cells: r["cells"].as_array().map(|c| c.iter().map(|x| x.as_str().unwrap_or("").to_string()).collect()).unwrap_or_default(),
                     note: text(r, "note"),
                     heavy_above: r.get("heavy").and_then(Value::as_bool).unwrap_or(false),
@@ -281,15 +271,6 @@ pub fn of(which: &str, sheet: u64, theme: &Value, outputs: &[Value]) -> Option<S
 #[cfg(test)]
 pub mod tests {
     use super::*;
-
-    #[test]
-    fn the_schedule_is_whichever_the_compositor_names() {
-        assert_eq!(Which::of("equipment"), Which::Equipment);
-        assert_eq!(Which::of("processes"), Which::Processes);
-        assert_eq!(Which::of("revisions"), Which::Revisions);
-        assert_eq!(Which::of(""), Which::None);
-        assert_eq!(Which::of("nothing of the sort"), Which::None);
-    }
 
     pub fn tests_screen() -> Screen {
         sheet()

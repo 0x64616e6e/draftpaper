@@ -64,6 +64,18 @@ A column of `"mm": 0` takes whatever is left over, and there should be exactly o
 lettered small under its row. `"bar": N` rules column N from each row's `"share"`, 0 to 1 — `disks.toml`
 does this. `"heavy": true` on a row puts a heavier rule above it, for grouping.
 
+`"ink"` on a row says how it should read, not what colour to use:
+
+| | for |
+|---|---|
+| `"alert"` | something wrong: a run that failed, a disk nearly full, a train cancelled |
+| `"faint"` | something said quietly: a row that is over, or stale, or does not matter yet |
+| `"strong"` | the one row to look at first |
+
+Leave it out and the row is lettered in the sheet's own ink. Which colour each of those is belongs to
+the theme, and changes with it; an extension that named a colour would be the one thing on the sheet
+that did not follow the paper.
+
 An extension supplies words and the sheet sets them. It cannot letter in a face of its own, an ink off
 the theme's palette, or anywhere but the slot it was given, because all it hands over is an entry of the
 document both renderers already read (`docs/sheet-content.md`).

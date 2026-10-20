@@ -153,8 +153,11 @@ struct Sheet {
     over: Option<(wl_surface::WlSurface, f64, f64)>,
     marked: Option<wl_surface::WlSurface>,
     levels: sheet::Levels,
-    /// which schedule is out (Mod+i takes the next), and the one worked out for it
-    showing: schedule::Which,
+    /// which schedule is out, by name, empty for none (Mod+i takes the next), and the one worked out
+    /// for it. Any name the compositor says: which schedules there are is `draftpaper schedule`'s to
+    /// know, the user's own among them (docs/sheet-content.md), and the sheet only letters what it
+    /// is told
+    showing: String,
     schedule: Option<schedule::Schedule>,
     /// the reading plotted, and the store it is plotted from
     plotting: graph::Domain,
@@ -210,7 +213,7 @@ fn main() {
         over: None,
         marked: None,
         levels: sheet::Levels::default(),
-        showing: schedule::Which::None,
+        showing: String::new(),
         schedule: None,
         plotting: graph::Domain::None,
         readings_over_time: None,
@@ -584,15 +587,14 @@ impl Sheet {
     /// The schedule the sheet carries, worked out again where the compositor says it has changed. It is
     /// read fresh each time it is called up: a schedule is a note of how things stand, not a live meter.
     fn reread_schedule(&mut self) {
-        let wanted = self.screens.values().map(|s| s.schedule.as_str()).find(|w| !w.is_empty()).unwrap_or("");
-        let which = schedule::Which::of(wanted);
-        if which == self.showing && self.schedule.is_some() == (which != schedule::Which::None) {
+        let wanted = self.screens.values().map(|s| s.schedule.clone()).find(|w| !w.is_empty()).unwrap_or_default();
+        if wanted == self.showing && self.schedule.is_some() == !wanted.is_empty() {
             return;
         }
-        self.showing = which;
+        self.showing = wanted;
         let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
         // the equipment schedule lists the displays, so it wants them as the compositor publishes them
-        self.schedule = schedule::of(wanted, sheet_number, &self.theme.raw, &sheet::outputs());
+        self.schedule = schedule::of(&self.showing, sheet_number, &self.theme.raw, &sheet::outputs());
     }
 
     /// What the sheet says, worked out again for every display from the one account of it
@@ -623,17 +625,17 @@ impl Sheet {
     /// The schedule read again while it stands on the sheet. The process schedule is a live note of
     /// what the machine is doing — the shell polled it every two seconds while it was shown
     /// (qml/ProcessSchedule.qml), and the revisions followed the repository the focused window is in —
-    /// so both are taken again here. The equipment schedule is the machine itself, which does not
-    /// change under the sheet, and nothing is read for it.
+    /// so both are taken again here, and so is a schedule of the user's own, which is asked again on
+    /// its own interval and only while it is out (extensions/README.md). The equipment schedule is the
+    /// machine itself, which does not change under the sheet, and nothing is read for it.
     fn refresh_schedule(&mut self) {
         let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
-        let wanted = match self.showing {
-            schedule::Which::Processes => "processes",
-            schedule::Which::Revisions => "revisions",
-            _ => return,
-        };
-        // neither of these lists the displays, so none are asked for
-        self.schedule = schedule::of(wanted, sheet_number, &self.theme.raw, &[]);
+        if self.showing.is_empty() || self.showing == "equipment" {
+            return;
+        }
+        // none of these lists the displays, so none are asked for
+        let wanted = self.showing.clone();
+        self.schedule = schedule::of(&wanted, sheet_number, &self.theme.raw, &[]);
         // not laid out again: the surface is cut to the room the schedule has, which does not change
         // with what is in it, so only the drawing is taken again
         let surfaces: Vec<wl_surface::WlSurface> = self

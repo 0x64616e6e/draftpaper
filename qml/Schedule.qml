@@ -36,6 +36,15 @@ Item {
     readonly property real dpr: edge.dpr
     readonly property color ink: theme.ink
     readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
+    // the ink a row asks for, if it asks for one: a schedule of the user's own may letter a row in the
+    // theme's alert, faint or strong ink (docs/sheet-content.md); anything else is the sheet's own
+    function rowInk(row, fallback) {
+        if (!row || !row.ink) return fallback
+        if (row.ink === "alert") return theme.alert
+        if (row.ink === "faint") return faint
+        if (row.ink === "strong") return edge.strong
+        return fallback
+    }
     readonly property color rule: Qt.rgba(ink.r, ink.g, ink.b, 0.55)
     readonly property real hair: 1 / dpr
     // no margin of its own: the lettering starts at its edges
@@ -238,7 +247,7 @@ Item {
                                         text: line.row.cells[cell.index] || ""
                                         elide: cell.c.right ? Text.ElideNone : Text.ElideRight
                                         font.family: Fonts.mono; font.pixelSize: (cell.index === 0 ? 2.5 : 2.6) * sched.mm; font.bold: cell.index === 0
-                                        color: cell.bar && line.row.share >= sched.alertAt ? sched.theme.alert : sched.ink
+                                        color: sched.rowInk(line.row, cell.bar && line.row.share >= sched.alertAt ? sched.theme.alert : sched.ink)
                                     }
                                     // the share as a bar ruled to the millimetre, 10 mm long, before the figure
                                     Rectangle {
@@ -247,7 +256,7 @@ Item {
                                         color: "transparent"; border.width: sched.hair; border.color: sched.rule
                                         Rectangle {
                                             width: parent.width * Math.max(0, Math.min(1, line.row.share || 0)); height: parent.height
-                                            color: (line.row.share || 0) >= sched.alertAt ? sched.theme.alert : sched.ink
+                                            color: sched.rowInk(line.row, (line.row.share || 0) >= sched.alertAt ? sched.theme.alert : sched.ink)
                                         }
                                     }
                                     Text {

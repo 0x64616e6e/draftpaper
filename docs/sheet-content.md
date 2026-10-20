@@ -103,13 +103,17 @@ entry: **letter `text` where the face has every character in it, else `words`.**
   "title": "PROCESS SCHEDULE",
   "meta": "BY CPU · LOAD 0.73 · 112 PROCESSES",
   "columns": [ { "name": "NO.", "mm": 8, "right": false } ],
-  "rows": [ { "cells": ["01", "firefox", "4210", "4.0", "723 MB", "1:02:50"], "share": 0.04 } ],
+  "rows": [ { "cells": ["01", "firefox", "4210", "4.0", "723 MB", "1:02:50"],
+              "share": 0.04,  // where the bar stands, 0 to 1
+              "note": "",     // lettered small under the row, in the column `note` names
+              "heavy": false, // a heavier rule above this row, for grouping
+              "ink": "" } ],  // the ink the row is lettered in: "alert", "faint", "strong"
   "bar": 3,               // the column ruled as a bar, from `share`; -1 for none
   "note": -1              // the column lettered as a note under its row; -1 for none
 }
 ```
 
-Four things worth saying about that shape, because each of them is a defect from this week:
+Six things worth saying about that shape, because each of them is a defect from this week:
 
 - **`mark` and `words` are both carried, and the renderer chooses.** Only the renderer knows whether a
   Nerd Font is installed and whether it has that codepoint. The producer cannot know, and the shell and
@@ -122,6 +126,14 @@ Four things worth saying about that shape, because each of them is a defect from
   back to `draftpaper` is the same in both.
 - **The schedule is in the document even when it has no rows.** A schedule with nothing in it is still a
   schedule, with a heading and columns. The client dropped it entirely and the sheet looked ignored.
+- **`ink` on a row is a role, not a colour.** A row that has gone wrong says `"alert"` and the theme
+  settles what that is on this paper; a row saying `#c0392b` would be the one thing on the sheet the
+  theme cannot reach. It is the second rule of this document applied a level down, from the slot to
+  the row.
+- **Which schedule is out is a name, not a list.** The client held an enum of the three the sheet came
+  with and matched the compositor's name against it, so a schedule of the user's own fell through to
+  `None` and was never drawn at all — the shell drew it, the client drew nothing. What schedules there
+  are is `draftpaper schedule`'s to know; a renderer letters whatever name it is handed.
 
 ## Who makes it
 

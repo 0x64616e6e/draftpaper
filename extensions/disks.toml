@@ -1,5 +1,5 @@
 # What is on the disks, fullest first, each one's use ruled as a bar: `draftpaper schedule disks`.
-# Nothing to install — df is enough. This is the example to read for how `bar` and `share` work.
+# Nothing to install — df is enough. This is the example to read for how `bar`, `share` and `ink` work.
 interval = 60
 command = ["sh", "-c", '''
 df -B1 --output=target,source,size,used -x tmpfs -x devtmpfs -x efivarfs -x overlay 2> /dev/null |
@@ -14,7 +14,8 @@ jq -Rs '{
     | {cells: [.[0], .[1],
                ((.[2] | tonumber) / 1e9 | round | tostring) + " GB",
                ((.[3] | tonumber) * 100 / (.[2] | tonumber) | round | tostring) + "%"],
-       share: ((.[3] | tonumber) / (.[2] | tonumber))})
+       share: ((.[3] | tonumber) / (.[2] | tonumber)),
+       ink: (if (.[3] | tonumber) / (.[2] | tonumber) > 0.9 then "alert" else "" end)})
     | sort_by(-.share))
 }'
 ''']

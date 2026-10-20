@@ -21,6 +21,9 @@ printf '%s' "$runs" | jq -c --arg repo "$REPO" '{
     cells: ["#\(.number)", .workflowName, .headBranch,
             (.displayTitle | if length > 46 then .[0:45] + "…" else . end),
             (if .status != "completed" then (.status | gsub("_"; " ")) else .conclusion end)],
-    note: (.startedAt[0:16] | sub("T"; " "))})
+    note: (.startedAt[0:16] | sub("T"; " ")),
+    ink: (if .conclusion == "failure" then "alert"
+          elif .status != "completed" then "strong"
+          else "" end)})
 }'
 ''']
