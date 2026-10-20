@@ -1,5 +1,5 @@
 #!/bin/sh
-# make screenshots: the README's pictures (docs/*.jpg), drawn headless: nothing is shown on any display.
+# make screenshots: the README's pictures (docs/screenshots/*.jpg), drawn headless: nothing is shown on any display.
 # Soft Glow throughout (Blueprint for its own picture): the sheet, the tiles, parking, the launcher, the
 # settings (the colour scheme, the wallpaper page with pictures of the script's own), the lock and login
 # screens with the reader listening.
@@ -13,7 +13,7 @@ repo=$(cd "$(dirname "$0")/.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
 cli=$repo/cli/target/release/draftpaper
 fake=$repo/compositor/target/release/examples/fakegreetd
-out=${OUT:-$repo/docs}
+out=${OUT:-$repo/docs/screenshots}
 size=1920x1200 scale=1.5 mm=6.4
 for c in foot convert; do command -v $c > /dev/null || { echo "screenshots: $c is needed"; exit 1; }; done
 runtime=${XDG_RUNTIME_DIR:?no XDG_RUNTIME_DIR}

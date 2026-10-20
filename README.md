@@ -36,16 +36,16 @@ sheet looks the same on a laptop panel and a 4K monitor. Windows tile on the zon
 and letter: each takes a rectangle of whole zones, its edges on the ticks, and moves and resizes a zone at
 a time.
 
-![Three terminals tiled on the sheet's zones](docs/tiles.jpg)
+![Three terminals tiled on the sheet's zones](docs/screenshots/tiles.jpg)
 
 *Three windows on the zones: the README on the left half, `layout.rs` and the git log on the right.*
 
-![One window parked in the left margin](docs/parked.jpg)
+![One window parked in the left margin](docs/screenshots/parked.jpg)
 
 *`git log` parked (Super+Escape): its title lettered up the left margin's cell A, `layout.rs` taking its
 zones.*
 
-![Every window parked: the whole sheet with its title block](docs/sheet.jpg)
+![Every window parked: the whole sheet with its title block](docs/screenshots/sheet.jpg)
 
 *Every window of the workspace parked: the sheet, the three parked titles, and the title block.*
 
@@ -109,12 +109,12 @@ Clicks: a workspace number switches to it; an empty side cell parks the focused 
 parked window's title brings it back; the profile cell cycles the power profile; volume mutes on click
 and changes on scroll; the theme name switches theme.
 
-![The launcher: the applications as a register in the frame's top-left corner](docs/launcher.jpg)
+![The launcher: the applications as a register in the frame's top-left corner](docs/screenshots/launcher.jpg)
 
 *The launcher (Super+D): a register of the applications on whole zones, what you type lettered in the
 margin above it; the most used come first. `draftpaper menu` shows any list of lines in it, for scripts.*
 
-![The lock screen: the sheet blurred inside its frame, one field with the fingerprint reader listening](docs/lock.jpg)
+![The lock screen: the sheet blurred inside its frame, one field with the fingerprint reader listening](docs/screenshots/lock.jpg)
 
 *The lock screen (Super+Shift+X), as the login screen: the sheet blurred inside its frame, nothing of
 the windows, one field with the fingerprint reader listening, again and again until it knows your
@@ -329,7 +329,7 @@ the session takes the displays over as they are, in the same mode, shows that ve
 shell is up, then fades it into the desktop as the blur goes (Linux 6.8 or later). After any display
 manager the session opens the same way, from whatever was on screen.
 
-![The login screen: the sheet blurred inside its frame, one field in the middle, the fingerprint reader listening](docs/greeter.jpg)
+![The login screen: the sheet blurred inside its frame, one field in the middle, the fingerprint reader listening](docs/screenshots/greeter.jpg)
 
 *The login screen: your name remembered, the fingerprint reader listening; type the password and Enter
 instead.*
@@ -398,11 +398,11 @@ paper drawn in pale blue-white), **Day Panel** (the CDE workstation palette: ste
 lettering, Saab amber as the accent) and **Night Panel** (a black instrument panel: unlit markings, only
 the focused workspace and window lit in amber, warnings in red).
 
-![The Blueprint theme: two windows side by side, one parked in the right margin](docs/blueprint.jpg)
+![The Blueprint theme: two windows side by side, one parked in the right margin](docs/screenshots/blueprint.jpg)
 
 *Blueprint, with the terminals in the theme's colours.*
 
-![The settings: the colour scheme page, the themes as drawings on the board and the scheme builder below them](docs/picker.jpg)
+![The settings: the colour scheme page, the themes as drawings on the board and the scheme builder below them](docs/screenshots/picker.jpg)
 
 *The settings (Super+T), on the colour scheme page: the themes along the top, the builder below; the
 pages down the left (Tab turns to the wallpaper). The sheet around them previews what is picked.*
@@ -439,7 +439,7 @@ and the parked cells' hatching: `hatch_strength` (0 to 1, 0.35 by default) and `
 1.5 by default; 0 turns it off). A `[sheet]` in config.toml with either key sets it over the theme's
 (the settings' Sheet page).
 
-![The settings' wallpaper page: the pictures as drawings, and the wallpaper's settings below them](docs/wallpaper.jpg)
+![The settings' wallpaper page: the pictures as drawings, and the wallpaper's settings below them](docs/screenshots/wallpaper.jpg)
 
 *The wallpaper page: the pictures of `~/Pictures/Wallpapers` as drawings, the one picked already
 showing on the sheet around the board; below, the margins, the title block's tint, how it is mounted,
