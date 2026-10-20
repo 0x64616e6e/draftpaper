@@ -24,7 +24,10 @@ Design: `docs/wayland-design.md`.
 
 Next: drag and drop (#18); the login screen's reveal without skipped frames (#42); full colour management
 (gamut mapping) after #50's calibration curves. A client of its own for the sheet's lettering, in place of
-Quickshell for the always-on margins and title block (proposed: `docs/sheet-client.md`).
+Quickshell for the always-on margins and title block (proposed: `docs/sheet-client.md`). The keyboard's
+own legend: holding Super letters the keymap onto the things it already acts on, a leader mirrors the
+same vocabulary for anyone who would rather tap than hold, and a thing with no binding can be given one
+by pointing at it (designed: `docs/keyboard.md`).
 
 ## 3. A distribution (vision)
 

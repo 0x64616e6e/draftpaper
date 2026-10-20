@@ -1,0 +1,162 @@
+# The keyboard: the legend, the leader, and binding by pointing
+
+Status: designed, not built. 2026-10-20, against 0.7.5. This is a contract for what is built next, not a
+record of what exists. Where it disagrees with the code, the code has not been written yet.
+
+## Why
+
+Draftpaper has a documented, mnemonic keymap and a register you can type into, and neither of them is
+what the research says makes an operator fast. The research page (draftpaper.este.systems/research)
+already carries the finding and the admission:
+
+> It does not yet have the two things this research says matter most: a key shown beside the thing it
+> runs, and a hold-to-reveal overlay for what follows a leader key. The cheatsheet is a file you go and
+> read, which is exactly the shape the literature says fails.
+
+The shape of the failure is specific. Lane and colleagues watched 251 experienced users who knew their
+shortcuts issue commands by menu anyway; Cockburn's survey of novice-to-expert transitions finds expert
+accelerators "seldom used", with users failing to adopt faster methods. What moves people is teaching
+the fast path **while they use the slow one** — marking menus, where selecting from the menu is
+physically the same motion as the expert's mark, and ExposeHK, where holding the modifier overlays each
+command with its key and measurably increases hotkey use. A cheatsheet in a file is none of that.
+
+## What is decided
+
+**The overlay mirrors the chord map. It extends past it later.**
+
+Everything below follows from that. The first build invents no vocabulary: it letters the keymap that
+already exists onto the things that keymap already acts on. A tree of sequences that no chord can
+express comes after, once the overlay has earned its place.
+
+## Two gestures, one legend
+
+They are not alternatives. They do different work, and the difference is the mechanism the research
+turns on.
+
+**Holding Super teaches the chords.** You are already holding Super in order to press `Super+h`, so the
+overlay arriving is a slower version of the motion you are trying to learn. The novice path and the
+expert path are the same movement, which is the whole of why marking menus work, and every slow use
+rehearses the fast one. This is the part that makes people graduate.
+
+**A leader composes what a chord cannot.** `Super` tapped, then a key, then a key: a tree, for the
+vocabulary that will not fit in one chord without running out of letters. There is no expert motion to
+rehearse here, because the sequence *is* the expert motion.
+
+So the hold is for what exists and the leader is for what will not fit, and **wherever a chord exists
+the leader route is the same keys**. `Super` tap then `h` does exactly what `Super+h` does. The leader
+is a way of typing the vocabulary, not a second vocabulary — Raskin's monotony holds: one way to mean a
+thing, even where there are two ways to type it. The legend shows `Super+h`, and you may hold or tap.
+
+Both gestures draw **the same legend**, or we have built two interfaces for one keymap.
+
+## The legend
+
+A mark beside every actionable thing, and the key, the mark and what it does lettered into the sheet's
+free area — the way a parts list sits on a drawing. This is the one place the design departs from
+qutebrowser's hints, and it departs on purpose:
+
+- One disclosure, not two. A second, longer hold to reveal descriptions is undiscoverable; nobody holds
+  a key for a second and a half to find out whether something else happens.
+- A crowded sheet gets a **shorter legend**, not a broken overlay. It degrades by saying less.
+- It is the sheet's own idiom. A drawing with annotations has a legend; this is that.
+
+The legend is also what makes a leader admissible at all. We published Raskin's preference for
+quasimodes over modes, and a leader key *is* a mode. His argument is against modes you can **forget you
+are in**, and his own remedy is a mode that is impossible to miss and always escapable — which is the
+ground on which the rulers were already accepted ("two lines across the whole screen is not a state you
+can forget you are in"). So: **no silent leader.** The leader shows the legend or the leader does not
+ship. `Esc` always leaves, an unbound key does nothing and says so, and there is no inter-key timeout —
+once the legend is on screen a timeout only punishes you for reading it.
+
+## Which key, and why there is no choice
+
+A desktop has no normal mode. Focus is nearly always inside an application, which receives every plain
+keystroke, so `Space` or `,` — the leader of Helix and Spacemacs — is unavailable unless it is stolen
+globally, which breaks the application it is stolen from.
+
+That leaves a modifier. A **Super tap** — pressed and released with nothing else — is unambiguous:
+press `Super+h` and Super is never released alone, so the leader never arms. This removes the timing
+threshold that the hold gesture needs, and with it the false overlays that a threshold fires while
+someone types quickly.
+
+## Where the targets come from
+
+Both registries already exist, and the overlay is a join between them on the action's name.
+
+| | holds | lives in |
+|---|---|---|
+| key → action | `("Mod+h", "focus left")`, the table of defaults and whatever the config overrides | `compositor/src/config.rs` |
+| thing → action | every cell, row and parked title's `action` and `action_right` | the content document (`docs/sheet-content.md`) |
+
+Nothing has to be enumerated for the first build. For each thing the document says is actionable, look
+up the key bound to its action and letter that key on it. Where the document gives both an `action` and
+an `action_right`, the mark pressed plainly runs the first and with Shift the second — two verbs, already
+populated, no new vocabulary.
+
+**The overlay shows the real binding.** It does not generate throwaway labels. A label that means
+nothing tomorrow teaches nothing, and the point of the exercise is that you stop needing the overlay.
+
+## Zones need no hints
+
+The sheet already prints a coordinate system: the columns numbered across the frame, the rows lettered
+down it. For every spatial target — move this window there, split there, park here — the hints are
+already drawn, in the product's own hand, and they do not move. `Super`-hold then `C3` is not a hint
+system; it is reading the drawing.
+
+This is the largest and most frequent class of target, and it costs nothing and teaches a coordinate
+you can see with the overlay closed. A tiling compositor with arbitrary geometry could not do it.
+
+## Stable and positional
+
+The distinction decides what may be bound, and the architecture already draws it.
+
+- **Stable**: a thing whose action has a name in the content document — `profile.next`, `ext-ci.left`,
+  `schedule.trains`. The name means the same thing tomorrow.
+- **Positional**: this window, the third parked title, that notification. Reachable by coordinate,
+  never by a name that survives the afternoon.
+
+Anything that still needs a *generated* mark after the keymap has settled is a missing binding, and the
+overlay is then a list of them.
+
+## Binding by pointing
+
+The reason a keymap never grows is that the config file asks you to know an action's name before you can
+bind it: you have to find `park_prev` in a list to discover that it exists. Inverted — point at the
+thing on the sheet and press the key you want it on — the keymap grows by use, which is what designing
+against non-adoption actually requires.
+
+Two rules keep it from filling the config with bindings that rot:
+
+1. **Only stable things may be bound.** The prompt never appears over a positional target, so a binding
+   cannot be attached to a window that will not exist tomorrow. The system can tell which is which
+   without guessing, because the document names one kind and not the other.
+2. **The tree places it.** A flat "press any free key" degenerates into assignments nobody remembers.
+   Once the leader tree exists the prompt can say *this is a schedule; schedules live under `s`; `c`,
+   `d` and `f` are free* — so a new binding lands somewhere mnemonic by construction. Norman's mapping
+   argument, which the research page already cites: a meaningful binding is one chunk, an arbitrary one
+   is not.
+
+Draftpaper writes the result. The user's `config.toml` is the user's file, so the bindings it accepts go
+in a block or a file Draftpaper owns, and the config always wins over it.
+
+## Not settled
+
+1. **How far the leader tree extends past the chord map.** Mirroring keeps one language and caps the
+   vocabulary at what chords can express; extending is where the power is and where a second language
+   creeps back in. Decided when the mirror has been lived with, not before.
+2. **Whether a Super tap is acceptable as the leader**, given it is muscle memory for an overview
+   elsewhere and that some applications grab Super. The fallback is `Super+Space`, which is immune and
+   gives the timing threshold back.
+3. **What the overlay costs to draw** on a sheet whose whole doctrine is that nothing moves. The defence
+   is that it is asked for — the objection in the literature is to unbidden motion, not to a response to
+   your own key — but it should arrive without animation and leave without one.
+
+## Order
+
+1. **The hold overlay over the existing keymap.** Read-only, nothing generated, no new actions: the zone
+   coordinates, the keys beside the windows and the title-block cells they already act on. A week of
+   using it says whether the gesture earns its place, before any label assignment is designed.
+2. **The legend**, once there is more to say than a mark can carry.
+3. **The leader**, mirroring the chord map exactly.
+4. **Binding by pointing**, which wants the tree to place things in.
+5. **Extending the tree** past what a chord can express — if by then it is still wanted.
