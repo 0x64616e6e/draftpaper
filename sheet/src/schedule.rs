@@ -21,7 +21,7 @@ pub const GAP: f64 = 6.0;
 /// One column: what it is called, how wide it is (0: whatever is left), and whether it reads from the
 /// right, as figures do.
 pub struct Column {
-    pub name: &'static str,
+    pub name: String,
     pub mm: f64,
     pub right: bool,
 }
@@ -171,7 +171,7 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
     canvas.fill(0, px(at.head) as i32, wide as i32, heavy as i32, ink.premultiplied());
     // the columns' heads
     for (i, c) in schedule.columns.iter().enumerate() {
-        let text = c.name;
+        let text = c.name.as_str();
         let w = face.width(text, 2.0 * mm, 0.3 * mm);
         let x = if c.right { px(colx[i] + col_w(i) - 1.6) - w } else { px(colx[i] + if i == 0 { 0.0 } else { 1.6 }) };
         face.draw(canvas, x, px(at.head + 0.6) + face.ascent(2.0 * mm), text, 2.0 * mm, 0.3 * mm, faint.premultiplied());
@@ -237,159 +237,45 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, schedule: &Schedule, at: &Plac
 }
 
 /// The equipment: what the machine is, as the schedule of equipment on a drawing.
-pub fn equipment(p: &Paths, displays: &[(String, String, String)], sheet: &str) -> Schedule {
-    let m = draftpaper::machine::json(p);
-    let mut rows: Vec<Row> = Vec::new();
-    let mut add = |reference: String, item: String, text: String, note: String| {
-        if !text.is_empty() {
-            rows.push(Row { cells: vec![reference, item, text], note, ..Row::default() });
-        }
-    };
-    let s = |k: &str| m.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-    add("M1".into(), "MACHINE".into(), s("machine"), String::new());
-    if let Some(cpu) = m.get("cpu") {
-        let cores = cpu.get("cores").and_then(Value::as_u64).unwrap_or(0);
-        let threads = cpu.get("threads").and_then(Value::as_u64).unwrap_or(0);
-        add("M2".into(), "PROCESSOR".into(), cpu.get("model").and_then(Value::as_str).unwrap_or("").to_string(), format!("{cores} cores, {threads} threads"));
-    }
-    let gpus: Vec<&str> = m.get("gpus").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
-    for (i, g) in gpus.iter().enumerate() {
-        add(format!("M{}", 3 + i), "GRAPHICS".into(), g.to_string(), String::new());
-    }
-    let n = 3 + gpus.len().max(1);
-    if let Some(gib) = m.get("memory_gib").and_then(Value::as_f64) {
-        add(format!("M{n}"), "MEMORY".into(), format!("{} GiB", gib.round()), String::new());
-    }
-    if let Some(st) = m.get("storage") {
-        let used = st.get("used_gb").and_then(Value::as_f64);
-        let size = st.get("size_gb").and_then(Value::as_f64);
-        let note = [
-            st.get("fs").and_then(Value::as_str).unwrap_or("").to_string(),
-            match (used, size) {
-                (Some(u), Some(t)) => format!("{} of {} GB used", u.round(), t.round()),
-                _ => String::new(),
-            },
-        ]
-        .iter()
-        .filter(|t| !t.is_empty())
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(" · ");
-        add(format!("M{}", n + 1), "STORAGE".into(), st.get("disk").and_then(Value::as_str).unwrap_or("").to_string(), note);
-    }
-    let system = [s("system"), s("kernel")].iter().filter(|t| !t.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
-    let uptime = m.get("uptime_s").and_then(Value::as_f64).map(up).unwrap_or_default();
-    add("S1".into(), "SYSTEM".into(), system, uptime);
-    let desktop = format!("Draftpaper {}{}", s("draftpaper"), if s("quickshell").is_empty() { String::new() } else { format!(" · Quickshell {}", s("quickshell")) });
-    add("S2".into(), "DESKTOP".into(), desktop, String::new());
-    for (i, (name, what, note)) in displays.iter().enumerate() {
-        add(format!("D{}", i + 1), format!("DISPLAY {name}"), what.clone(), note.clone());
-    }
-    // the sheet itself is equipment too: the theme it is drawn in and how it is ruled
-    add("P1".into(), "SHEET".into(), sheet.to_string(), String::new());
-    // a heavier rule where the references change letter, as a drawing groups its items
-    for i in 1..rows.len() {
-        let before = rows[i - 1].cells[0].chars().next();
-        let now = rows[i].cells[0].chars().next();
-        rows[i].heavy_above = before != now;
-    }
-    Schedule {
-        title: "SCHEDULE OF EQUIPMENT".into(),
-        meta: String::new(),
-        columns: vec![Column { name: "REF", mm: 9.0, right: false }, Column { name: "ITEM", mm: 27.0, right: false }, Column { name: "DESCRIPTION", mm: 0.0, right: false }],
-        rows,
-        note_col: 2,
-        bar_col: -1,
-    }
-}
-
-fn up(seconds: f64) -> String {
-    let s = seconds as u64;
-    let (d, h, m) = (s / 86_400, s % 86_400 / 3600, s % 3600 / 60);
-    if d > 0 {
-        format!("up {d} d {h} h")
-    } else if h > 0 {
-        format!("up {h} h {m} min")
-    } else {
-        format!("up {m} min")
-    }
-}
-
-/// What the machine is doing, busiest first.
-pub fn processes() -> Schedule {
-    let p = draftpaper::processes::json(40);
-    let load = p.get("load").and_then(Value::as_str).unwrap_or("").to_string();
-    let count = p.get("processes").and_then(Value::as_u64).unwrap_or(0);
-    let rows = p
-        .get("rows")
-        .and_then(Value::as_array)
+/// The schedule the compositor says is up, read from the one account of what the sheet says
+/// (`draftpaper::content`, docs/sheet-content.md). Nothing is worked out here: what each schedule
+/// holds is the document's, and this only turns it into what the sheet can place and draw.
+pub fn of(which: &str, sheet: u64, theme: &Value, outputs: &[Value]) -> Option<Schedule> {
+    let v = draftpaper::content::schedule(&Paths::new(), which, sheet, theme, outputs)?;
+    let text = |x: &Value, k: &str| x.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    let columns = v["columns"]
+        .as_array()
         .map(|a| {
             a.iter()
-                .enumerate()
-                .map(|(i, r)| {
-                    let cpu = r.get("cpu").and_then(Value::as_f64).unwrap_or(0.0);
-                    Row {
-                        cells: vec![
-                            format!("{:02}", i + 1),
-                            r.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
-                            r.get("pid").and_then(Value::as_str).map(str::to_string).or_else(|| r.get("pid").and_then(Value::as_u64).map(|v| v.to_string())).unwrap_or_default(),
-                            format!("{cpu:.1}"),
-                            r.get("memory").and_then(Value::as_str).unwrap_or("").to_string(),
-                            r.get("time").and_then(Value::as_str).unwrap_or("").to_string(),
-                        ],
-                        share: Some(cpu / 100.0),
-                        ..Row::default()
-                    }
+                .map(|c| Column {
+                    name: text(c, "name"),
+                    mm: c.get("mm").and_then(Value::as_f64).unwrap_or(0.0),
+                    right: c.get("right").and_then(Value::as_bool).unwrap_or(false),
                 })
                 .collect()
         })
         .unwrap_or_default();
-    Schedule {
-        title: "PROCESS SCHEDULE".into(),
-        meta: format!("BY CPU · LOAD {load} · {count} PROCESSES"),
-        columns: vec![
-            Column { name: "NO.", mm: 8.0, right: false },
-            Column { name: "PROCESS", mm: 0.0, right: false },
-            Column { name: "PID", mm: 15.0, right: true },
-            Column { name: "CPU %", mm: 24.0, right: true },
-            Column { name: "MEMORY", mm: 17.0, right: true },
-            Column { name: "TIME", mm: 16.0, right: true },
-        ],
-        rows,
-        note_col: -1,
-        bar_col: 3,
-    }
-}
-
-/// What has been drawn lately, from the repository the focused window sits in.
-pub fn revisions(sheet: u64) -> Schedule {
-    let r = draftpaper::revisions::json(&Paths::new());
-    let repo = r.get("repo").and_then(Value::as_str).unwrap_or("");
-    let rows = r
-        .get("rows")
-        .and_then(Value::as_array)
+    let rows = v["rows"]
+        .as_array()
         .map(|a| {
             a.iter()
-                .map(|row| {
-                    let g = |k: &str| row.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-                    Row { cells: vec![g("rev"), g("description"), g("date"), g("by")], ..Row::default() }
+                .map(|r| Row {
+                    cells: r["cells"].as_array().map(|c| c.iter().map(|x| x.as_str().unwrap_or("").to_string()).collect()).unwrap_or_default(),
+                    note: text(r, "note"),
+                    heavy_above: r.get("heavy").and_then(Value::as_bool).unwrap_or(false),
+                    share: r.get("share").and_then(Value::as_f64),
                 })
                 .collect()
         })
         .unwrap_or_default();
-    Schedule {
-        title: if repo.is_empty() { "REVISIONS".into() } else { format!("REVISIONS · {}", repo.to_uppercase()) },
-        meta: format!("SHEET {sheet}"),
-        columns: vec![
-            Column { name: "REV", mm: 16.0, right: false },
-            Column { name: "DESCRIPTION", mm: 0.0, right: false },
-            Column { name: "DATE", mm: 21.0, right: true },
-            Column { name: "BY", mm: 22.0, right: true },
-        ],
+    Some(Schedule {
+        title: text(&v, "title"),
+        meta: text(&v, "meta"),
+        columns,
         rows,
-        note_col: -1,
-        bar_col: -1,
-    }
+        note_col: v.get("note").and_then(Value::as_i64).unwrap_or(-1) as isize,
+        bar_col: v.get("bar").and_then(Value::as_i64).unwrap_or(-1) as isize,
+    })
 }
 
 #[cfg(test)]
@@ -403,13 +289,6 @@ pub mod tests {
         assert_eq!(Which::of("revisions"), Which::Revisions);
         assert_eq!(Which::of(""), Which::None);
         assert_eq!(Which::of("nothing of the sort"), Which::None);
-    }
-
-    #[test]
-    fn the_uptime_reads_as_a_drawing_notes_it() {
-        assert_eq!(up(90.0), "up 1 min");
-        assert_eq!(up(3700.0), "up 1 h 1 min");
-        assert_eq!(up(200_000.0), "up 2 d 7 h");
     }
 
     pub fn tests_screen() -> Screen {
@@ -446,7 +325,7 @@ pub mod tests {
         let schedule = Schedule {
             title: "T".into(),
             meta: String::new(),
-            columns: vec![Column { name: "A", mm: 10.0, right: false }, Column { name: "B", mm: 0.0, right: false }],
+            columns: vec![Column { name: "A".into(), mm: 10.0, right: false }, Column { name: "B".into(), mm: 0.0, right: false }],
             rows: rows(4),
             note_col: -1,
             bar_col: -1,
@@ -466,7 +345,7 @@ pub mod tests {
         let make = |n| Schedule {
             title: "T".into(),
             meta: String::new(),
-            columns: vec![Column { name: "A", mm: 10.0, right: false }, Column { name: "B", mm: 0.0, right: false }],
+            columns: vec![Column { name: "A".into(), mm: 10.0, right: false }, Column { name: "B".into(), mm: 0.0, right: false }],
             rows: rows(n),
             note_col: -1,
             bar_col: -1,
@@ -488,7 +367,7 @@ pub mod tests {
         let schedule = Schedule {
             title: "REVISIONS".into(),
             meta: "SHEET 1".into(),
-            columns: vec![Column { name: "REV", mm: 16.0, right: false }, Column { name: "DESCRIPTION", mm: 0.0, right: false }],
+            columns: vec![Column { name: "REV".into(), mm: 16.0, right: false }, Column { name: "DESCRIPTION".into(), mm: 0.0, right: false }],
             rows: Vec::new(),
             note_col: -1,
             bar_col: -1,
@@ -505,7 +384,7 @@ pub mod tests {
         // in a pool that never hands one back: twenty megabytes a refresh on a large display.
         let s = sheet();
         let of = |n: usize| {
-            Schedule { title: "T".into(), meta: String::new(), columns: vec![Column { name: "A", mm: 0.0, right: false }], rows: rows(n), note_col: -1, bar_col: -1 }
+            Schedule { title: "T".into(), meta: String::new(), columns: vec![Column { name: "A".into(), mm: 0.0, right: false }], rows: rows(n), note_col: -1, bar_col: -1 }
                 .place(&s)
                 .expect("placed")
         };
@@ -522,7 +401,7 @@ pub mod tests {
         let mut s = sheet();
         // a title block that reaches nearly to the frame's top leaves nothing above it
         s.title = Some(crate::sheet::Block { rect: (1050.0, 60.0, 832.0, 230.0), cells: Vec::new() });
-        let schedule = Schedule { title: "T".into(), meta: String::new(), columns: vec![Column { name: "A", mm: 0.0, right: false }], rows: rows(4), note_col: -1, bar_col: -1 };
+        let schedule = Schedule { title: "T".into(), meta: String::new(), columns: vec![Column { name: "A".into(), mm: 0.0, right: false }], rows: rows(4), note_col: -1, bar_col: -1 };
         assert!(schedule.place(&s).is_none());
     }
 }

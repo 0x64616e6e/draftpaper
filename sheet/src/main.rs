@@ -596,29 +596,8 @@ impl Sheet {
         }
         self.showing = which;
         let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
-        let displays: Vec<(String, String, String)> = self
-            .screens
-            .values()
-            .map(|s| {
-                (
-                    s.name.clone(),
-                    format!("{} × {} · scale {}", (s.width * s.scale).round(), (s.height * s.scale).round(), s.scale),
-                    format!("{:.1} px/mm · {:.1} logical px a mm", s.mm * s.scale, s.mm),
-                )
-            })
-            .collect();
-        let sheet_of = self
-            .screens
-            .values()
-            .next()
-            .map(|s| format!("{} · margin {} mm", self.theme.label, (s.margin / s.mm).round()))
-            .unwrap_or_default();
-        self.schedule = match which {
-            schedule::Which::None => None,
-            schedule::Which::Equipment => Some(schedule::equipment(&draftpaper::util::Paths::new(), &displays, &sheet_of)),
-            schedule::Which::Processes => Some(schedule::processes()),
-            schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
-        };
+        // the equipment schedule lists the displays, so it wants them as the compositor publishes them
+        self.schedule = schedule::of(wanted, sheet_number, &self.theme.raw, &sheet::outputs());
     }
 
     /// The schedule read again while it stands on the sheet. The process schedule is a live note of
@@ -628,11 +607,13 @@ impl Sheet {
     /// change under the sheet, and nothing is read for it.
     fn refresh_schedule(&mut self) {
         let sheet_number = self.screens.values().map(|s| s.workspace).next().unwrap_or(1);
-        self.schedule = match self.showing {
-            schedule::Which::Processes => Some(schedule::processes()),
-            schedule::Which::Revisions => Some(schedule::revisions(sheet_number)),
+        let wanted = match self.showing {
+            schedule::Which::Processes => "processes",
+            schedule::Which::Revisions => "revisions",
             _ => return,
         };
+        // neither of these lists the displays, so none are asked for
+        self.schedule = schedule::of(wanted, sheet_number, &self.theme.raw, &[]);
         // not laid out again: the surface is cut to the room the schedule has, which does not change
         // with what is in it, so only the drawing is taken again
         let surfaces: Vec<wl_surface::WlSurface> = self

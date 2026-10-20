@@ -1,6 +1,6 @@
 # The sheet's content: one account of what the drawing says
 
-Status: stage 0 built, 2026-10-20; stages 1 to 5 proposed. The sheet is lettered by the shell again
+Status: stages 0 and 1 built, 2026-10-20; stages 2 to 5 proposed. The sheet is lettered by the shell again
 (`[sheet] lettering = "shell"`); the client in `sheet/` stays in the tree and still passes its tests.
 
 ## Why
@@ -142,6 +142,11 @@ and the glyph helper — go away entirely.
 
 - **The graph.** It is a plot, not lettering: lines from the metrics store. It stays a renderer feature.
 - **The tray.** Icons from `SystemTray`, which has no text to carry. It stays the shell's, as it is now.
+- **The notifications.** They belong to whichever process took the name on the session bus, which is
+  the renderer, and a polled snapshot cannot see them. The formatting is the one place a disagreement
+  could still hide; closing it means a daemon that holds them, which is a bigger decision than this.
+- **The config's own `[[cell]]`s.** Each is a command with an interval of its own, and folding them
+  into one poll would change the cadence the config asks for. They stay with whoever letters the sheet.
 - **Levels that are lit for four seconds.** The volume and the brightness are lettered for a moment
   after they move, which is faster than a five-second poll. For now the renderer keeps watching them and
   overlays them on `top.status`. If that proves to be where the next disagreement lives, the document
@@ -154,7 +159,9 @@ Each one leaves the sheet working and the tests green.
 0. **The document, and the client reading it.** ✅ Built 2026-10-20. `cli/src/content.rs`, `draftpaper sheet`, tests against a
    known reading. The title block only — twelve cells is enough to settle the shape, and the formatting
    moves out of `sheet/src/title.rs` rather than being written again.
-1. **The margins and the schedules.** The rest of the shape; the three schedule builders move.
+1. **The margins and the schedules.** ✅ Built 2026-10-20. The rest of the shape; the three schedule
+   builders move out of `sheet/src/schedule.rs`, and the marks a workspace carries — which the client
+   never had — come with them.
 2. **The client letters from it.** `sheet/src` keeps the font, the drawing and the placing, and decides
    nothing about words. Its content tests move to the CLI with the code.
 3. **The shell letters from it.** The poll changes, the twelve-row table and the text properties go.

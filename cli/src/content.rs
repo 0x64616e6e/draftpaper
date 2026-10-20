@@ -30,6 +30,10 @@ const MEMORY: char = '\u{f035b}';
 const ARCS: [char; 5] = ['\u{f092f}', '\u{f091f}', '\u{f0922}', '\u{f0925}', '\u{f0928}'];
 const WIRED: char = '\u{f0201}';
 const OFFLINE: char = '\u{f092e}';
+const BT_ON: char = '\u{f00b1}';
+const BT_OFF: char = '\u{f00af}';
+const BATTERY_LOW: char = '\u{f0083}';
+const SHOT: char = '\u{f0e51}';
 const TEMPERATURES: [(&str, char); 3] = [("CPU", '\u{f061a}'), ("NVME", '\u{f02ca}'), ("FAN", '\u{f0210}')];
 
 /// A glyph and the space after it, as the sheet sets one before a reading.
@@ -46,7 +50,7 @@ fn ramp(v: f64, gs: &[char]) -> char {
 /// One thing the sheet letters. `text` carries its glyphs; `words` is what to letter without them, and
 /// is left out where the two would be the same.
 fn say(text: String, words: Option<String>) -> Value {
-    let mut v = json!({ "text": text });
+    let mut v = json!({ "text": text.trim_end() });
     if let Some(words) = words.filter(|w| *w != v["text"].as_str().unwrap_or("")) {
         v["words"] = json!(words);
     }
@@ -213,23 +217,388 @@ fn clock(now: std::time::SystemTime) -> (String, String) {
     )
 }
 
-/// The whole document: every display the compositor has, and what the sheet says on it. The margins and
-/// the schedules are stage 1 (docs/sheet-content.md); this is the title block.
+/// The glyph a window is marked with along the top margin, by what it calls itself. The first entry
+/// whose name is part of the id wins, and anything unrecognised is a window like any other
+/// (qml/shell.qml's `appGlyphs`).
+fn app_mark(app_id: &str) -> char {
+    const APPS: [(&[&str], char); 21] = [
+        (&["firefox", "librewolf", "zen"], '\u{f0239}'),
+        (&["chromium", "chrome", "brave"], '\u{f02af}'),
+        (&["alacritty", "foot", "kitty", "xterm", "wezterm", "terminal", "konsole", "ghostty"], '\u{f120}'),
+        (&["code", "codium"], '\u{f0a1e}'),
+        (&["claude"], '\u{f06a9}'),
+        (&["thunderbird", "evolution", "geary"], '\u{f01f0}'),
+        (&["signal"], '\u{f0b79}'),
+        (&["telegram"], '\u{f2c6}'),
+        (&["teams"], '\u{f02bb}'),
+        (&["slack"], '\u{f04b1}'),
+        (&["discord", "vesktop"], '\u{f066f}'),
+        (&["spotify"], '\u{f04c7}'),
+        (&["mpv", "vlc", "totem", "celluloid"], '\u{f057c}'),
+        (&["gimp", "inkscape", "krita"], '\u{f0e3e}'),
+        (&["libreoffice", "soffice"], '\u{f0219}'),
+        (&["nautilus", "thunar", "pcmanfm", "nemo", "dolphin"], '\u{f024b}'),
+        (&["evince", "zathura", "okular", "papers"], '\u{f0226}'),
+        (&["keepassxc", "bitwarden"], '\u{f030b}'),
+        (&["obs"], '\u{f044b}'),
+        (&["steam"], '\u{f1b6}'),
+        (&["emacs"], '\u{e632}'),
+    ];
+    let id = app_id.to_lowercase();
+    APPS.iter().find(|(names, _)| names.iter().any(|n| id.contains(n))).map(|(_, g)| *g).unwrap_or('\u{f05af}')
+}
+
+/// The workspaces this display shows, in the first zone of its top margin: the number, and after it the
+/// windows on it, up to three, each by its own mark and no mark twice. A parked window is not on the
+/// sheet and is not counted (qml/shell.qml's `spaceMarkup`).
+fn workspaces(spaces: &[Value], windows: &[Value], display: &str) -> Vec<Value> {
+    spaces
+        .iter()
+        .filter(|w| w.get("output").and_then(Value::as_str) == Some(display))
+        .map(|w| {
+            let number = w.get("number").and_then(Value::as_u64).unwrap_or(0);
+            let mut marks: Vec<char> = Vec::new();
+            for win in windows {
+                if win.get("workspace").and_then(Value::as_u64) != Some(number) || win.get("parked").and_then(Value::as_bool).unwrap_or(false) {
+                    continue;
+                }
+                let g = app_mark(win.get("app_id").and_then(Value::as_str).unwrap_or(""));
+                if !marks.contains(&g) {
+                    marks.push(g);
+                }
+            }
+            let marked: String = marks.iter().take(3).map(|g| format!(" {g}")).collect();
+            let mut v = say(format!("{number}{marked}"), Some(number.to_string()));
+            v["number"] = json!(number);
+            v["focused"] = json!(w.get("focused").and_then(Value::as_bool).unwrap_or(false));
+            v
+        })
+        .collect()
+}
+
+/// The windows parked down the side margins, each by the cell it is parked in.
+fn parked(windows: &[Value], workspace: u64) -> Vec<Value> {
+    windows
+        .iter()
+        .filter(|w| w.get("parked").and_then(Value::as_bool).unwrap_or(false))
+        .filter(|w| w.get("workspace").and_then(Value::as_u64) == Some(workspace))
+        .filter_map(|w| {
+            let cell = w.get("cell").and_then(Value::as_u64)?;
+            let title = w.get("title").and_then(Value::as_str).filter(|t| !t.is_empty());
+            let name = title.or_else(|| w.get("app_id").and_then(Value::as_str)).unwrap_or("");
+            let id = w.get("id").and_then(Value::as_u64)?;
+            Some(json!({ "cell": cell, "text": name, "action": format!("window.{id}") }))
+        })
+        .collect()
+}
+
+/// What is connected over Bluetooth, in the first zone of the foot. The glyph says whether anything is,
+/// so without it the reading says so in words.
+fn bluetooth(r: &Value) -> Value {
+    let names: Vec<&str> = r.get("bt").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    let joined = names.join(", ");
+    let connected = !names.is_empty();
+    let mut v = say(
+        format!("{}{joined}", mark(if connected { BT_ON } else { BT_OFF })),
+        Some(if connected { format!("BT {joined}") } else { "BT -".into() }),
+    );
+    v["action"] = json!("run.bluetooth");
+    v
+}
+
+/// What wants saying now, in the last zone of the top margin: a reading past the alarm the theme sets
+/// for it. The volume and the brightness are lettered there too, for a few seconds after they move, but
+/// they move faster than this document is asked for and stay with whoever letters the sheet.
+fn status(r: &Value) -> Vec<Value> {
+    let mut row = Vec::new();
+    if r.get("hot").and_then(Value::as_bool).unwrap_or(false) {
+        if let Some(v) = r.get("temps").and_then(Value::as_array).and_then(|a| a.iter().find(|t| t["label"] == "CPU")).and_then(|t| t["value"].as_str()) {
+            let mut e = say(format!("{}{v}", mark(TEMPERATURES[0].1)), Some(format!("CPU {v}")));
+            e["ink"] = json!("alert");
+            row.push(e);
+        }
+    }
+    if r.get("battery_low").and_then(Value::as_bool).unwrap_or(false) {
+        if let Some(b) = r.get("battery").and_then(Value::as_f64) {
+            let figure = format!("{}%", (b * 100.0).round());
+            let mut e = say(format!("{}{figure}", mark(BATTERY_LOW)), Some(format!("BAT {figure}")));
+            e["ink"] = json!("alert");
+            row.push(e);
+        }
+    }
+    row
+}
+
+/// The last zone of the foot: the screenshot, where the config names one to take, and the theme the
+/// sheet is drawn in.
+fn foot(theme: &Value) -> Vec<Value> {
+    let mut end = Vec::new();
+    if theme.get("commands").and_then(|c| c.get("screenshot")).and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+        let mut shot = say(SHOT.to_string(), Some("SHOT".into()));
+        shot["action"] = json!("run.screenshot");
+        end.push(shot);
+    }
+    let mut name = say(theme.get("label").and_then(Value::as_str).unwrap_or("").to_uppercase(), None);
+    name["action"] = json!("settings.toggle");
+    name["action_right"] = json!("theme.next");
+    end.push(name);
+    end
+}
+
+/// What the margins of one display carry.
+pub fn margins(theme: &Value, r: &Value, spaces: &[Value], windows: &[Value], display: &str, workspace: u64) -> Value {
+    json!({
+        "top": { "workspaces": workspaces(spaces, windows, display), "status": status(r) },
+        "bottom": { "start": bluetooth(r), "end": foot(theme) },
+        "sides": parked(windows, workspace),
+    })
+}
+
+/// One row of a schedule: what it says across the columns, the note under it, whether a heavier rule
+/// runs above it, and the share of the column that is ruled as a bar.
+fn row(cells: Vec<String>, note: &str, share: Option<f64>) -> Value {
+    let mut v = json!({ "cells": cells });
+    if !note.is_empty() {
+        v["note"] = json!(note);
+    }
+    if let Some(share) = share {
+        v["share"] = json!(share);
+    }
+    v
+}
+
+fn column(name: &str, mm: f64, right: bool) -> Value {
+    json!({ "name": name, "mm": mm, "right": right })
+}
+
+/// How long the machine has been up, as a drawing notes it.
+fn up(seconds: f64) -> String {
+    let s = seconds as u64;
+    let (d, h, m) = (s / 86_400, s % 86_400 / 3600, s % 3600 / 60);
+    if d > 0 {
+        format!("up {d} d {h} h")
+    } else if h > 0 {
+        format!("up {h} h {m} min")
+    } else {
+        format!("up {m} min")
+    }
+}
+
+/// The machine itself, as a drawing schedules its equipment: a reference, the item, what it is, and a
+/// note under it. The references are lettered in groups and a heavier rule runs where the letter changes.
+fn equipment(p: &crate::util::Paths, displays: &[Value], sheet: &str) -> Value {
+    let m = crate::machine::json(p);
+    let mut rows: Vec<Value> = Vec::new();
+    let mut refs: Vec<String> = Vec::new();
+    let mut add = |reference: String, item: String, text: String, note: String| {
+        if !text.is_empty() {
+            refs.push(reference.clone());
+            rows.push(row(vec![reference, item, text], &note, None));
+        }
+    };
+    let s = |k: &str| m.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+    add("M1".into(), "MACHINE".into(), s("machine"), String::new());
+    if let Some(cpu) = m.get("cpu") {
+        let cores = cpu.get("cores").and_then(Value::as_u64).unwrap_or(0);
+        let threads = cpu.get("threads").and_then(Value::as_u64).unwrap_or(0);
+        add("M2".into(), "PROCESSOR".into(), cpu.get("model").and_then(Value::as_str).unwrap_or("").to_string(), format!("{cores} cores, {threads} threads"));
+    }
+    let gpus: Vec<&str> = m.get("gpus").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
+    for (i, g) in gpus.iter().enumerate() {
+        add(format!("M{}", 3 + i), "GRAPHICS".into(), g.to_string(), String::new());
+    }
+    let n = 3 + gpus.len().max(1);
+    if let Some(gib) = m.get("memory_gib").and_then(Value::as_f64) {
+        add(format!("M{n}"), "MEMORY".into(), format!("{} GiB", gib.round()), String::new());
+    }
+    if let Some(st) = m.get("storage") {
+        let used = st.get("used_gb").and_then(Value::as_f64);
+        let size = st.get("size_gb").and_then(Value::as_f64);
+        let note = [
+            st.get("fs").and_then(Value::as_str).unwrap_or("").to_string(),
+            match (used, size) {
+                (Some(u), Some(t)) => format!("{} of {} GB used", u.round(), t.round()),
+                _ => String::new(),
+            },
+        ]
+        .iter()
+        .filter(|t| !t.is_empty())
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(" · ");
+        add(format!("M{}", n + 1), "STORAGE".into(), st.get("disk").and_then(Value::as_str).unwrap_or("").to_string(), note);
+    }
+    let system = [s("system"), s("kernel")].iter().filter(|t| !t.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
+    let uptime = m.get("uptime_s").and_then(Value::as_f64).map(up).unwrap_or_default();
+    add("S1".into(), "SYSTEM".into(), system, uptime);
+    let desktop = format!("Draftpaper {}{}", s("draftpaper"), if s("quickshell").is_empty() { String::new() } else { format!(" · Quickshell {}", s("quickshell")) });
+    add("S2".into(), "DESKTOP".into(), desktop, String::new());
+    for (i, d) in displays.iter().enumerate() {
+        let name = d.get("name").and_then(Value::as_str).unwrap_or("");
+        let what = d.get("what").and_then(Value::as_str).unwrap_or("").to_string();
+        let note = d.get("note").and_then(Value::as_str).unwrap_or("").to_string();
+        add(format!("D{}", i + 1), format!("DISPLAY {name}"), what, note);
+    }
+    // the sheet itself is equipment too: the theme it is drawn in and how it is ruled
+    add("P1".into(), "SHEET".into(), sheet.to_string(), String::new());
+    // a heavier rule where the references change letter, as a drawing groups its items
+    for i in 1..rows.len() {
+        if refs[i - 1].chars().next() != refs[i].chars().next() {
+            rows[i]["heavy"] = json!(true);
+        }
+    }
+    json!({
+        "title": "SCHEDULE OF EQUIPMENT",
+        "meta": "",
+        "columns": [column("REF", 9.0, false), column("ITEM", 27.0, false), column("DESCRIPTION", 0.0, false)],
+        "rows": rows,
+        "note": 2,
+        "bar": -1,
+    })
+}
+
+/// What the machine is doing: the busiest programs first, each one's share of a processor ruled as a bar.
+fn processes() -> Value {
+    let p = crate::processes::json(40);
+    let load = p.get("load").and_then(Value::as_str).unwrap_or("").to_string();
+    let count = p.get("processes").and_then(Value::as_u64).unwrap_or(0);
+    let rows: Vec<Value> = p
+        .get("rows")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let cpu = r.get("cpu").and_then(Value::as_f64).unwrap_or(0.0);
+                    let pid = r
+                        .get("pid")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .or_else(|| r.get("pid").and_then(Value::as_u64).map(|v| v.to_string()))
+                        .unwrap_or_default();
+                    row(
+                        vec![
+                            format!("{:02}", i + 1),
+                            r.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
+                            pid,
+                            format!("{cpu:.1}"),
+                            r.get("memory").and_then(Value::as_str).unwrap_or("").to_string(),
+                            r.get("time").and_then(Value::as_str).unwrap_or("").to_string(),
+                        ],
+                        "",
+                        Some(cpu / 100.0),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    json!({
+        "title": "PROCESS SCHEDULE",
+        "meta": format!("BY CPU · LOAD {load} · {count} PROCESSES"),
+        "columns": [
+            column("NO.", 8.0, false), column("PROCESS", 0.0, false), column("PID", 15.0, true),
+            column("CPU %", 24.0, true), column("MEMORY", 17.0, true), column("TIME", 16.0, true)
+        ],
+        "rows": rows,
+        "note": -1,
+        "bar": 3,
+    })
+}
+
+/// What has been drawn lately, from the repository the focused window sits in. Over a window that is in
+/// no repository it has no rows, and stands on the sheet empty rather than not at all.
+fn revisions(sheet: u64) -> Value {
+    let r = crate::revisions::json(&crate::util::Paths::new());
+    let repo = r.get("repo").and_then(Value::as_str).unwrap_or("");
+    let rows: Vec<Value> = r
+        .get("rows")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|v| {
+                    let g = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();
+                    row(vec![g("rev"), g("description"), g("date"), g("by")], "", None)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    json!({
+        "title": if repo.is_empty() { "REVISIONS".to_string() } else { format!("REVISIONS · {}", repo.to_uppercase()) },
+        "meta": format!("SHEET {sheet}"),
+        "columns": [column("REV", 16.0, false), column("DESCRIPTION", 0.0, false), column("DATE", 21.0, true), column("BY", 22.0, true)],
+        "rows": rows,
+        "note": -1,
+        "bar": -1,
+    })
+}
+
+/// The displays as the equipment schedule lists them: what each one is, and how finely it is ruled.
+fn listed(outputs: &[Value]) -> Vec<Value> {
+    outputs
+        .iter()
+        .map(|o| {
+            let f = |k: &str| o.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+            let (w, h, scale, mm) = (f("width"), f("height"), f("scale"), f("px_per_mm"));
+            json!({
+                "name": o.get("name").and_then(Value::as_str).unwrap_or(""),
+                "what": format!("{} × {} · scale {scale}", (w * scale).round(), (h * scale).round()),
+                "note": format!("{:.1} px/mm · {:.1} logical px a mm", mm * scale, mm),
+            })
+        })
+        .collect()
+}
+
+/// The sheet itself, as the equipment schedule lists it: the theme it is drawn in and how wide its margin is.
+fn ruled(theme: &Value, outputs: &[Value]) -> String {
+    let Some(o) = outputs.first() else { return String::new() };
+    let mm = o.get("px_per_mm").and_then(Value::as_f64).unwrap_or(1.0);
+    let margin = o.get("margin").and_then(Value::as_f64).unwrap_or(0.0);
+    format!("{} · margin {} mm", theme.get("label").and_then(Value::as_str).unwrap_or(""), (margin / mm).round())
+}
+
+/// Whichever schedule the compositor says is up, or nothing where none is.
+pub fn schedule(p: &crate::util::Paths, which: &str, sheet: u64, theme: &Value, outputs: &[Value]) -> Option<Value> {
+    match which {
+        "equipment" => Some(equipment(p, &listed(outputs), &ruled(theme, outputs))),
+        "processes" => Some(processes()),
+        "revisions" => Some(revisions(sheet)),
+        _ => None,
+    }
+}
+
+/// The whole document: every display the compositor has, and what the sheet says on it.
+///
+/// What is live and held by whoever letters the sheet is not in here and cannot be: the notifications,
+/// which belong to whichever process took the name on the bus, and the volume and brightness lettered
+/// for a few seconds after they move. Nor are the config's own `[[cell]]`s, which are commands with
+/// intervals of their own. Everything that is a reading of the machine is.
 pub fn document(p: &crate::util::Paths) -> Value {
     let theme: Value = std::fs::read_to_string(p.theme_json()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
     let readings = crate::readings::json(p);
-    let outputs = crate::util::ask("{\"request\": \"outputs\"}")
-        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
-        .and_then(|v| v.get("reply").and_then(Value::as_array).cloned())
-        .unwrap_or_default();
     let now = std::time::SystemTime::now();
-    let mut displays = serde_json::Map::new();
+    let reply = |request: &str| {
+        crate::util::ask(request)
+            .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+            .and_then(|v| v.get("reply").and_then(Value::as_array).cloned())
+            .unwrap_or_default()
+    };
+    let outputs = reply("{\"request\": \"outputs\"}");
+    let spaces = reply("{\"request\": \"workspaces\"}");
+    let windows = reply("{\"request\": \"windows\"}");
+
+    let mut displays_out = serde_json::Map::new();
     for o in &outputs {
         let Some(name) = o.get("name").and_then(Value::as_str) else { continue };
         let workspace = o.get("workspace").and_then(Value::as_u64).unwrap_or(1);
-        displays.insert(name.to_string(), json!({ "title": title(&theme, workspace, now, &readings, None) }));
+        let mut d = margins(&theme, &readings, &spaces, &windows, name, workspace);
+        d["title"] = json!(title(&theme, workspace, now, &readings, None));
+        let which = o.get("schedule").and_then(Value::as_str).unwrap_or("");
+        if let Some(s) = schedule(p, which, workspace, &theme, &outputs) {
+            d["schedule"] = s;
+        }
+        displays_out.insert(name.to_string(), d);
     }
-    json!({ "version": 1, "displays": displays })
+    json!({ "version": 1, "displays": displays_out })
 }
 
 pub fn main(p: &crate::util::Paths) {
@@ -337,6 +706,78 @@ mod tests {
         assert!(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].contains(&parts[0]), "{date}");
         assert_eq!(time.len(), 5, "{time}");
         assert_eq!(&time[2..3], ":");
+    }
+
+    #[test]
+    fn a_workspace_is_marked_with_the_windows_on_it() {
+        let spaces = json!([{ "number": 2, "focused": true, "output": "eDP-1" }, { "number": 9, "focused": false, "output": "DP-3" }]);
+        let windows = json!([
+            { "workspace": 2, "app_id": "firefox", "parked": false },
+            { "workspace": 2, "app_id": "Alacritty", "parked": false },
+            { "workspace": 2, "app_id": "foot", "parked": false },
+            { "workspace": 2, "app_id": "keepassxc", "parked": true },
+        ]);
+        let w = workspaces(spaces.as_array().unwrap(), windows.as_array().unwrap(), "eDP-1");
+        assert_eq!(w.len(), 1, "only the workspaces this display shows");
+        assert_eq!(w[0]["number"], 2);
+        assert_eq!(w[0]["focused"], true);
+        // the number, then one mark a window, no mark twice, and nothing for a window that is parked
+        assert_eq!(w[0]["text"], format!("2 {} {}", app_mark("firefox"), app_mark("foot")));
+        assert_eq!(w[0]["words"], "2", "without the marks it is the number alone");
+        assert_ne!(app_mark("firefox"), app_mark("foot"));
+        assert_eq!(app_mark("Alacritty"), app_mark("foot"), "a terminal is a terminal");
+        assert_eq!(app_mark("something-else"), app_mark("another"), "anything else is a window");
+    }
+
+    #[test]
+    fn a_window_parked_is_lettered_by_the_cell_it_is_in() {
+        let windows = json!([
+            { "workspace": 1, "parked": true, "cell": 3, "id": 7, "title": "a file", "app_id": "nvim" },
+            { "workspace": 1, "parked": false, "cell": 4, "id": 8, "title": "not parked" },
+            { "workspace": 2, "parked": true, "cell": 5, "id": 9, "title": "another sheet" },
+            { "workspace": 1, "parked": true, "cell": 6, "id": 10, "title": "", "app_id": "foot" },
+        ]);
+        let p = parked(windows.as_array().unwrap(), 1);
+        assert_eq!(p.len(), 2, "parked, and on this sheet");
+        assert_eq!(p[0]["cell"], 3);
+        assert_eq!(p[0]["text"], "a file");
+        assert_eq!(p[0]["action"], "window.7");
+        assert_eq!(p[1]["text"], "foot", "a window with no title is lettered by what it calls itself");
+    }
+
+    #[test]
+    fn the_foot_says_what_is_connected_and_what_the_sheet_is_drawn_in() {
+        let theme = json!({ "label": "Night Panel", "commands": { "screenshot": ["grim"] } });
+        let none = bluetooth(&Value::Null);
+        assert_eq!(none["words"], "BT -", "nothing connected, said in words");
+        let some = bluetooth(&json!({ "bt": ["a keyboard", "a mouse"] }));
+        assert_eq!(some["words"], "BT a keyboard, a mouse");
+        assert!(some["text"].as_str().unwrap().ends_with("a keyboard, a mouse"));
+        let end = foot(&theme);
+        assert_eq!(end.len(), 2);
+        assert_eq!(end[0]["words"], "SHOT");
+        assert_eq!(end[1]["text"], "NIGHT PANEL");
+        // no screenshot command in the config: nothing to letter for it
+        assert_eq!(foot(&json!({ "label": "x" })).len(), 1);
+    }
+
+    #[test]
+    fn only_a_reading_past_its_alarm_is_said_along_the_top() {
+        assert!(status(&Value::Null).is_empty(), "a quiet machine says nothing");
+        let hot = json!({ "hot": true, "temps": [{ "label": "CPU", "value": "95°" }], "battery_low": true, "battery": 0.08 });
+        let row = status(&hot);
+        assert_eq!(row.len(), 2);
+        assert_eq!(row[0]["words"], "CPU 95°");
+        assert_eq!(row[0]["ink"], "alert");
+        assert_eq!(row[1]["words"], "BAT 8%");
+        assert_eq!(row[1]["ink"], "alert");
+    }
+
+    #[test]
+    fn the_uptime_reads_as_a_drawing_notes_it() {
+        assert_eq!(up(90.0), "up 1 min");
+        assert_eq!(up(3700.0), "up 1 h 1 min");
+        assert_eq!(up(200_000.0), "up 2 d 7 h");
     }
 
     #[test]

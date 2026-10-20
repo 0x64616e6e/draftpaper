@@ -149,6 +149,13 @@ fn bar(value: Option<&Value>) -> Option<Bar> {
 }
 
 /// The workspaces of one display, and the windows parked on the one it shows.
+/// The compositor's outputs as it publishes them, unparsed: what the equipment schedule lists.
+pub fn outputs() -> Vec<Value> {
+    request_reply("{\"request\": \"outputs\"}")
+        .and_then(|v| v.get("reply").and_then(Value::as_array).cloned())
+        .unwrap_or_default()
+}
+
 pub fn workspaces() -> Vec<(u64, bool, bool, String)> {
     let Some(reply) = request_reply("{\"request\": \"workspaces\"}") else { return Vec::new() };
     reply
