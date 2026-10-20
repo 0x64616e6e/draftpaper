@@ -497,6 +497,13 @@ impl<W: Clone + PartialEq> Layout<W> {
         self.focused()
     }
 
+    /// Which window a focus that way would land on, without going there: what the legend marks while Mod
+    /// is held, so the key lettered on a window is the key that would really take you to it
+    /// (docs/keyboard.md). None where that way is the edge of the sheet.
+    pub fn peek_dir(&self, dir: Direction) -> Option<W> {
+        self.towards(dir).and_then(|i| self.tiles.get(i)).map(|(w, _)| w.clone())
+    }
+
     /// Move the focused window a zone towards `dir`, keeping its size: into free zones; past a window
     /// spanning the same rows (or columns), swapping places with it; else nowhere, and nothing changes.
     pub fn move_dir(&mut self, dir: Direction, grid: &Grid) {

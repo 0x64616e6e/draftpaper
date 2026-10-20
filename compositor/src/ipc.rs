@@ -367,6 +367,27 @@ impl Draftpaper {
         }
     }
 
+    /// Where each direction's focus key would land on this screen, as window ids: `{"left": 12, …}`,
+    /// and the window those keys act *from* under `"focused"`. The legend marks them (docs/keyboard.md).
+    ///
+    /// Only the compositor can answer this — it is the layout's business, and `peek_dir` asks the same
+    /// question `focus left` does without going there, so the mark cannot say one thing and the key do
+    /// another. A direction with nothing that way is left out rather than given a null.
+    fn focus_marks(&self, i: usize) -> Value {
+        use crate::layout::Direction;
+        let Some(screen) = self.screens.get(i) else { return Value::Null };
+        let mut out = serde_json::Map::new();
+        if let Some(w) = screen.layout().focused() {
+            out.insert("focused".into(), json!(window_id(&w)));
+        }
+        for (name, d) in [("left", Direction::Left), ("right", Direction::Right), ("up", Direction::Up), ("down", Direction::Down)] {
+            if let Some(w) = screen.layout().peek_dir(d) {
+                out.insert(name.into(), json!(window_id(&w)));
+            }
+        }
+        Value::Object(out)
+    }
+
     fn ipc_outputs(&self) -> Value {
         let focused = self.active;
         Value::Array(
@@ -433,6 +454,11 @@ impl Draftpaper {
                         // Mod is being held and the legend is out (docs/keyboard.md). What it letters is
                         // the "keys" request's answer, which is asked for once and does not change.
                         "legend": self.legend,
+                        // where a focus key would land, by the window it would land on: the legend marks
+                        // each of them with the key bound to it, so the mark on a window is the key that
+                        // really takes you there. Worked out here because only the compositor knows the
+                        // layout; which key that is, the renderer reads off the keymap.
+                        "focus_to": self.focus_marks(i),
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
                 })

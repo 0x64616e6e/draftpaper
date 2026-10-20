@@ -165,8 +165,16 @@ in a block or a file Draftpaper owns, and the config always wins over it.
    keymap. The millimetres they set it out on are the document's (`content::legend()`), for the
    same reason, and `compositor/tests/lettering.sh` compares the two legends like everything else.
 
-   What it is not yet: it letters the keymap as a table rather than marking the particular window
-   or cell a key would act on. That is the next increment.
+   It marks as well as lettering (2026-10-21): each window a focus key would reach carries that
+   key, and the window the keys act *from* carries a quiet mark of its own. Which window each
+   key reaches is the compositor's (`focus_to` in the outputs, from the same `peek_dir` that
+   `focus left` runs, so a mark cannot promise what the key would not do); which key that is
+   comes off the keymap. The table gives way to the marks, taking half the sheet at most, and
+   says in its heading how many bindings it had no room for.
+
+   Still not done: nothing is marked but windows. The title block's cells and the schedules'
+   rows carry actions in the document but no keys in the keymap, and by this design that makes
+   them missing bindings rather than things to label — which is what step 4 is for.
 
    `msg legend [on|off]` puts it out without the gesture, which is what the tests drive it with and what
    a binding of one's own would run.

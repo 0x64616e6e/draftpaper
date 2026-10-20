@@ -90,6 +90,7 @@ pixels: $(COMPOSITOR) $(CLI) $(SHEET)
 	compositor/tests/idle.sh
 	compositor/tests/sheet.sh
 	compositor/tests/lettering.sh
+	compositor/tests/legend.sh
 
 # the README's pictures (docs/screenshots.sh), headless: needs foot and ImageMagick
 screenshots: $(COMPOSITOR) $(CLI)

@@ -67,12 +67,17 @@ impl Mm {
 /// Where the legend goes and what of it fits: as many columns of the table as the sheet's free side
 /// takes, down to the title block.
 pub struct Placed {
-    /// the display's logical pixels
+    /// the surface: the frame's whole interior, in the display's logical pixels. It is this big because
+    /// the legend marks the windows as well as lettering the table, and a window may be anywhere on
+    /// the sheet; the table is drawn `gap` in from this corner.
     pub x: f64,
     pub y: f64,
-    /// millimetres
+    /// the surface, in millimetres
     pub width: f64,
     pub height: f64,
+    /// the table itself, in millimetres
+    pub table_w: f64,
+    pub table_h: f64,
     pub cols: usize,
     pub rows_per_col: usize,
     /// how many the sheet had no room for; counted, not dropped in silence
@@ -83,7 +88,7 @@ pub struct Placed {
 /// The legend's place on this sheet, or None where it has no room. `avoid` is a schedule's left edge in
 /// millimetres from the frame's corner, where one is out: the schedules keep to the title block's column
 /// and the legend would otherwise letter over them.
-pub fn place(s: &Screen, n: usize, avoid: Option<f64>) -> Option<Placed> {
+pub fn place(s: &Screen, n: usize, avoid: Option<f64>, marked: bool) -> Option<Placed> {
     if n == 0 {
         return None;
     }
@@ -96,7 +101,13 @@ pub fn place(s: &Screen, n: usize, avoid: Option<f64>) -> Option<Placed> {
     if let Some(at) = avoid {
         right = right.min(at.floor() - 4.0);
     }
-    let width = (right - mm.gap).max(0.0);
+    // with marks on the sheet the table gives way to them: it takes half the width at most, so the
+    // windows it is teaching you to reach are not buried under the reference for reaching them.
+    // What will not fit is counted in the heading, as it always was.
+    let mut width = (right - mm.gap).max(0.0);
+    if marked {
+        width = width.min((frame_w / 2.0).floor());
+    }
     // down: never into the title block. It is bounded here, so it needs no bound across as well.
     let bottom = match &s.title {
         Some(b) => ((b.rect.1 - fy) / s.mm).floor() - mm.gap,
@@ -113,10 +124,13 @@ pub fn place(s: &Screen, n: usize, avoid: Option<f64>) -> Option<Placed> {
     let shown = n.min(fits);
     let down = shown.div_ceil(cols.max(1)).min(rows_per_col);
     Some(Placed {
-        x: fx + mm.gap * s.mm,
-        y: fy + mm.gap * s.mm,
-        width: (cols as f64) * mm.pair(),
-        height: mm.head + (down as f64) * mm.row,
+        // the surface is the frame's interior, so a mark can go wherever its window is
+        x: fx,
+        y: fy,
+        width: frame_w,
+        height: frame_h,
+        table_w: (cols as f64) * mm.pair(),
+        table_h: mm.head + (down as f64) * mm.row,
         cols,
         rows_per_col,
         over: n - shown,
@@ -124,38 +138,71 @@ pub fn place(s: &Screen, n: usize, avoid: Option<f64>) -> Option<Placed> {
     })
 }
 
-/// The legend lettered: a heading, a rule, and the keymap in columns of a key and what it does.
-pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], at: &Placed, s: &Screen, theme: &Theme, scale: f64) {
+/// A window the legend marks: where it is on this sheet, and the key that would go to it.
+pub struct Mark {
+    /// the window, in millimetres from the frame's corner
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub key: String,
+    /// the window the keys act *from*: lettered as the one you are on, not as somewhere to go
+    pub here: bool,
+}
+
+/// The legend lettered: the table of the keymap, and a mark on each window a focus key would reach.
+pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], at: &Placed, s: &Screen, theme: &Theme, scale: f64) {
     let mm = (s.mm * scale) as f32;
     let px = |v: f64| (v * s.mm * scale) as f32;
     let ink = theme.ink;
     let faint = theme.faint();
     let heavy = (0.35 * mm).round().max(2.0);
-    let wide = px(at.width);
+    let g = at.mm.gap;
+    let wide = px(at.table_w);
 
-    // the paper under it, always: unlike a schedule the legend stands *over* the windows, and a keymap
-    // lettered straight onto whatever is on the screen is not a keymap anyone can read
+    // ---- the table ----
     let tint = Ink { a: theme.title_tint.max(0.92), ..theme.paper };
-    canvas.fill(0, 0, wide as i32, px(at.height) as i32, tint.premultiplied());
+    canvas.fill(px(g) as i32, px(g) as i32, (px(g + at.table_w) - px(g)) as i32, (px(g + at.table_h) - px(g)) as i32, tint.premultiplied());
 
-    face.draw(canvas, 0.0, px(1.0) + face.ascent(2.8 * mm), "LEGEND", 2.8 * mm, 0.25 * mm, ink.premultiplied());
+    face.draw(canvas, px(g), px(g + 1.0) + face.ascent(2.8 * mm), "LEGEND", 2.8 * mm, 0.25 * mm, ink.premultiplied());
     let meta = if at.over > 0 { format!("MOD HELD · {} MORE", at.over) } else { "MOD HELD".to_string() };
     let w = face.width(&meta, 2.0 * mm, 0.3 * mm);
-    face.draw(canvas, wide - w, px(1.6) + face.ascent(2.0 * mm), &meta, 2.0 * mm, 0.3 * mm, faint.premultiplied());
-    canvas.fill(0, px(at.mm.head - 2.0) as i32, wide as i32, heavy as i32, ink.premultiplied());
+    face.draw(canvas, px(g) + wide - w, px(g + 1.6) + face.ascent(2.0 * mm), &meta, 2.0 * mm, 0.3 * mm, faint.premultiplied());
+    canvas.fill(px(g) as i32, px(g + at.mm.head - 2.0) as i32, wide as i32, heavy as i32, ink.premultiplied());
 
     let shown = keys.len().min(at.cols * at.rows_per_col);
     for (i, k) in keys.iter().take(shown).enumerate() {
         let col = i / at.rows_per_col;
         let row = i % at.rows_per_col;
-        let x = (col as f64) * at.mm.pair();
-        let y = at.mm.head + (row as f64) * at.mm.row;
+        let x = g + (col as f64) * at.mm.pair();
+        let y = g + at.mm.head + (row as f64) * at.mm.row;
         // the key, clipped to its column: XF86AudioRaiseVolume and its like would otherwise run into
         // what it does
         let text = fit(face, &k.keys, 2.2 * mm, px(at.mm.key));
         face.draw(canvas, px(x), px(y) + face.ascent(2.2 * mm) + px(1.0), &text, 2.2 * mm, 0.0, ink.premultiplied());
         let said = fit(face, &k.action, 2.2 * mm, px(at.mm.act));
         face.draw(canvas, px(x + at.mm.key + at.mm.inner), px(y) + face.ascent(2.2 * mm) + px(1.0), &said, 2.2 * mm, 0.0, faint.premultiplied());
+    }
+
+    // ---- the marks, on the windows themselves ----
+    // a key lettered on the window it would take you to, which is the whole of why the gesture is worth
+    // holding: the slow path and the fast one are the same movement (docs/keyboard.md)
+    for m in marks {
+        let box_mm = if m.here { 10.0 } else { 14.0 };
+        let bx = m.x + (m.w - box_mm) / 2.0;
+        let by = m.y + (m.h - 8.0) / 2.0;
+        let tint = Ink { a: 0.94, ..theme.paper };
+        canvas.fill(px(bx) as i32, px(by) as i32, (px(bx + box_mm) - px(bx)) as i32, (px(by + 8.0) - px(by)) as i32, tint.premultiplied());
+        let rule = if m.here { faint } else { ink };
+        let (x0, y0, x1, y1) = (px(bx) as i32, px(by) as i32, px(bx + box_mm) as i32, px(by + 8.0) as i32);
+        canvas.fill(x0, y0, x1 - x0, heavy as i32, rule.premultiplied());
+        canvas.fill(x0, y1 - heavy as i32, x1 - x0, heavy as i32, rule.premultiplied());
+        canvas.fill(x0, y0, heavy as i32, y1 - y0, rule.premultiplied());
+        canvas.fill(x1 - heavy as i32, y0, heavy as i32, y1 - y0, rule.premultiplied());
+        let size = 3.6 * mm;
+        let w = face.width(&m.key, size, 0.0);
+        let colour = if m.here { faint } else { ink };
+        face.draw(canvas, px(bx + box_mm / 2.0) - w / 2.0, px(by + 1.4) + face.ascent(size), &m.key, size, 0.0, colour.premultiplied());
     }
 }
 
@@ -177,4 +224,55 @@ fn fit(face: &mut Face, text: &str, px: f32, room: f32) -> String {
     }
     cut.push('…');
     cut
+}
+
+/// The windows a focus key would reach on this sheet, with the key lettered on each.
+///
+/// The compositor says *which* window each direction lands on (`focus_to` in the outputs, worked out by
+/// the same code the key itself runs) and the keymap says *which key* that direction is bound to. Both
+/// are asked rather than worked out here, so a mark cannot promise something the key would not do.
+pub fn marks(s: &Screen, out: &serde_json::Value, windows: &[Value], keys: &[Key]) -> Vec<Mark> {
+    let to = out.get("focus_to").cloned().unwrap_or(Value::Null);
+    let ox = out.get("x").and_then(Value::as_f64).unwrap_or(0.0);
+    let oy = out.get("y").and_then(Value::as_f64).unwrap_or(0.0);
+    let (fx, fy, ..) = s.frame;
+    // the shortest key bound to this action: "Mod+h" rather than "Mod+Left" where both are, since the
+    // letter is what the keymap is built on and the arrow is the alias
+    let key_for = |action: &str| -> Option<String> {
+        keys.iter()
+            .filter(|k| k.action == action)
+            .map(|k| k.keys.clone())
+            .min_by_key(|k| (k.len(), k.clone()))
+            .map(|k| k.rsplit('+').next().unwrap_or("").to_string())
+            .filter(|k| !k.is_empty())
+    };
+    let mut out_marks = Vec::new();
+    for (dir, action, here) in [
+        ("focused", "", true),
+        ("left", "focus left", false),
+        ("right", "focus right", false),
+        ("up", "focus up", false),
+        ("down", "focus down", false),
+    ] {
+        let Some(id) = to.get(dir).and_then(Value::as_u64) else { continue };
+        let Some(w) = windows.iter().find(|w| w.get("id").and_then(Value::as_u64) == Some(id)) else { continue };
+        let Some(g) = w.get("geometry").filter(|g| !g.is_null()) else { continue };
+        let n = |k: &str| g.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+        let key = match here {
+            true => "·".to_string(),
+            false => match key_for(action) {
+                Some(k) => k,
+                None => continue,
+            },
+        };
+        out_marks.push(Mark {
+            x: (n("x") - ox - fx) / s.mm,
+            y: (n("y") - oy - fy) / s.mm,
+            w: n("width") / s.mm,
+            h: n("height") / s.mm,
+            key,
+            here,
+        });
+    }
+    out_marks
 }

@@ -146,6 +146,9 @@ struct Sheet {
     /// from and which what is under the pointer is read from
     raw_spaces: Vec<serde_json::Value>,
     raw_windows: Vec<serde_json::Value>,
+    /// the outputs as the compositor publishes them, for what the Screen does not keep: where a focus
+    /// key would land (legend.rs)
+    raw_outputs: Vec<serde_json::Value>,
     /// what the user puts on the sheet themselves: the config's `[[cell]]`s and the extensions beside
     /// it, each run no oftener than it asks for (draftpaper::content::extensions)
     mine: Vec<serde_json::Value>,
@@ -213,6 +216,7 @@ fn main() {
         parked: Vec::new(),
         raw_spaces: Vec::new(),
         raw_windows: Vec::new(),
+        raw_outputs: Vec::new(),
         mine: Vec::new(),
         content: HashMap::new(),
         seats: SeatState::new(&globals, &qh),
@@ -331,6 +335,7 @@ impl Sheet {
     /// Ask the compositor for the sheet again, and put every margin where it now belongs. Called at the
     /// start and whenever the displays change.
     fn reread(&mut self, qh: &QueueHandle<Self>) {
+        self.raw_outputs = sheet::outputs();
         self.screens = sheet::screens().into_iter().map(|s| (s.name.clone(), s)).collect();
         // a display the compositor no longer draws a sheet on loses its margins
         let screens = &self.screens;
@@ -353,10 +358,20 @@ impl Sheet {
         let viewport = self.viewporter.get_viewport(&surface, qh, ());
         // the scale this display shows it at, to the 120th: without it the surface draws at whole scales
         let scale = self.scaling.as_ref().map(|m| m.get_fractional_scale(&surface, qh, surface.clone()));
-        let layer = self.shell.create_layer_surface(qh, surface, Layer::Bottom, Some(side.namespace()), Some(output));
+        // the legend stands over the windows it marks; everything else is the sheet, under them
+        let level = if side == Side::Legend { Layer::Top } else { Layer::Bottom };
+        let layer = self.shell.create_layer_surface(qh, surface, level, Some(side.namespace()), Some(output));
         layer.set_anchor(side.anchor());
         layer.set_exclusive_zone(-1);
         layer.set_keyboard_interactivity(smithay_client_toolkit::shell::wlr_layer::KeyboardInteractivity::None);
+        // the legend alone takes no pointer: it covers the frame while Mod is held, and a click
+        // must reach the window under it. The margins and the title block are clicked on, so
+        // they keep theirs — setting this for every band is what broke them once.
+        if side == Side::Legend {
+            if let Ok(empty) = smithay_client_toolkit::compositor::Region::new(&self.compositor) {
+                layer.wl_surface().set_input_region(Some(empty.wl_region()));
+            }
+        }
         // no commit yet: a surface anchored across without a size is a protocol error, and lay_out gives
         // it one straight after
         self.bands.push(Band { side, screen: screen.to_string(), layer, viewport, _scale: scale, size: (0, 0), scale120: 120, drawn: false });
@@ -395,7 +410,9 @@ impl Sheet {
                         // the schedule's left edge, where one stands here: worked out from the fields
                         // rather than through a method, which would borrow the whole of self in this loop
                         let left = (!s.schedule.is_empty()).then(|| self.schedule.as_ref().and_then(|w| w.place(s))).flatten().map(|a| (a.x - s.frame.0) / s.mm);
-                        legend::place(s, self.keymap.len(), left)
+                        // false: the surface is the frame either way, and only the table inside it
+                        // narrows when there are marks, so the size asked for here does not change
+                        legend::place(s, self.keymap.len(), left, false)
                     });
                 match (at, self.screens.get(&band.screen)) {
                     (Some(at), Some(s)) => {
@@ -482,11 +499,19 @@ impl Sheet {
             }
         } else if side == Side::Legend {
             let left = self.schedule_left(&s);
+            // the marks are worked out before the face is borrowed: which window each focus key
+            // lands on is the compositor's answer, joined to the keymap by the key it is bound to
+            let marks = self
+                .raw_outputs
+                .iter()
+                .find(|o| o.get("name").and_then(serde_json::Value::as_str) == Some(s.name.as_str()))
+                .map(|o| legend::marks(&s, o, &self.raw_windows, &self.keymap))
+                .unwrap_or_default();
             if !s.legend {
                 // Mod is not being held
             } else if let Some(face) = self.face.as_mut() {
-                if let Some(at) = legend::place(&s, self.keymap.len(), left) {
-                    legend::draw(&mut canvas, face, &self.keymap, &at, &s, &self.theme, scale);
+                if let Some(at) = legend::place(&s, self.keymap.len(), left, !marks.is_empty()) {
+                    legend::draw(&mut canvas, face, &self.keymap, &marks, &at, &s, &self.theme, scale);
                 }
             }
         } else if side == Side::Schedule {
