@@ -1,7 +1,8 @@
 # The keyboard: the legend, the leader, and binding by pointing
 
-Status: designed, not built. 2026-10-20, against 0.7.5. This is a contract for what is built next, not a
-record of what exists. Where it disagrees with the code, the code has not been written yet.
+Status: step 1 built 2026-10-20 (the hold overlay, in the shell); the rest designed. Against 0.7.5.
+Where this disagrees with the code, the code has not been written yet — except where it is marked built,
+and there the code wins.
 
 ## Why
 
@@ -153,9 +154,20 @@ in a block or a file Draftpaper owns, and the config always wins over it.
 
 ## Order
 
-1. **The hold overlay over the existing keymap.** Read-only, nothing generated, no new actions: the zone
-   coordinates, the keys beside the windows and the title-block cells they already act on. A week of
-   using it says whether the gesture earns its place, before any label assignment is designed.
+1. **The hold overlay over the existing keymap.** ✅ Built 2026-10-20. Read-only, nothing generated, no
+   new actions. Mod held alone past `[keys] legend_after` (300 ms) and the keymap is lettered on the
+   sheet's free side, as many columns of it as the sheet will take; let Mod go, or press anything at
+   all, and it is gone. The compositor keeps the gesture and says so with the outputs (`legend`); it
+   draws no text, as it draws none of the sheet's lettering. The keys are its own, asked for once over
+   the IPC (`keys`), so nothing keeps a second copy of the keymap.
+
+   What it is not yet: it letters the keymap as a table rather than marking the particular window or
+   cell a key would act on, and it is the shell's only — the sheet's own client (`sheet/`) does not
+   draw it. Both are the next increment, and the second is the more pressing: two renderers that letter
+   different sheets is the defect the content document was written against.
+
+   `msg legend [on|off]` puts it out without the gesture, which is what the tests drive it with and what
+   a binding of one's own would run.
 2. **The legend**, once there is more to say than a mark can carry.
 3. **The leader**, mirroring the chord map exactly.
 4. **Binding by pointing**, which wants the tree to place things in.

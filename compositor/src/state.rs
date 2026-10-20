@@ -120,6 +120,11 @@ pub struct Draftpaper {
     pub pointer_over: (Option<Window>, Option<usize>),
     /// the timer repeating a held binding (input.rs)
     pub key_repeat: Option<smithay::reexports::calloop::RegistrationToken>,
+    /// the legend (docs/keyboard.md): whether Mod has been held alone long enough for the keymap to be
+    /// lettered over the sheet, and the timer counting that out (input.rs). Whoever letters the sheet is
+    /// told in the outputs it is sent, as it is told which schedule is up; the compositor draws no text.
+    pub legend: bool,
+    pub legend_timer: Option<smithay::reexports::calloop::RegistrationToken>,
     /// screencopy frames waiting for the backend's next frame (screencopy.rs)
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
     /// the output-management clients and what they were last told (output_management.rs)
@@ -247,6 +252,8 @@ impl Draftpaper {
             anim: Default::default(),
             screenshot_requested: false,
             key_repeat: None,
+            legend: false,
+            legend_timer: None,
             pointer_over: (None, None),
             screencopies: Vec::new(),
             output_management: Default::default(),

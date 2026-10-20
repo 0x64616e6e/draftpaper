@@ -417,6 +417,9 @@ ShellRoot {
             }
             LoadGraph { id: load; shell: root; edge: edge; domain: root.graphOn === edge.screen.name ? root.graph : "" }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
+            // Mod held alone long enough: the keymap lettered on the sheet's free side, gone the moment
+            // it is let go. The compositor says when; the keys are its own (docs/keyboard.md).
+            Legend { shell: root; edge: edge; wanted: Compositor.legend; keys: Compositor.keys; avoid: sched }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----
             Margin {

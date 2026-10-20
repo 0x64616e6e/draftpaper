@@ -43,26 +43,30 @@ impl Draftpaper {
                     event.state(),
                     serial,
                     time,
-                    |state, mods, keysym| match pressed
-                        .then(|| {
-                            // the magnifier out: Escape puts it away
-                            let escape = keysym.modified_sym() == smithay::input::keyboard::Keysym::Escape && !mods.ctrl && !mods.alt && !mods.logo && !mods.shift;
-                            if state.lens.is_some() && escape {
-                                return Some(Action::Zoom);
+                    |state, mods, keysym| {
+                        // the legend watches every key go by without taking any of them (docs/keyboard.md)
+                        state.legend_key(pressed, keysym.modified_sym(), locked);
+                        match pressed
+                            .then(|| {
+                                // the magnifier out: Escape puts it away
+                                let escape = keysym.modified_sym() == smithay::input::keyboard::Keysym::Escape && !mods.ctrl && !mods.alt && !mods.logo && !mods.shift;
+                                if state.lens.is_some() && escape {
+                                    return Some(Action::Zoom);
+                                }
+                                state.config.action(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty)
+                            })
+                            .flatten()
+                            .filter(|a| !locked || matches!(a, Action::Vt(_)))
+                        {
+                            Some(action) => {
+                                // volume, brightness and resizing go on while the key is held
+                                let name = smithay::input::keyboard::xkb::keysym_get_name(keysym.modified_sym());
+                                let held = matches!(action, Action::Resize(_))
+                                    || matches!(name.as_str(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume" | "XF86MonBrightnessUp" | "XF86MonBrightnessDown");
+                                FilterResult::Intercept((action, held))
                             }
-                            state.config.action(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty)
-                        })
-                        .flatten()
-                        .filter(|a| !locked || matches!(a, Action::Vt(_)))
-                    {
-                        Some(action) => {
-                            // volume, brightness and resizing go on while the key is held
-                            let name = smithay::input::keyboard::xkb::keysym_get_name(keysym.modified_sym());
-                            let held = matches!(action, Action::Resize(_))
-                                || matches!(name.as_str(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume" | "XF86MonBrightnessUp" | "XF86MonBrightnessDown");
-                            FilterResult::Intercept((action, held))
+                            None => FilterResult::Forward,
                         }
-                        None => FilterResult::Forward,
                     },
                 );
                 if let Some((action, held)) = action {
@@ -283,6 +287,48 @@ impl Draftpaper {
     }
 
     /// Run `action` again while its key is held: after the keyboard's repeat delay, then at its rate.
+    /// The legend's gesture (docs/keyboard.md): Mod held **alone** raises the keymap over the sheet once
+    /// `[keys] legend_after` has gone by, and anything else at all puts it away again.
+    ///
+    /// It takes no key. Mod is forwarded as it always was, so an application that wants it still has it,
+    /// and the first key of a chord cancels the timer — which is why a slow `Mod+Shift+i` never flashes
+    /// the legend on its way to the picker. Nothing here is a mode: the key is held, so it cannot be
+    /// forgotten (Raskin's quasimode, the argument the design doc sets out).
+    fn legend_key(&mut self, pressed: bool, sym: smithay::input::keyboard::Keysym, locked: bool) {
+        if arms_legend(pressed, sym, !locked && !self.greeter) {
+            self.arm_legend();
+        } else {
+            self.drop_legend();
+        }
+    }
+
+    fn arm_legend(&mut self) {
+        use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+        let Some(after) = self.config.legend_after else { return };
+        if self.legend || self.legend_timer.is_some() {
+            return;
+        }
+        self.legend_timer = self
+            .loop_handle
+            .insert_source(Timer::from_duration(after), move |_, _, data: &mut Self| {
+                data.legend = true;
+                data.legend_timer = None;
+                data.touched = true;        // whoever letters the sheet hears of it in the next outputs
+                TimeoutAction::Drop
+            })
+            .ok();
+    }
+
+    fn drop_legend(&mut self) {
+        if let Some(token) = self.legend_timer.take() {
+            self.loop_handle.remove(token);
+        }
+        if self.legend {
+            self.legend = false;
+            self.touched = true;
+        }
+    }
+
     fn repeat(&mut self, action: Action) {
         use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
         let delay = std::time::Duration::from_millis(self.config.input.repeat_delay.max(1) as u64);
@@ -448,5 +494,34 @@ impl Draftpaper {
                 }
             }
         }
+    }
+}
+
+/// Whether a key going by arms the legend's wait or puts it away (docs/keyboard.md).
+///
+/// Mod pressed on its own starts the count; **everything else stops it**, including Mod's own release,
+/// which is what makes the gesture safe to put on a modifier. The first key of a chord lands here before
+/// the binding runs, so `Mod+Shift+i` cancels the wait on the Shift and the legend never flashes on its
+/// way to the picker. `usable` is false on the lock and login screens, where nothing is bound anyway.
+fn arms_legend(pressed: bool, sym: smithay::input::keyboard::Keysym, usable: bool) -> bool {
+    use smithay::input::keyboard::Keysym;
+    // Mod is Super on the TTY and Alt when nested (config.rs), so the legend answers to both
+    let is_mod = matches!(sym, Keysym::Super_L | Keysym::Super_R | Keysym::Alt_L | Keysym::Alt_R);
+    pressed && is_mod && usable
+}
+
+#[cfg(test)]
+mod tests {
+    use super::arms_legend;
+    use smithay::input::keyboard::Keysym;
+
+    #[test]
+    fn mod_held_alone_arms_the_legend_and_anything_else_puts_it_away() {
+        assert!(arms_legend(true, Keysym::Super_L, true), "Mod pressed starts the wait");
+        assert!(arms_legend(true, Keysym::Alt_L, true), "nested, Mod is Alt");
+        assert!(!arms_legend(false, Keysym::Super_L, true), "letting Mod go puts it away");
+        assert!(!arms_legend(true, Keysym::h, true), "another key cancels: a chord is on its way");
+        assert!(!arms_legend(true, Keysym::Shift_L, true), "the second modifier of a chord cancels too");
+        assert!(!arms_legend(true, Keysym::Super_L, false), "not on the lock or login screen");
     }
 }

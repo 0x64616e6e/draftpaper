@@ -12,6 +12,12 @@ Singleton {
     property var outputs: []
     property var workspaces: []
     property var windows: []
+    // Mod is being held and the keymap belongs on the sheet (docs/keyboard.md). The compositor decides
+    // it, being the only thing that sees every key, and says so with the outputs.
+    readonly property bool legend: outputs.some(o => o.legend === true)
+    // its keymap, asked for once and kept: the bindings as its own table and the config write them.
+    // Nothing here keeps a second copy, so the legend cannot letter a key the compositor would not act on.
+    property var keys: []
     readonly property string path: Quickshell.env("DRAFTPAPER_SOCKET") || ""
 
     function output(name) { return outputs.find(o => o.name === name) || null }
@@ -45,6 +51,7 @@ Singleton {
         onConnectionStateChanged: {
             if (connected) {
                 compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
+                compositor.send({ request: "keys" })
                 for (const name in compositor.merged) compositor.send({ request: "sheet", output: name, merged: compositor.merged[name] })
                 for (const name in compositor.clear) compositor.send({ request: "sheet", output: name, clear: compositor.clear[name] })
             }
@@ -58,6 +65,7 @@ Singleton {
                 if (m.event === "outputs") compositor.outputs = m.outputs
                 else if (m.event === "workspaces") compositor.workspaces = m.workspaces
                 else if (m.event === "windows") compositor.windows = m.windows
+                else if (m.ok === true && m.for === "keys") compositor.keys = m.reply
                 else if (m.ok === false) console.warn("draftpaper:", m.error)
             }
         }

@@ -2,7 +2,7 @@
 //! the session's programs), newline-delimited JSON. A client writes one request per line and reads one
 //! reply per line, in order:
 //!
-//!   {"request": "version" | "outputs" | "workspaces" | "windows"}
+//!   {"request": "version" | "outputs" | "workspaces" | "windows" | "keys"}   "keys": the keymap, for the legend
 //!   {"request": "action", "action": "workspace 3"}        any binding action (config.rs)
 //!   {"request": "frames"}                                frames drawn with a change, per output
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
@@ -13,7 +13,8 @@
 //!   {"request": "gamma"}                                   each display's gamma ramps, as loaded (gamma.rs)
 //!   {"request": "pointer"}                                 where the pointer is
 //!
-//! Replies are {"ok": true, "reply": ...} or {"ok": false, "error": "..."}. After a subscribe the client
+//! Replies are {"ok": true, "for": REQUEST, "reply": ...} or {"ok": false, "for": REQUEST, "error": "..."};
+//! `for` is what was asked, for a client that keeps one socket for events and requests both. After a subscribe the client
 //! gets, right away and then whenever it changes, the whole state of each subscribed kind as
 //! {"event": "workspaces", "workspaces": [...]} (likewise outputs, windows): clients replace their model
 //! and never apply deltas. Outputs carry the sheet's geometry (frame, margin, zones, parking cells), for
@@ -143,13 +144,17 @@ impl Draftpaper {
             if line.trim().is_empty() {
                 continue;
             }
-            let reply = match serde_json::from_str::<Value>(&line) {
+            let parsed = serde_json::from_str::<Value>(&line);
+            // what the reply answers, echoed back: a client holding one socket open for events as well
+            // as requests — the shell does — has no other way to tell one reply from the next
+            let asked = parsed.as_ref().ok().and_then(|r| r.get("request").and_then(Value::as_str)).unwrap_or("").to_string();
+            let reply = match parsed {
                 Ok(request) => self.ipc_handle(id, &request),
                 Err(e) => Err(format!("not JSON: {e}")),
             };
             let reply = match reply {
-                Ok(v) => json!({ "ok": true, "reply": v }),
-                Err(e) => json!({ "ok": false, "error": e }),
+                Ok(v) => json!({ "ok": true, "for": asked, "reply": v }),
+                Err(e) => json!({ "ok": false, "for": asked, "error": e }),
             };
             self.ipc_send(id, &reply);
             // a subscription is answered with the current state, after the reply
@@ -176,6 +181,27 @@ impl Draftpaper {
             "outputs" => Ok(self.ipc_outputs()),
             "workspaces" => Ok(self.ipc_workspaces()),
             "windows" => Ok(self.ipc_windows()),
+            // the legend put out or away without the gesture: what the tests drive it with, and what a
+            // binding of one's own would run for anyone who would rather tap than hold (docs/keyboard.md)
+            "legend" => {
+                let on = request.get("on").and_then(Value::as_bool).unwrap_or(false);
+                if self.legend != on {
+                    self.legend = on;
+                    self.touched = true;
+                }
+                Ok(json!(self.legend))
+            }
+            // the keymap, for the legend to letter and for anything else that would rather read the
+            // bindings than guess them (docs/keyboard.md). The compositor is the only thing that knows
+            // them — the defaults are its table and the config only amends it — so it is asked rather
+            // than a second copy being kept anywhere else.
+            "keys" => Ok(Value::Array(
+                self.config
+                    .bindings
+                    .iter()
+                    .map(|b| json!({ "keys": b.keys, "action": b.text }))
+                    .collect(),
+            )),
             // frames drawn with a change, per output, since the start (an idle desktop draws none)
             "frames" => Ok(json!(self.frames)),
             // the login screen runs nothing and keeps its sheet as the session will first draw it
@@ -404,6 +430,9 @@ impl Draftpaper {
                         // the schedule the sheet carries, where it is this screen's
                         "schedule": if self.schedule_on == s.output.name() { self.schedule.clone() } else { String::new() },
                         "graph": if self.graph_on == s.output.name() { self.graph.clone() } else { String::new() },
+                        // Mod is being held and the legend is out (docs/keyboard.md). What it letters is
+                        // the "keys" request's answer, which is asked for once and does not change.
+                        "legend": self.legend,
                         "layers": smithay::desktop::layer_map_for_output(&s.output).layers().map(|l| l.namespace().to_string()).collect::<Vec<_>>(),
                     }))
                 })
@@ -634,14 +663,16 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|frames|pointer|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|subscribe KIND...|ACTION");
             return 2;
         }
-        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames")) => {
+        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames" | "keys")) => {
             json!({ "request": if r == "focused-output" { "outputs" } else { r } })
         }
         // where the pointer is; with X Y, the action that puts it there
         Some("pointer") if args.len() == 1 => json!({ "request": "pointer" }),
+        // the legend out or away without holding Mod (docs/keyboard.md): `msg legend` puts it out
+        Some("legend") => json!({ "request": "legend", "on": args.get(1).map(|a| a != "off").unwrap_or(true) }),
         Some("subscribe") => json!({ "request": "subscribe", "events": args[1..] }),
         Some(_) => json!({ "request": "action", "action": args.join(" ") }),
     };

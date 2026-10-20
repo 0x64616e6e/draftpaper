@@ -31,6 +31,9 @@
 //!     "Mod+Return" = "spawn foot"      # Mod is Super on the TTY, Alt when nested
 //!     "Mod+d" = "spawn fuzzel"
 //!
+//!     [keys]                           # the legend (docs/keyboard.md): Mod held alone this long
+//!     legend_after = 300               # letters the keymap over the sheet; 0 turns it off
+//!
 //! Actions: focus|move|resize left|right|up|down, workspace N, send N, fullscreen, close, quit,
 //! spawn COMMAND (run by sh -c). The file is read again when it changes (see main.rs); a file that does
 //! not parse is reported and the previous settings stay.
@@ -96,6 +99,11 @@ pub struct Binding {
     pub mods: Mods,
     pub key: Keysym,
     pub action: Action,
+    /// the binding as it was written — "Mod+Shift+i", "spawn draftpaper schedule pick". Kept rather than
+    /// formatted back from `mods`, `key` and `action`, so what the legend letters is what the table says
+    /// and the two cannot drift (docs/keyboard.md).
+    pub keys: String,
+    pub text: String,
 }
 
 #[derive(Debug, Clone)]
@@ -124,6 +132,10 @@ pub struct Config {
     pub scale_bar: bool,
     /// [title] key_plan: with several screens, a plan of them in the bottom margin (title.rs's key_plan)
     pub key_plan: bool,
+    /// [keys] legend_after: how long Mod must be held, alone, before the legend is lettered over the
+    /// sheet — the keymap shown on the things it acts on (docs/keyboard.md). None where it is turned
+    /// off with 0. Any other key cancels it, so a slow chord never raises it.
+    pub legend_after: Option<std::time::Duration>,
 }
 
 /// [session] (session.rs): the windows put back at login, but those of the applications in `skip`.
@@ -319,11 +331,11 @@ impl Config {
             .iter()
             .map(|(k, a)| (k.to_string(), a.to_string()))
             .chain(user.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())));
-        for (keys, action) in entries {
+        for (keys, text) in entries {
             let (mods, key) = parse_keys(&keys)?;
             bindings.retain(|b| !(b.mods == mods && b.key == key));     // later entries replace earlier
-            if let Some(action) = parse_action(&action)? {
-                bindings.push(Binding { mods, key, action });
+            if let Some(action) = parse_action(&text)? {
+                bindings.push(Binding { mods, key, action, keys, text });
             }
         }
         let anim = table.get("animations").and_then(|v| v.as_table()).cloned().unwrap_or_default();
@@ -341,7 +353,10 @@ impl Config {
         // [title]: scale = true|false (the rest of [title] is the shell's: project, drawn)
         let scale_bar = table.get("title").and_then(|v| v.get("scale")).and_then(|v| v.as_bool()).unwrap_or(true);
         let key_plan = table.get("title").and_then(|v| v.get("key_plan")).and_then(|v| v.as_bool()).unwrap_or(true);
-        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan })
+        // [keys] legend_after: milliseconds, 0 to turn the legend off
+        let after = table.get("keys").and_then(|v| v.get("legend_after")).and_then(|v| v.as_integer()).unwrap_or(300).clamp(0, 5000) as u64;
+        let legend_after = (after > 0).then(|| std::time::Duration::from_millis(after));
+        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan, legend_after })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1
