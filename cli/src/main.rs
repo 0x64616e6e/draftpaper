@@ -9,7 +9,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use draftpaper::{config, greeter, machine, metrics, processes, readings, restore, revisions, scheme, text, theme, tmux, util};
+use draftpaper::{config, content, greeter, machine, metrics, processes, readings, restore, revisions, scheme, text, theme, tmux, util};
 use serde_json::{json, Map, Value};
 
 use util::Paths;
@@ -69,6 +69,7 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
   draftpaper tmux save|keep|restore [SOCKET]
                               tmux's sessions kept across a reboot ([session] apps: run by tmux itself)
   draftpaper readings         the readings the shell polls, as JSON
+  draftpaper sheet            what the sheet says, as JSON: one account for whoever letters it
   draftpaper revisions        the focused window's repository and latest commits, as JSON (the revision block)
   draftpaper machine          the machine schedule's facts, as JSON: machine, processor, graphics, memory,
                               storage, system, versions, uptime
@@ -158,6 +159,8 @@ fn main() {
         ["lock-on-sleep", how, ..] => lock_on_sleep(&p, how),
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
+        // what the sheet says, for whoever letters it (docs/sheet-content.md)
+        ["sheet", ..] => content::main(&p),
         ["revisions", ..] => revisions::main(&p),
         ["machine", ..] => machine::main(&p),
         ["processes", ..] => processes::main(40),

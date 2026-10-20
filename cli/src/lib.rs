@@ -4,6 +4,7 @@
 
 pub mod apps;
 pub mod config;
+pub mod content;
 pub mod dbus;
 pub mod greeter;
 pub mod machine;

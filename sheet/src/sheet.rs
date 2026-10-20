@@ -194,6 +194,8 @@ pub fn parked(workspace: u64) -> Vec<(usize, String, u64)> {
 /// The theme the sheet is lettered in: what the shell reads from the same file (qml/Theme.qml).
 #[derive(Debug, Clone)]
 pub struct Theme {
+    /// the theme as `draftpaper` wrote it, for what reads it whole (draftpaper::content)
+    pub raw: Value,
     pub ink: Ink,
     pub alert: Ink,
     /// the family the lettering asks for, where the config names one
@@ -229,6 +231,7 @@ impl Theme {
         let s = |a: &str, b: &str| v.get(a).and_then(|x| x.get(b)).and_then(Value::as_str).unwrap_or("").to_string();
         Theme {
             ink: Ink::parse(v.get("ink").and_then(Value::as_str).unwrap_or("#000000"), 1.0),
+            raw: v.clone(),
             alert: Ink::parse(v.get("alert").and_then(Value::as_str).unwrap_or("#aa0000"), 1.0),
             mono: Some(s("text", "monospace")).filter(|m| !m.is_empty()),
             project: s("title", "project"),

@@ -498,7 +498,7 @@ impl Sheet {
             let (w, h) = ((at.2 * scale) as f32, (at.3 * scale) as f32);
             // the label
             let label_px = 2.2 * mm;
-            face.draw(canvas, x + 2.0 * mm, y + 1.2 * mm + face.ascent(label_px), cell.label, label_px, 0.3 * mm, faint.premultiplied());
+            face.draw(canvas, x + 2.0 * mm, y + 1.2 * mm + face.ascent(label_px), &cell.label, label_px, 0.3 * mm, faint.premultiplied());
             // the reading: the clock letters it large, every other cell at the one reading size that
             // holds the block together — not at whatever its measured height would allow
             if cell.value.is_empty() {
