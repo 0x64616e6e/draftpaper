@@ -198,7 +198,14 @@ fn main() {
                 let said = util::ask(&json!({ "request": "schedule", "which": which }).to_string());
                 std::process::exit(if said.is_some() { 0 } else { 1 });
             }
-            let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(["call", "schedules", which]).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
+            // the handler answers the five it comes with by name; a schedule of the user's own goes
+            // through `show`, since the shell cannot have a function for a name it has never heard
+            let call: Vec<&str> = if ["next", "equipment", "processes", "revisions", "hide"].contains(&which) {
+                vec!["call", "schedules", which]
+            } else {
+                vec!["call", "schedules", "named", which]
+            };
+            let code = Command::new("qs").args(["ipc", "-p"]).arg(p.qml()).args(call).status().map(|s| s.code().unwrap_or(1)).unwrap_or(1);
             std::process::exit(code);
         }
         ["config", "json", ..] => config_json(&p),

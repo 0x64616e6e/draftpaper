@@ -270,7 +270,10 @@ impl Draftpaper {
                         let i = ORDER.iter().position(|w| *w == self.schedule).unwrap_or(0);
                         ORDER[(i + 1) % ORDER.len()].to_string()
                     }
-                    other => ORDER.iter().find(|w| **w == other).unwrap_or(&"").to_string(),
+                    "hide" => String::new(),
+                    // a name of the user's own is kept as it is: an extension that prints a schedule
+                    // is one, and the compositor does not know their names (docs/sheet-content.md)
+                    other => other.to_string(),
                 };
                 self.schedule_on = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();
                 self.touched = true;

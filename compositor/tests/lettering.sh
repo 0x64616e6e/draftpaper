@@ -152,11 +152,10 @@ compare "the top margin" 0 0 "$w" "$mg"
 # the foot a zone at a time, so a zone that drifts says which it was: Bluetooth in the first, the
 # columns' numbers, the scale bar's figures.
 #
-# All but the last. In the last sits the screenshot's glyph, and the shell draws it about twice the size
-# the client does — the same character, asked for at the same size, out of the same file, whose metrics
-# the two agree on exactly. It is a real difference, it is not only that glyph, and it is the first thing
-# this test found. Until it is run down the last zone is left out rather than the whole foot, and this
-# comes back the day the glyph does.
+# All but the last. In the last sits the screenshot's glyph, and a glyph is where the two renderers are
+# furthest apart: the shell's is hinted and comes out solid, the client's is not and comes out of thin
+# strokes that no pixel quite covers. The sizes agree now (sheet/src/font.rs) and the box is a pixel; the
+# weight does not, and a zone that is mostly one icon shows it at about a quarter apart.
 zones=$(o .zones.across)
 k=0
 while [ "$k" -lt "$((zones - 1))" ]; do

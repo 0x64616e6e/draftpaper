@@ -257,6 +257,9 @@ ShellRoot {
         function processes(): void { root.showSchedule("processes") }
         function revisions(): void { root.showSchedule("revisions") }
         function hide(): void { root.showSchedule("") }
+        // a schedule of the user's own, by the name of its extension (docs/sheet-content.md). Not
+        // `show`: `qs ipc` has a subcommand of that name and would swallow the argument.
+        function named(which: string): void { root.showSchedule(which) }
         function state(): string { return root.schedule }
     }
     IpcHandler {

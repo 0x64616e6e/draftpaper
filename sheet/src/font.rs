@@ -289,20 +289,36 @@ fn drawn(font: &fontdue::Font, ch: char, px: f32) -> Glyph {
 
 /// The monospaced Nerd Fonts installed, most wanted first; empty where none is (the sheet then letters
 /// words where it would have put a glyph, as the shell does).
+/// The Nerd Fonts installed, most wanted first; empty where none is (the sheet then letters words where
+/// it would have put a glyph, as the shell does).
+///
+/// A patched font comes in three cuts. The *Mono* one scales every glyph down into a single cell; the
+/// plain one draws them at the size they were drawn at and keeps the single advance anyway, so the ink
+/// stands out of its cell and nothing moves; *Propo* widens the advance as well, which would put the
+/// lettering after it off the millimetre it belongs on.
+///
+/// The plain cut is the one to have. It is what Qt hands the shell when the shell asks for the Mono one
+/// — asked for `BlexMono Nerd Font Mono`, which is a family it lists, Qt letters from `BlexMono Nerd
+/// Font` — and it is the better of the two for a sheet: at the size a reading is lettered, a glyph
+/// squeezed into one cell comes out as hairlines, and hairlines are what an unhinted rasteriser renders
+/// faintest. Propo is never taken, whatever is installed.
 fn nerd_fonts(db: &fontdb::Database) -> Vec<String> {
     let mut found: Vec<String> = Vec::new();
     for face in db.faces() {
         for (name, _) in &face.families {
-            if name.ends_with(" Nerd Font Mono") && !found.contains(name) {
+            if (name.ends_with(" Nerd Font") || name.ends_with(" Nerd Font Mono")) && !found.contains(name) {
                 found.push(name.clone());
             }
         }
     }
-    // the two the shell prefers, then whatever else is there
+    // the plain cut of what the shell prefers, then its Mono cut, then whatever else is there
     found.sort_by_key(|n| match n.as_str() {
-        "Symbols Nerd Font Mono" => 0,
-        "BlexMono Nerd Font Mono" => 1,
-        _ => 2,
+        "Symbols Nerd Font" => 0,
+        "BlexMono Nerd Font" => 1,
+        "Symbols Nerd Font Mono" => 2,
+        "BlexMono Nerd Font Mono" => 3,
+        n if n.ends_with(" Nerd Font") => 4,
+        _ => 5,
     });
     found
 }

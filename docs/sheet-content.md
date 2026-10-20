@@ -172,9 +172,11 @@ Each one leaves the sheet working and the tests green.
 4. **The diff harness as a test.** ✅ Built 2026-10-20, compositor/tests/lettering.sh. One document, both
    renderers, headless, screenshots compared band by band and cell by cell — not pixel for pixel, which
    would fail on every glyph edge, but on where the ink falls across each region. It found, on its first
-   run, that the Nerd Font glyphs come out smaller in the client than in the shell: the same character,
-   asked for at the same size, out of the same file, whose metrics the two agree on exactly. That is
-   still open.
+   run, that the Nerd Font glyphs came out smaller in the client than in the shell. They were different
+   cuts of the same patched font: the client took the *Mono* one, which scales every glyph into a single
+   cell, and Qt hands the shell the plain one whatever family it is asked for. The client takes the plain
+   one now (sheet/src/font.rs). What is left between them is weight, not size — hinted against unhinted
+   — and that is the rasteriser, not the document.
 5. **Extensions.** ✅ Built 2026-10-20. A program in `extensions/NAME.toml`, or a `[[cell]]` of the
    config, contributing entries to the title block's last cell and the foot's zones. The shape was
    settled by then, and an extension that can only supply words cannot break the grid, the face, the ink
