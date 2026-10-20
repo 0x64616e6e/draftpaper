@@ -231,6 +231,19 @@ on where no Nerd Font is installed, and the theme's alert ink. Nothing else: an 
 and the sheet sets them, so it cannot letter in a face of its own, a colour off the palette, or anywhere
 but the slot it was given (docs/sheet-content.md).
 
+Print a schedule instead of a line and the extension is one: `draftpaper schedule NAME` calls it up where
+the equipment and the processes go, by the name of its file.
+
+```json
+{"title": "DEPARTURES", "meta": "PLATFORM 4",
+ "columns": [{"name": "TIME", "mm": 18}, {"name": "FOR", "mm": 0}, {"name": "DUE", "mm": 24, "right": true}],
+ "rows": [{"cells": ["09:14", "Cluj-Napoca", "on time"]},
+          {"cells": ["09:52", "Brasov", "4 min late"], "note": "awaiting a platform"}]}
+```
+
+A column of `mm: 0` takes what is left; `note` is lettered under its row; `"bar": N` rules column N as a
+bar from each row's `share` (0 to 1), as the process schedule rules its processor column.
+
 ## Rulers
 
 Mod+r brings out two rulers, as clear acrylic on the drawing: a horizontal and a vertical one, each

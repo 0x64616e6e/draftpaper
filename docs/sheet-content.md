@@ -178,7 +178,14 @@ Each one leaves the sheet working and the tests green.
 5. **Extensions.** ✅ Built 2026-10-20. A program in `extensions/NAME.toml`, or a `[[cell]]` of the
    config, contributing entries to the title block's last cell and the foot's zones. The shape was
    settled by then, and an extension that can only supply words cannot break the grid, the face, the ink
-   or the pixel snapping. Schedules of their own are the next thing it could carry and do not yet.
+   or the pixel snapping. An extension that prints a schedule rather than a line is one, called up by
+   the name of its file.
+
+The three schedules the sheet comes with stay in process and are not extensions. They want what an
+extension has no way to ask for — the displays as the compositor publishes them, the rows last read when
+every window is parked — one of them samples the processes over half a second, and they are what the
+sheet is rather than what is added to it: a mistake in a file should not be able to empty the title
+block, and the second an extension is given before it is killed would do exactly that.
 
 ## Testing
 

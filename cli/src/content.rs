@@ -349,6 +349,32 @@ fn status(r: &Value) -> Vec<Value> {
     row
 }
 
+/// One cell or extension run, no oftener than it asks for. What it printed last is kept beside the
+/// theme with the second it was printed in and given back until its time is up; one that hangs is
+/// killed after a second and the last answer stands.
+fn ran(p: &crate::util::Paths, key: &str, d: &Value) -> Option<String> {
+    let command: Vec<String> = d.get("command").and_then(Value::as_array)?.iter().filter_map(Value::as_str).map(str::to_string).collect();
+    if command.is_empty() {
+        return None;
+    }
+    let every = d.get("interval").and_then(Value::as_u64).unwrap_or(5).max(1);
+    let kept = p.cache.join("extensions");
+    let note = kept.join(format!("{key}.json"));
+    let before: Value = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+    let stamp = before.get("stamp").and_then(Value::as_u64).unwrap_or(0);
+    let mut out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    if now.saturating_sub(stamp) >= every {
+        let argv: Vec<&str> = command.iter().map(String::as_str).collect();
+        if let Some(fresh) = crate::util::run(&argv, 1) {
+            out = fresh;
+            let _ = std::fs::create_dir_all(&kept);
+            crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
+        }
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 /// The sheet carries what the user puts on it as well: the `[[cell]]`s of the config, and the
 /// extensions beside it in `extensions/`. Both are the same thing — a program that prints what it has
 /// to say — and both end up as entries of this document like any other, so an extension cannot letter
@@ -365,8 +391,6 @@ fn status(r: &Value) -> Vec<Value> {
 /// altogether the rest are left for the next time the sheet is read. A sheet is drawn every few
 /// seconds; nothing the user puts on it is allowed to be the reason it is not.
 pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
-    const EACH: u64 = 1;
-    const ALL: std::time::Duration = std::time::Duration::from_millis(1500);
     let cfg = crate::config::load(p);
     let mut said = Vec::new();
     let mut declared: Vec<(String, Value)> = cfg
@@ -386,26 +410,13 @@ pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
             declared.push((format!("ext-{stem}"), v));
         }
     }
-    let kept = p.cache.join("extensions");
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let started = std::time::Instant::now();
+
     for (key, d) in declared {
-        let command: Vec<String> = d.get("command").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
-        if command.is_empty() {
+        let Some(out) = ran(p, &key, &d) else { continue };
+        // one that printed a schedule is not a cell: it stands on the sheet when it is called up by
+        // name (`draftpaper schedule NAME`), and nothing of it goes in the margins
+        if serde_json::from_str::<Value>(out.trim()).is_ok_and(|v| v.get("rows").is_some()) {
             continue;
-        }
-        let every = d.get("interval").and_then(Value::as_u64).unwrap_or(5).max(1);
-        let note = kept.join(format!("{key}.json"));
-        let before: Value = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
-        let stamp = before.get("stamp").and_then(Value::as_u64).unwrap_or(0);
-        let mut out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
-        if now.saturating_sub(stamp) >= every && started.elapsed() < ALL {
-            let argv: Vec<&str> = command.iter().map(String::as_str).collect();
-            if let Some(fresh) = crate::util::run(&argv, EACH) {
-                out = fresh;
-                let _ = std::fs::create_dir_all(&kept);
-                crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
-            }
         }
         let line = out.lines().next().unwrap_or("").trim().to_string();
         if line.is_empty() {
@@ -427,6 +438,49 @@ pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
         said.push(v);
     }
     said
+}
+
+/// A schedule of the user's own, where an extension of that name printed one. It is read the same way
+/// a cell of theirs is — no oftener than its interval asks, killed if it hangs — and what it printed is
+/// taken as a schedule of this document (docs/sheet-content.md): a heading, columns and rows.
+///
+/// The three the sheet comes with are not these. They are read in process, they want things an
+/// extension has no way to ask for — the displays as the compositor publishes them, the rows last read
+/// when every window is parked — and one of them samples the processes over half a second, which is a
+/// long time to hold a sheet up for. They are what the sheet is; this is what you add to it.
+fn mine_schedule(p: &crate::util::Paths, name: &str) -> Option<Value> {
+    let f = p.config_dir.join("draftpaper/extensions").join(format!("{name}.toml"));
+    let d: Value = toml::from_str(&std::fs::read_to_string(&f).ok()?).ok()?;
+    as_schedule(name, &ran(p, &format!("ext-{name}"), &d)?)
+}
+
+/// What a program printed, taken as a schedule of this document, or None where it did not print one.
+fn as_schedule(name: &str, out: &str) -> Option<Value> {
+    let v: Value = serde_json::from_str(out.trim()).ok()?;
+    v.get("rows")?;
+    let columns: Vec<Value> = v
+        .get("columns")
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .map(|c| {
+                    column(
+                        c.get("name").and_then(Value::as_str).unwrap_or(""),
+                        c.get("mm").and_then(Value::as_f64).unwrap_or(0.0),
+                        c.get("right").and_then(Value::as_bool).unwrap_or(false),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    Some(json!({
+        "title": v.get("title").and_then(Value::as_str).unwrap_or(&name.to_uppercase()),
+        "meta": v.get("meta").and_then(Value::as_str).unwrap_or(""),
+        "columns": columns,
+        "rows": v.get("rows").cloned().unwrap_or(json!([])),
+        "note": v.get("note").and_then(Value::as_i64).unwrap_or(-1),
+        "bar": v.get("bar").and_then(Value::as_i64).unwrap_or(-1),
+    }))
 }
 
 /// What a `{key}.left` or `{key}.right` runs: whatever the cell or the extension it names says to.
@@ -714,7 +768,9 @@ pub fn schedule(p: &crate::util::Paths, which: &str, sheet: u64, theme: &Value, 
         "equipment" => Some(equipment(p, &listed(outputs), &ruled(theme, outputs))),
         "processes" => Some(processes()),
         "revisions" => Some(revisions(sheet)),
-        _ => None,
+        // not one the sheet comes with: an extension of that name, where it printed a schedule
+        "" => None,
+        name => mine_schedule(p, name),
     }
 }
 
@@ -878,6 +934,30 @@ mod tests {
         assert!(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].contains(&parts[0]), "{date}");
         assert_eq!(time.len(), 5, "{time}");
         assert_eq!(&time[2..3], ":");
+    }
+
+    #[test]
+    fn an_extension_that_prints_a_schedule_gives_one() {
+        let out = r#"{"title": "DEPARTURES", "meta": "PLATFORM 4",
+            "columns": [{"name": "TIME", "mm": 18}, {"name": "FOR", "mm": 0}, {"name": "DUE", "mm": 24, "right": true}],
+            "rows": [{"cells": ["09:14", "Cluj-Napoca", "on time"]}, {"cells": ["09:52", "Brasov", "late"], "note": "no platform yet"}]}"#;
+        let s = as_schedule("trains", out).expect("a schedule");
+        assert_eq!(s["title"], "DEPARTURES");
+        assert_eq!(s["meta"], "PLATFORM 4");
+        assert_eq!(s["columns"].as_array().unwrap().len(), 3);
+        // the columns are taken as this document gives them, filled in where the extension left them out
+        assert_eq!(s["columns"][1]["right"], false);
+        assert_eq!(s["columns"][2]["right"], true);
+        assert_eq!(s["rows"].as_array().unwrap().len(), 2);
+        assert_eq!(s["rows"][1]["note"], "no platform yet");
+        // nothing said about the note and bar columns is no note and no bar, not a panic
+        assert_eq!(s["note"], -1);
+        assert_eq!(s["bar"], -1);
+        // its name does for a heading where it gives none
+        assert_eq!(as_schedule("trains", r#"{"rows": []}"#).unwrap()["title"], "TRAINS");
+        // and what is not a schedule is not taken for one
+        assert!(as_schedule("trains", "DRAFT-42").is_none());
+        assert!(as_schedule("trains", r#"{"text": "DRAFT-42"}"#).is_none());
     }
 
     #[test]

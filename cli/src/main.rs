@@ -187,8 +187,10 @@ fn main() {
         ["schedule", rest @ ..] => {
             // the shell's IpcHandler "schedules" (qml/shell.qml): next (Mod+i), equipment, processes, hide
             let which = rest.first().copied().unwrap_or("next");
-            if !["next", "equipment", "processes", "revisions", "hide"].contains(&which) {
-                util::die("draftpaper schedule next|equipment|processes|revisions|hide");
+            // a schedule of the user's own is named by its extension's file (docs/sheet-content.md)
+            let mine = p.config_dir.join("draftpaper/extensions").join(format!("{which}.toml"));
+            if !["next", "equipment", "processes", "revisions", "hide"].contains(&which) && !mine.exists() {
+                util::die("draftpaper schedule next|equipment|processes|revisions|hide|NAME");
             }
             // the sheet's own client has no socket: the compositor keeps which schedule is out, and
             // every subscriber hears of it (compositor/src/ipc.rs)
