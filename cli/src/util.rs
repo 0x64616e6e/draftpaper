@@ -71,8 +71,14 @@ pub fn which(name: &str) -> Option<PathBuf> {
 /// Run a program, its output kept, waiting at most `secs` (a hung one is killed); None when it does not
 /// exist or did not finish.
 pub fn run(cmd: &[&str], secs: u64) -> Option<String> {
+    run_with(cmd, secs, &[])
+}
+
+/// The same, with something more in the environment: what an extension declared about itself, so that
+/// its command can be told rather than edited (extensions/README.md).
+pub fn run_with(cmd: &[&str], secs: u64, env: &[(String, String)]) -> Option<String> {
     which(cmd[0])?;
-    let mut child = Command::new(cmd[0]).args(&cmd[1..]).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
+    let mut child = Command::new(cmd[0]).args(&cmd[1..]).envs(env.iter().map(|(k, v)| (k, v))).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null()).spawn().ok()?;
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(secs);
     loop {
         match child.try_wait() {

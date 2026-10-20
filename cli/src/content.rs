@@ -399,6 +399,41 @@ fn ran(p: &crate::util::Paths, key: &str, d: &Value) -> Option<String> {
     (!out.is_empty()).then_some(out)
 }
 
+/// What an extension declared about itself, as its command is told it.
+///
+/// An extension is two things in one file: a declaration and a command. Until now only the sheet could
+/// read the declaration, so anything the command needed to know — which repository, which airport,
+/// which feed — had to be written into the command itself, and every one of those examples opened with
+/// a line telling the reader to go and edit a shell variable in the middle of a script. The settings
+/// are data; the command is told them.
+///
+/// Two ways, because there are two kinds of setting. Every scalar at the top of the file is an
+/// environment variable of its own, `repo = "owner/name"` as `$DRAFTPAPER_REPO`, which is what a shell
+/// wants. Anything with a shape to it — a table, a list of tables, the holdings of a position — has
+/// nowhere to go in an environment variable, so the whole declaration is there as JSON in
+/// `$DRAFTPAPER_EXTENSION` for `jq` to read. The command itself is not in it: a script does not need
+/// to be handed its own text.
+fn settings(d: &Value) -> Vec<(String, String)> {
+    let mut env = Vec::new();
+    let Some(table) = d.as_object() else { return env };
+    for (k, v) in table {
+        let value = match v {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => n.to_string(),
+            Value::Bool(b) => b.to_string(),
+            _ => continue,
+        };
+        let name: String = k.chars().map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' }).collect();
+        env.push((format!("DRAFTPAPER_{name}"), value));
+    }
+    let mut whole = d.clone();
+    if let Some(t) = whole.as_object_mut() {
+        t.remove("command");
+    }
+    env.push(("DRAFTPAPER_EXTENSION".to_string(), crate::util::dumps(&whole)));
+    env
+}
+
 /// Ask one cell or extension what it has to say and keep the answer, for the asking that comes after.
 /// This is what `ran` spawns and does not wait for; it is given twenty seconds, which is long for a
 /// sheet and short for a network, and nothing on the sheet waits on it either way.
@@ -412,7 +447,7 @@ pub fn run_one(p: &crate::util::Paths, key: &str) {
         return;
     }
     let argv: Vec<&str> = command.iter().map(String::as_str).collect();
-    let Some(out) = crate::util::run(&argv, 20) else { return };
+    let Some(out) = crate::util::run_with(&argv, 20, &settings(&d)) else { return };
     let kept = p.cache.join("extensions");
     let note = kept.join(format!("{key}.json"));
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -564,8 +599,9 @@ fn as_schedule(name: &str, out: &str) -> Option<Value> {
     }))
 }
 
-/// What a `{key}.left` or `{key}.right` runs: whatever the cell or the extension it names says to.
-pub fn runs(p: &crate::util::Paths, action: &str) -> Option<Vec<String>> {
+/// What a `{key}.left` or `{key}.right` runs: whatever the cell or the extension it names says to, and
+/// the settings it is told (`settings`).
+pub fn runs(p: &crate::util::Paths, action: &str) -> Option<(Vec<String>, Vec<(String, String)>)> {
     let (key, side) = action.rsplit_once('.')?;
     let cfg = crate::config::load(p);
     let d = if let Some(i) = key.strip_prefix("cell-") {
@@ -576,7 +612,8 @@ pub fn runs(p: &crate::util::Paths, action: &str) -> Option<Vec<String>> {
         toml::from_str::<Value>(&text).ok()?
     };
     let cmd: Vec<String> = d.get(side)?.as_array()?.iter().filter_map(Value::as_str).map(str::to_string).collect();
-    (!cmd.is_empty()).then_some(cmd)
+    // what a click runs is told what the extension declared, as the extension's own command is
+    (!cmd.is_empty()).then(|| (cmd, settings(&d)))
 }
 
 /// The volume, and whether it is muted. The sheet letters this for a few seconds after it moves, so

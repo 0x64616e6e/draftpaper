@@ -1,17 +1,18 @@
 # The last runs of a repository on GitHub (needs `gh`, logged in): `draftpaper schedule ci`.
 #
-# Set REPO. Whatever letters the sheet runs from your home directory, not from a checkout, so `gh` has
-# no repository to guess from and nothing would be lettered at all.
+# Set `repo` below and leave the command alone. Whatever letters the sheet runs from your home
+# directory, not from a checkout, so `gh` has no repository to guess from.
 interval = 60
+repo = ""                               # owner/name, as in 0x64616e6e/draftpaper
+last = 9                                # how many of the last runs to letter
 command = ["sh", "-c", '''
-REPO=                                   # owner/name, as in 0x64616e6e/draftpaper
 say() { printf '{"title": "CI", "meta": "%s", "rows": []}' "$1"; exit 0; }
 command -v gh > /dev/null || say "gh is not installed"
-[ -n "$REPO" ] || say "set REPO in ci.toml"
-runs=$(gh run list --repo "$REPO" --limit 9 \
-         --json number,workflowName,headBranch,status,conclusion,startedAt,displayTitle 2> /dev/null) || runs=
-[ -n "$runs" ] && [ "$runs" != "[]" ] || say "no answer from $REPO"
-printf '%s' "$runs" | jq -c --arg repo "$REPO" '{
+[ -n "$DRAFTPAPER_REPO" ] || say "set repo in ci.toml"
+got=$(gh run list --repo "$DRAFTPAPER_REPO" --limit "$DRAFTPAPER_LAST" \
+        --json number,workflowName,headBranch,status,conclusion,startedAt,displayTitle 2> /dev/null) || got=
+[ -n "$got" ] && [ "$got" != "[]" ] || say "no answer from $DRAFTPAPER_REPO"
+printf '%s' "$got" | jq -c --arg repo "$DRAFTPAPER_REPO" '{
   title: "CI",
   meta: "\($repo | ascii_upcase) · \(map(select(.conclusion == "failure")) | length) OF \(length) FAILED",
   columns: [{name: "RUN", mm: 14}, {name: "WORKFLOW", mm: 26}, {name: "BRANCH", mm: 26},

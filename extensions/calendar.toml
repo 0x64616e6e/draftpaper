@@ -1,14 +1,15 @@
 # Today, from a calendar you can fetch as iCalendar: `draftpaper schedule calendar`.
 #
-# Put your feed's address in URL — in Google Calendar it is Settings → your calendar → "Secret address
-# in iCal format", and in Nextcloud the calendar's share link with ?export on the end. Anyone with that
-# address can read the calendar, so keep the file to yourself: chmod 600.
+# Put your feed's address in `url` below and leave the command alone — in Google Calendar it is
+# Settings → your calendar → "Secret address in iCal format", and in Nextcloud the calendar's share
+# link with ?export on the end. Anyone with that address can read the calendar, so keep the file to
+# yourself: chmod 600.
 interval = 600
+url = ""
 command = ["sh", "-c", '''
-URL=
 say() { printf '{"title": "TODAY", "meta": "%s", "rows": []}' "$1"; exit 0; }
-[ -n "$URL" ] || say "set URL in calendar.toml"
-feed=$(curl -sf --max-time 15 "$URL") || feed=
+[ -n "$DRAFTPAPER_URL" ] || say "set url in calendar.toml"
+feed=$(curl -sf --max-time 15 "$DRAFTPAPER_URL") || feed=
 [ -n "$feed" ] || say "no answer"
 printf '%s' "$feed" | tr -d '\r' | sed -e :a -e '$!N;s/\n //;ta' -e 'P;D' |
 awk -v day="$(date +%Y%m%d)" '

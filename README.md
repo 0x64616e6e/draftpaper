@@ -227,6 +227,12 @@ background and goes on being drawn from what the last asking left behind, so the
 reading later. A command that takes longer than twenty seconds is killed and the last answer stands.
 Nothing you put on the sheet can be the reason it stops being drawn.
 
+Anything the command needs to know is declared beside it rather than written into it: every setting at
+the top of the file reaches it as an environment variable of its own — `repo = "0x64616e6e/draftpaper"`
+as `$DRAFTPAPER_REPO` — and the whole declaration is there as JSON in `$DRAFTPAPER_EXTENSION` for a
+setting with a shape to it, a list of holdings or of feeds. So an extension is set by setting it, and
+the script below is never touched.
+
 Its first line of output is what is lettered. Print a JSON object instead and you get the whole of what a
 slot can say: `{"text": "\uf0599 12°", "words": "12°", "ink": "alert"}` — a glyph, with words to fall back
 on where no Nerd Font is installed, and the theme's alert ink. Nothing else: an extension supplies words
@@ -251,9 +257,9 @@ bar from each row's `share` (0 to 1), as the process schedule rules its processo
 says how it should read — `alert` for something wrong, `faint` for something said quietly, `strong` for
 the row to look at first — and the theme settles what each of those is on this paper.
 
-There are six worked examples in `extensions/` — the disks with a bar, the repository's runs on GitHub,
-an airport's departures, a calendar, what is running under Docker, the packages waiting — with a README
-beside them on writing your own.
+There are seven worked examples in `extensions/` — the disks with a bar, the repository's runs on
+GitHub, an airport's departures, a calendar, what is running under Docker, the packages waiting, what
+your holdings are worth — with a README beside them on writing your own.
 
 ## Rulers
 

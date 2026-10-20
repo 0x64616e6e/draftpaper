@@ -193,7 +193,12 @@ Each one leaves the sheet working and the tests green.
    config, contributing entries to the title block's last cell and the foot's zones. The shape was
    settled by then, and an extension that can only supply words cannot break the grid, the face, the ink
    or the pixel snapping. An extension that prints a schedule rather than a line is one, called up by
-   the name of its file.
+   the name of its file. Its declaration is data to its own command as well as to the sheet: every
+   setting at the top of the file reaches the command as `$DRAFTPAPER_<NAME>`, and the whole of it as
+   JSON in `$DRAFTPAPER_EXTENSION` (`settings` in cli/src/content.rs, extensions/README.md). The first
+   three examples written each opened with a line telling the reader to go and edit a shell variable in
+   the middle of a script, which is the same defect as the rest of this document: a thing that is known
+   in one place being retyped in another.
 
 The three schedules the sheet comes with stay in process and are not extensions. They want what an
 extension has no way to ask for — the displays as the compositor publishes them, the rows last read when

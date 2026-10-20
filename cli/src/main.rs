@@ -168,8 +168,8 @@ fn main() {
         // one cell or extension asked again, in the background: `ran` spawns this and does not wait
         ["cell-run", key, ..] => content::run_one(&p, key),
         ["cell", action, ..] => {
-            let Some(cmd) = content::runs(&p, action) else { std::process::exit(1) };
-            let _ = std::process::Command::new(&cmd[0]).args(&cmd[1..]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+            let Some((cmd, env)) = content::runs(&p, action) else { std::process::exit(1) };
+            let _ = std::process::Command::new(&cmd[0]).args(&cmd[1..]).envs(env).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
         }
         ["revisions", ..] => revisions::main(&p),
         ["machine", ..] => machine::main(&p),

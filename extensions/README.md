@@ -27,10 +27,12 @@ Nothing here is installed or runs by itself. They are files to take a copy of.
 | `calendar.toml` | today, from any calendar you can fetch as iCalendar | the network, a feed address |
 | `containers.toml` | what is running under Docker or Podman | one of them |
 | `updates.toml` | the packages waiting, and what they are coming from | Debian or a relation |
+| `positions.toml` | what your holdings are worth, each one's share ruled as a bar | the network |
 
 `disks.toml` is the one to read first. It needs nothing installed, and it is the shortest example of
-every part of the shape: the columns, the one that takes what is left, and a bar ruled from each row's
-share.
+every part of the shape: the columns, the one that takes what is left, a bar ruled from each row's
+share, and a threshold declared at the top of the file rather than written into the command.
+`positions.toml` is the one to read next, for a setting that is a list rather than a word.
 
 ## What an extension is
 
@@ -47,6 +49,45 @@ command = ["sh", "-c", '''
 Use `'''` rather than `"""` for the command. A TOML string in double quotes reads backslashes as escapes,
 which fights with nearly every shell and with `jq`'s `\(...)`; in single quotes the script is passed
 through exactly as written.
+
+## Settings
+
+Anything the command needs to know is declared beside it rather than written into it. Every setting at
+the top of the file reaches the command as an environment variable of its own, under its name in
+capitals with `DRAFTPAPER_` before it:
+
+```toml
+interval = 60
+repo = "0x64616e6e/draftpaper"
+last = 9
+command = ["sh", "-c", '''
+gh run list --repo "$DRAFTPAPER_REPO" --limit "$DRAFTPAPER_LAST" --json conclusion
+''']
+```
+
+So `ci.toml` is set by setting `repo`, and the script below it is never touched. The same goes for the
+airport in `departures.toml`, the feed address in `calendar.toml` and the threshold in `disks.toml` —
+each of those used to open with a line telling you to go and edit a variable in the middle of a shell
+script.
+
+A setting with a shape to it — a table, a list of tables — has nowhere to go in an environment
+variable, so the whole declaration is there as JSON in `$DRAFTPAPER_EXTENSION` as well:
+
+```toml
+command = ["sh", "-c", '''
+printf '%s' "$DRAFTPAPER_EXTENSION" | jq -c '[.holding[] | .symbol]'
+''']
+
+[[holding]]
+symbol = "AAPL"
+units = 20
+```
+
+The command itself is not in that JSON; a script does not need to be handed its own text. And mind
+TOML's one trap here: every key after a `[table]` or a `[[table]]` header belongs to that table, so
+`interval` and `command` go **above** the first one, as they do here.
+
+A click's `left` and `right` commands are told the same settings.
 
 Print **a line** and it is a cell — the first takes the title block's last cell, the rest a zone each
 along the foot. Print **an object with `text` in it** and it is still a cell, with everything a slot can
