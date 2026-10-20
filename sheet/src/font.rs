@@ -180,9 +180,13 @@ impl Face {
             return true;
         }
         // no face of letters has it, so it is one of the glyphs, or nothing: the Nerd Fonts are asked,
-        // and answer for every glyph the sheet sets at once
+        // and answer for every glyph the sheet sets at once. Where there is no Nerd Font to ask, the
+        // answer is still an answer and is remembered as one — otherwise a machine without one walks
+        // every face it has before every glyph it does not letter, for as long as the session lasts.
         self.draw_from_spares(ch, 16.0);
-        self.covers.get(&ch).copied().unwrap_or(false)
+        let answer = self.covers.get(&ch).copied().unwrap_or(false);
+        self.covers.insert(ch, answer);
+        answer
     }
 
     /// How far the pen moves for one character at this size, letter spacing aside.

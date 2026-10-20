@@ -1,0 +1,13 @@
+# The packages waiting to be upgraded (Debian and its kin): `draftpaper schedule updates`.
+# It only reads what `apt update` last fetched; it never fetches anything itself.
+interval = 900
+command = ["sh", "-c", '''
+command -v apt-get > /dev/null || { printf '{"title": "UPDATES", "meta": "not a Debian", "rows": []}'; exit 0; }
+LC_ALL=C apt-get -s -o Debug::NoLocking=1 upgrade 2> /dev/null | awk '/^Inst /{print $2"\t"$3"\t"$4}' |
+ tr -d '()[]' | jq -Rs '{
+  title: "UPDATES",
+  meta: "\(split("\n") | map(select(length > 0)) | length) WAITING",
+  columns: [{name: "PACKAGE", mm: 0}, {name: "FROM", mm: 44, right: true}, {name: "TO", mm: 44, right: true}],
+  rows: (split("\n") | map(select(length > 0) | split("\t") | {cells: [.[0], (.[1] // ""), (.[2] // "")]}))
+}'
+''']

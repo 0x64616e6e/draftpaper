@@ -49,6 +49,9 @@ label = "TICKET"
 command = ["echo", "DRAFT-42"]
 interval = 1
 TOML
+# asked once before anything is drawn: an extension is asked again in the background and the sheet goes
+# on being drawn from the last answer, so without this the first render would have nothing of it
+env HOME="$t" XDG_CONFIG_HOME="$t/.config" DRAFTPAPER_CACHE="$t/.cache/draftpaper" "$repo/cli/target/release/draftpaper" cell-run ext-ticket > /dev/null 2>&1
 NOW=1792400000
 pids=
 # KEEP=1 leaves the screenshots and the logs behind, for looking at what differed

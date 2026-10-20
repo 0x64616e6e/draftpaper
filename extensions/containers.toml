@@ -1,0 +1,15 @@
+# What is running under Docker or Podman: `draftpaper schedule containers`.
+interval = 10
+command = ["sh", "-c", '''
+for d in docker podman; do command -v $d > /dev/null && { c=$d; break; }; done
+[ -n "${c:-}" ] || { printf '{"title": "CONTAINERS", "meta": "neither docker nor podman", "rows": []}'; exit 0; }
+$c ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}' 2> /dev/null |
+jq -Rs --arg c "$c" '{
+  title: "CONTAINERS",
+  meta: ($c | ascii_upcase),
+  columns: [{name: "NAME", mm: 34}, {name: "IMAGE", mm: 0}, {name: "STATE", mm: 34, right: true}],
+  note: 1,
+  rows: (split("\n") | map(select(length > 0) | split("\t")
+    | {cells: [.[0], .[1], .[2]], note: (.[3] // "")}))
+}'
+''']

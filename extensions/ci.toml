@@ -1,0 +1,20 @@
+# The repository's last runs on GitHub (needs `gh`, logged in): `draftpaper schedule ci`.
+# It reads whichever repository the working directory belongs to, so put a `cd` in front of the `gh`
+# to pin it to one.
+interval = 60
+command = ["sh", "-c", '''
+command -v gh > /dev/null || { printf '{"title": "CI", "meta": "gh is not installed", "rows": []}'; exit 0; }
+gh run list --limit 9 --json number,workflowName,headBranch,status,conclusion,startedAt,displayTitle 2> /dev/null |
+jq -c '{
+  title: "CI",
+  meta: "\(map(select(.conclusion == "failure")) | length) OF \(length) FAILED",
+  columns: [{name: "RUN", mm: 14}, {name: "WORKFLOW", mm: 26}, {name: "BRANCH", mm: 26},
+            {name: "WHAT", mm: 0}, {name: "RESULT", mm: 24, right: true}],
+  note: 3,
+  rows: map({
+    cells: ["#\(.number)", .workflowName, .headBranch,
+            (.displayTitle | if length > 46 then .[0:45] + "…" else . end),
+            (if .status != "completed" then (.status | gsub("_"; " ")) else .conclusion end)],
+    note: (.startedAt[0:16] | sub("T"; " "))})
+}' || printf '{"title": "CI", "meta": "no answer", "rows": []}'
+''']

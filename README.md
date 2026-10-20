@@ -222,8 +222,10 @@ icc = "~/.local/share/icc/panel.icc"   # its calibration curves into the gamma t
 
 Put a `[[cell]]` in a file of its own and it is an extension: `~/.config/draftpaper/extensions/NAME.toml`,
 with the same keys, read in the order the names fall. A cell or an extension is run no oftener than its
-`interval` asks, is killed if it hangs for a second, and is left for the next reading once a second and a
-half has gone on them altogether — nothing you put on the sheet can be the reason it stops being drawn.
+`interval` asks, and never while the sheet waits: when its time is up the sheet asks again in the
+background and goes on being drawn from what the last asking left behind, so the answer appears one
+reading later. A command that takes longer than twenty seconds is killed and the last answer stands.
+Nothing you put on the sheet can be the reason it stops being drawn.
 
 Its first line of output is what is lettered. Print a JSON object instead and you get the whole of what a
 slot can say: `{"text": "\uf0599 12°", "words": "12°", "ink": "alert"}` — a glyph, with words to fall back
@@ -243,6 +245,10 @@ the equipment and the processes go, by the name of its file.
 
 A column of `mm: 0` takes what is left; `note` is lettered under its row; `"bar": N` rules column N as a
 bar from each row's `share` (0 to 1), as the process schedule rules its processor column.
+
+There are six worked examples in `extensions/` — the disks with a bar, the repository's runs on GitHub,
+an airport's departures, a calendar, what is running under Docker, the packages waiting — with a README
+beside them on writing your own.
 
 ## Rulers
 

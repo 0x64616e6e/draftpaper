@@ -165,6 +165,8 @@ fn main() {
         // what the sheet says, for whoever letters it (docs/sheet-content.md)
         ["sheet", rest @ ..] => content::main(&p, rest),
         // what a cell or an extension of the user's own says a click on it does (docs/sheet-content.md)
+        // one cell or extension asked again, in the background: `ran` spawns this and does not wait
+        ["cell-run", key, ..] => content::run_one(&p, key),
         ["cell", action, ..] => {
             let Some(cmd) = content::runs(&p, action) else { std::process::exit(1) };
             let _ = std::process::Command::new(&cmd[0]).args(&cmd[1..]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();

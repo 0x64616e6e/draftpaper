@@ -1,0 +1,23 @@
+# Aircraft that have left an airport in the last six hours, from the OpenSky Network, which wants no
+# key: `draftpaper schedule departures`. AIRPORT is an ICAO code — LROP is Bucharest Otopeni, EGLL
+# Heathrow, KJFK New York. FILTER keeps only the flights whose callsign starts with it; leave it empty
+# for all of them, or set it to your airline's prefix (ROT for Tarom, BAW for British Airways).
+interval = 300
+command = ["sh", "-c", '''
+AIRPORT=LROP
+FILTER=
+end=$(date +%s); begin=$((end - 21600))
+curl -sf --max-time 15 "https://opensky-network.org/api/flights/departure?airport=$AIRPORT&begin=$begin&end=$end" |
+jq -c --arg airport "$AIRPORT" --arg filter "$FILTER" '{
+  title: "DEPARTURES · \($airport)",
+  meta: (if $filter == "" then "LAST SIX HOURS" else "LAST SIX HOURS · \($filter)" end),
+  columns: [{name: "OFF", mm: 18}, {name: "FLIGHT", mm: 26}, {name: "FOR", mm: 0},
+            {name: "AIRCRAFT", mm: 24, right: true}],
+  rows: (map(select(($filter == "") or ((.callsign // "") | startswith($filter))))
+    | sort_by(-.firstSeen) | .[0:14]
+    | map({cells: [(.firstSeen | strflocaltime("%H:%M")),
+                   ((.callsign // "") | ascii_upcase | sub(" +$"; "")),
+                   (.estArrivalAirport // "—"),
+                   .icao24]}))
+}' || printf '{"title": "DEPARTURES", "meta": "no answer", "rows": []}'
+''']

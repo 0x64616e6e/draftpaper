@@ -365,14 +365,47 @@ fn ran(p: &crate::util::Paths, key: &str, d: &Value) -> Option<String> {
     let mut out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
     if now.saturating_sub(stamp) >= every {
-        let argv: Vec<&str> = command.iter().map(String::as_str).collect();
-        if let Some(fresh) = crate::util::run(&argv, 1) {
-            out = fresh;
-            let _ = std::fs::create_dir_all(&kept);
-            crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
+        // asked again, and not waited for. A sheet is drawn from what the last asking left behind, so
+        // whatever this one has to say is lettered the next time round — a second late on a reading
+        // taken every five, and none at all on one taken every minute. Waiting instead would put the
+        // sheet at the mercy of whatever the user put on it: an extension that asks the network, which
+        // is most of the interesting ones, takes longer than a sheet should ever be held up for.
+        //
+        // The stamp is written now rather than when the answer comes, so that it is not asked again
+        // before its interval is up, however long it takes to answer.
+        let _ = std::fs::create_dir_all(&kept);
+        crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
+        if let Ok(me) = std::env::current_exe() {
+            let _ = std::process::Command::new(me)
+                .args(["cell-run", key])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
         }
     }
     (!out.is_empty()).then_some(out)
+}
+
+/// Ask one cell or extension what it has to say and keep the answer, for the asking that comes after.
+/// This is what `ran` spawns and does not wait for; it is given twenty seconds, which is long for a
+/// sheet and short for a network, and nothing on the sheet waits on it either way.
+pub fn run_one(p: &crate::util::Paths, key: &str) {
+    let d = match declared(p).into_iter().find(|(k, _)| k == key) {
+        Some((_, d)) => d,
+        None => return,
+    };
+    let command: Vec<String> = d.get("command").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+    if command.is_empty() {
+        return;
+    }
+    let argv: Vec<&str> = command.iter().map(String::as_str).collect();
+    let Some(out) = crate::util::run(&argv, 20) else { return };
+    let kept = p.cache.join("extensions");
+    let note = kept.join(format!("{key}.json"));
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let _ = std::fs::create_dir_all(&kept);
+    crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
 }
 
 /// The sheet carries what the user puts on it as well: the `[[cell]]`s of the config, and the
@@ -390,15 +423,15 @@ fn ran(p: &crate::util::Paths, key: &str, d: &Value) -> Option<String> {
 /// killed after a second and the last answer stands, and once a second and a half has gone on them
 /// altogether the rest are left for the next time the sheet is read. A sheet is drawn every few
 /// seconds; nothing the user puts on it is allowed to be the reason it is not.
-pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
+/// Everything the user has put on the sheet, in the order it goes there: the config's `[[cell]]`s
+/// first, then the extensions, one to a file and in the order their names fall.
+fn declared(p: &crate::util::Paths) -> Vec<(String, Value)> {
     let cfg = crate::config::load(p);
-    let mut said = Vec::new();
-    let mut declared: Vec<(String, Value)> = cfg
+    let mut all: Vec<(String, Value)> = cfg
         .get("cell")
         .and_then(Value::as_array)
         .map(|a| a.iter().enumerate().map(|(i, c)| (format!("cell-{i}"), c.clone())).collect())
         .unwrap_or_default();
-    // the extensions proper: one to a file, in the order their names fall
     let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(p.config_dir.join("draftpaper/extensions"))
         .map(|r| r.filter_map(|e| e.ok().map(|e| e.path())).filter(|f| f.extension().is_some_and(|x| x == "toml")).collect())
         .unwrap_or_default();
@@ -407,11 +440,15 @@ pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
         let Some(stem) = f.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
         let Ok(text) = std::fs::read_to_string(&f) else { continue };
         if let Ok(v) = toml::from_str::<Value>(&text) {
-            declared.push((format!("ext-{stem}"), v));
+            all.push((format!("ext-{stem}"), v));
         }
     }
+    all
+}
 
-    for (key, d) in declared {
+pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
+    let mut said = Vec::new();
+    for (key, d) in declared(p) {
         let Some(out) = ran(p, &key, &d) else { continue };
         // one that printed a schedule is not a cell: it stands on the sheet when it is called up by
         // name (`draftpaper schedule NAME`), and nothing of it goes in the margins

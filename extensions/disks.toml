@@ -1,0 +1,20 @@
+# What is on the disks, fullest first, each one's use ruled as a bar: `draftpaper schedule disks`.
+# Nothing to install — df is enough. This is the example to read for how `bar` and `share` work.
+interval = 60
+command = ["sh", "-c", '''
+df -B1 --output=target,source,size,used -x tmpfs -x devtmpfs -x efivarfs -x overlay 2> /dev/null |
+tail -n +2 | awk 'NF == 4 && $3 + 0 > 0' |
+jq -Rs '{
+  title: "DISKS",
+  meta: "BY USE",
+  columns: [{name: "MOUNT", mm: 34}, {name: "FILESYSTEM", mm: 0},
+            {name: "SIZE", mm: 20, right: true}, {name: "USED", mm: 30, right: true}],
+  bar: 3,
+  rows: (split("\n") | map(select(length > 0) | [splits(" +")] | map(select(length > 0))
+    | {cells: [.[0], .[1],
+               ((.[2] | tonumber) / 1e9 | round | tostring) + " GB",
+               ((.[3] | tonumber) * 100 / (.[2] | tonumber) | round | tostring) + "%"],
+       share: ((.[3] | tonumber) / (.[2] | tonumber))})
+    | sort_by(-.share))
+}'
+''']
