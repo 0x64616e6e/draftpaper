@@ -407,26 +407,30 @@ fn equipment(p: &crate::util::Paths, displays: &[Value], sheet: &str) -> Value {
     let m = crate::machine::json(p);
     let mut rows: Vec<Value> = Vec::new();
     let mut refs: Vec<String> = Vec::new();
-    let mut add = |reference: String, item: String, text: String, note: String| {
+    let mut add = |reference: String, item: String, text: String, note: String, action: Option<&str>| {
         if !text.is_empty() {
             refs.push(reference.clone());
-            rows.push(row(vec![reference, item, text], &note, None));
+            let mut r = row(vec![reference, item, text], &note, None);
+            if let Some(action) = action {
+                r["action"] = json!(action);
+            }
+            rows.push(r);
         }
     };
     let s = |k: &str| m.get(k).and_then(Value::as_str).unwrap_or("").to_string();
-    add("M1".into(), "MACHINE".into(), s("machine"), String::new());
+    add("M1".into(), "MACHINE".into(), s("machine"), String::new(), None);
     if let Some(cpu) = m.get("cpu") {
         let cores = cpu.get("cores").and_then(Value::as_u64).unwrap_or(0);
         let threads = cpu.get("threads").and_then(Value::as_u64).unwrap_or(0);
-        add("M2".into(), "PROCESSOR".into(), cpu.get("model").and_then(Value::as_str).unwrap_or("").to_string(), format!("{cores} cores, {threads} threads"));
+        add("M2".into(), "PROCESSOR".into(), cpu.get("model").and_then(Value::as_str).unwrap_or("").to_string(), format!("{cores} cores, {threads} threads"), None);
     }
     let gpus: Vec<&str> = m.get("gpus").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     for (i, g) in gpus.iter().enumerate() {
-        add(format!("M{}", 3 + i), "GRAPHICS".into(), g.to_string(), String::new());
+        add(format!("M{}", 3 + i), "GRAPHICS".into(), g.to_string(), String::new(), None);
     }
     let n = 3 + gpus.len().max(1);
     if let Some(gib) = m.get("memory_gib").and_then(Value::as_f64) {
-        add(format!("M{n}"), "MEMORY".into(), format!("{} GiB", gib.round()), String::new());
+        add(format!("M{n}"), "MEMORY".into(), format!("{} GiB", gib.round()), String::new(), None);
     }
     if let Some(st) = m.get("storage") {
         let used = st.get("used_gb").and_then(Value::as_f64);
@@ -443,21 +447,21 @@ fn equipment(p: &crate::util::Paths, displays: &[Value], sheet: &str) -> Value {
         .cloned()
         .collect::<Vec<_>>()
         .join(" · ");
-        add(format!("M{}", n + 1), "STORAGE".into(), st.get("disk").and_then(Value::as_str).unwrap_or("").to_string(), note);
+        add(format!("M{}", n + 1), "STORAGE".into(), st.get("disk").and_then(Value::as_str).unwrap_or("").to_string(), note, Some("graph.disk"));
     }
     let system = [s("system"), s("kernel")].iter().filter(|t| !t.is_empty()).cloned().collect::<Vec<_>>().join(" · ");
     let uptime = m.get("uptime_s").and_then(Value::as_f64).map(up).unwrap_or_default();
-    add("S1".into(), "SYSTEM".into(), system, uptime);
+    add("S1".into(), "SYSTEM".into(), system, uptime, None);
     let desktop = format!("Draftpaper {}{}", s("draftpaper"), if s("quickshell").is_empty() { String::new() } else { format!(" · Quickshell {}", s("quickshell")) });
-    add("S2".into(), "DESKTOP".into(), desktop, String::new());
+    add("S2".into(), "DESKTOP".into(), desktop, String::new(), None);
     for (i, d) in displays.iter().enumerate() {
         let name = d.get("name").and_then(Value::as_str).unwrap_or("");
         let what = d.get("what").and_then(Value::as_str).unwrap_or("").to_string();
         let note = d.get("note").and_then(Value::as_str).unwrap_or("").to_string();
-        add(format!("D{}", i + 1), format!("DISPLAY {name}"), what, note);
+        add(format!("D{}", i + 1), format!("DISPLAY {name}"), what, note, None);
     }
     // the sheet itself is equipment too: the theme it is drawn in and how it is ruled
-    add("P1".into(), "SHEET".into(), sheet.to_string(), String::new());
+    add("P1".into(), "SHEET".into(), sheet.to_string(), String::new(), None);
     // a heavier rule where the references change letter, as a drawing groups its items
     for i in 1..rows.len() {
         if refs[i - 1].chars().next() != refs[i].chars().next() {
@@ -525,7 +529,21 @@ fn processes() -> Value {
 /// What has been drawn lately, from the repository the focused window sits in. Over a window that is in
 /// no repository it has no rows, and stands on the sheet empty rather than not at all.
 fn revisions(sheet: u64) -> Value {
-    let r = crate::revisions::json(&crate::util::Paths::new());
+    let p = crate::util::Paths::new();
+    let r = crate::revisions::json(&p);
+    // nothing focused, because every window is parked: the rows last read stay, so the bare sheet goes
+    // on showing the work just left. The shell held them in memory; a command that runs once and ends
+    // keeps them beside the theme, as the head they were read at is kept.
+    let kept = p.cache.join("revisions-said.json");
+    let r = if r.get("focused") == Some(&json!(false)) {
+        std::fs::read_to_string(&kept).ok().and_then(|t| serde_json::from_str::<Value>(&t).ok()).unwrap_or(r)
+    } else {
+        if r.get("rows").is_some() {
+            let _ = std::fs::create_dir_all(&p.cache);
+            crate::util::write(&kept, &crate::util::dumps(&r));
+        }
+        r
+    };
     let repo = r.get("repo").and_then(Value::as_str).unwrap_or("");
     let rows: Vec<Value> = r
         .get("rows")
@@ -589,7 +607,10 @@ pub fn schedule(p: &crate::util::Paths, which: &str, sheet: u64, theme: &Value, 
 /// which belong to whichever process took the name on the bus, and the volume and brightness lettered
 /// for a few seconds after they move. Nor are the config's own `[[cell]]`s, which are commands with
 /// intervals of their own. Everything that is a reading of the machine is.
-pub fn document(p: &crate::util::Paths) -> Value {
+/// `want` is the schedule whoever is lettering the sheet has out, and on which display: the shell holds
+/// that itself, where the sheet's own client leaves it with the compositor. Without it the compositor is
+/// asked, which is what `draftpaper sheet` on its own reports.
+pub fn document(p: &crate::util::Paths, want: Option<(&str, &str)>) -> Value {
     let theme: Value = std::fs::read_to_string(p.theme_json()).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
     let readings = crate::readings::json(p);
     let now = std::time::SystemTime::now();
@@ -603,13 +624,26 @@ pub fn document(p: &crate::util::Paths) -> Value {
     let spaces = reply("{\"request\": \"workspaces\"}");
     let windows = reply("{\"request\": \"windows\"}");
 
+    // the processor is a reading over time, so a command that runs once has to take two: a tenth of a
+    // second apart is enough to say what it is doing, and the sheet is asked for this every five
+    let mut cpu = crate::metrics::Cpu::new();
+    std::thread::sleep(std::time::Duration::from_millis(120));
+    let busy = cpu.busy();
+
     let mut displays_out = serde_json::Map::new();
     for o in &outputs {
         let Some(name) = o.get("name").and_then(Value::as_str) else { continue };
         let workspace = o.get("workspace").and_then(Value::as_u64).unwrap_or(1);
         let mut d = margins(&theme, &readings, &spaces, &windows, name, workspace);
-        d["title"] = json!(title(&theme, workspace, now, &readings, None));
-        let which = o.get("schedule").and_then(Value::as_str).unwrap_or("");
+        d["title"] = json!(title(&theme, workspace, now, &readings, busy));
+        // whichever the compositor says is out — or the revisions by themselves, where the config asks
+        // for them and nothing else is chosen, on the display in use (qml/shell.qml)
+        let named = match want {
+            Some((which, on)) => if on == name { which } else { "" },
+            None => o.get("schedule").and_then(Value::as_str).unwrap_or(""),
+        };
+        let by_itself = theme.get("title").and_then(|t| t.get("revisions")) == Some(&json!(true)) && o.get("focused").and_then(Value::as_bool).unwrap_or(false);
+        let which = if named.is_empty() && by_itself { "revisions" } else { named };
         if let Some(s) = schedule(p, which, workspace, &theme, &outputs) {
             d["schedule"] = s;
         }
@@ -618,8 +652,9 @@ pub fn document(p: &crate::util::Paths) -> Value {
     json!({ "version": 1, "displays": displays_out })
 }
 
-pub fn main(p: &crate::util::Paths) {
-    println!("{}", crate::util::dumps(&document(p)));
+pub fn main(p: &crate::util::Paths, args: &[&str]) {
+    let want = (args.len() >= 2).then(|| (args[0], args[1]));
+    println!("{}", crate::util::dumps(&document(p, want)));
 }
 
 #[cfg(test)]

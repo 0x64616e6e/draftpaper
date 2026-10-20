@@ -1,4 +1,4 @@
-// Placing things on the sheet (the notes: MachineSchedule.qml, LoadGraph.qml). The invariant: everything
+// Placing things on the sheet (the notes: Schedule.qml, LoadGraph.qml). The invariant: everything
 // drawn on the sheet sits at whole millimetres from the frame's corner, and is as long as whole
 // millimetres; only then is each edge put on the nearest physical pixel, so a line is sharp and its
 // place is exact to the millimetre at every scale.

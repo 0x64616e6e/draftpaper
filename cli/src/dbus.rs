@@ -135,3 +135,17 @@ fn address(conn: &Connection, device: &str) -> Option<String> {
     let data: Vec<HashMap<String, OwnedValue>> = get(conn, NM, config, "org.freedesktop.NetworkManager.IP4Config", "AddressData")?;
     data.first()?.get("address").and_then(|v| String::try_from(v.try_clone().ok()?).ok()).filter(|a| !a.is_empty())
 }
+
+/// The next power profile after this one, as the title block's cell cycles them.
+pub fn next_profile(now: &str) -> &'static str {
+    const ORDER: [&str; 3] = ["power-saver", "balanced", "performance"];
+    let i = ORDER.iter().position(|p| *p == now).unwrap_or(ORDER.len() - 1);
+    ORDER[(i + 1) % ORDER.len()]
+}
+
+/// Put the machine on the next profile; false where there is no daemon to ask.
+pub fn cycle_profile() -> bool {
+    let Some(conn) = system() else { return false };
+    let next = next_profile(&power_profile(&conn));
+    set_power_profile(&conn, next)
+}

@@ -36,22 +36,26 @@ Item {
     // (the readings' cells, NETWORK too: a click shows their year on the sheet, LoadGraph.qml, or puts it away;
     // PROJECT the schedule of equipment and PROCESSES the process schedule, Schedule.qml)
     // (StyledText), click (left), click (right), alert
-    readonly property var cells: [
-        [0, 0, 34, 24, "TIME", Qt.formatDateTime(shell.now, "HH:mm"), null, null, false],
-        [34, 0, 32, 12, "DATE", Qt.formatDateTime(shell.now, "ddd dd MMM yyyy"), null, null, false],
-        [66, 0, 22, 12, "SHEET", spaceName || "-", null, null, false],
-        [88, 0, 42, 12, "PROJECT", theme.title.project || "", () => shell.toggleSchedule("equipment", block.edge.screen.name), null, false],
-        [34, 12, 24, 12, "POWER", shell.powerText, () => shell.toggleGraph("power", block.edge.screen.name), null, false],
-        [58, 12, 22, 12, "BATTERY", shell.batteryText, () => shell.toggleGraph("battery", block.edge.screen.name), null, shell.batteryLow],
-        [80, 12, 22, 12, "PROFILE", shell.profileText || "-", () => shell.profileNext(), null, false],
-        [102, 12, 28, 12, "CPU / MEMORY", shell.loadText, () => shell.toggleGraph("load", block.edge.screen.name), null, false],
-        [0, 24, 34, 12, "NETWORK", shell.networkText, () => shell.toggleGraph("network", block.edge.screen.name), null, false],
-        [34, 24, 52, 12, "TEMPERATURE · FAN", shell.tempText || "-", () => shell.toggleGraph("temperature", block.edge.screen.name), null, shell.tempHot],
-        [86, 24, 16, 12, "PROCESSES", shell.readings.processes !== undefined ? String(shell.readings.processes) : "-", () => shell.toggleSchedule("processes", block.edge.screen.name), null, false],
-        custom ? [102, 24, 28, 12, custom.label || "", shell.customText || "-", custom.left ? () => shell.run(custom.left) : null,
-                  custom.right ? () => shell.run(custom.right) : null, false]
-               : [102, 24, 28, 12, "DRAWN", theme.title.drawn || "", null, null, false],
+    // where each cell sits in millimetres from the block's corner, for a compositor that has not
+    // measured the block yet. What each one says is the document's (docs/sheet-content.md), including
+    // which is lettered large — the shell used to read that off this table's heights.
+    readonly property var places: [
+        [0, 0, 34, 24], [34, 0, 32, 12], [66, 0, 22, 12], [88, 0, 42, 12],
+        [34, 12, 24, 12], [58, 12, 22, 12], [80, 12, 22, 12], [102, 12, 28, 12],
+        [0, 24, 34, 12], [34, 24, 52, 12], [86, 24, 16, 12], [102, 24, 28, 12],
     ]
+    // the twelfth cell is the config's first [[cell]] where it has one: a command with an interval of
+    // its own, which is why it is not in the document (docs/sheet-content.md)
+    readonly property var cells: {
+        const said = block.edge.doc.title || []
+        if (!said.length) return block.places.map(() => ({}))
+        if (!custom) return said
+        const mine = said.slice()
+        mine[11] = { label: custom.label || "", text: shell.customText || "-",
+                     action: custom.left ? "run.custom_left" : undefined,
+                     action_right: custom.right ? "run.custom_right" : undefined }
+        return mine
+    }
 
     PanelWindow {
         id: win
@@ -85,16 +89,17 @@ Item {
             clip: true
         Repeater {
             // a compositor from before the PROCESSES cell (until the next login) has eleven: that cell left out
-            model: block.geo && block.geo.cells.length < block.cells.length ? block.cells.filter(c => c[4] !== "PROCESSES") : block.cells
+            model: block.geo && block.geo.cells.length < block.cells.length ? block.cells.filter(c => c.label !== "PROCESSES") : block.cells
             Item {
                 id: cell
                 required property var modelData
                 required property int index
                 readonly property var at: block.geo ? block.geo.cells[index] : null
-                x: at ? at.x - block.geo.rect.x : modelData[0] * block.mm
-                y: at ? at.y - block.geo.rect.y : modelData[1] * block.mm
-                width: at ? at.width : modelData[2] * block.mm
-                height: at ? at.height : modelData[3] * block.mm
+                readonly property var place: block.places[index] || [0, 0, 0, 0]
+                x: at ? at.x - block.geo.rect.x : place[0] * block.mm
+                y: at ? at.y - block.geo.rect.y : place[1] * block.mm
+                width: at ? at.width : place[2] * block.mm
+                height: at ? at.height : place[3] * block.mm
                 Rectangle {
                     visible: !block.geo
                     anchors.fill: parent
@@ -104,21 +109,21 @@ Item {
                 }
                 Text {
                     x: 2 * block.mm; y: 1.2 * block.mm
-                    text: modelData[4]
+                    text: modelData.label || ""
                     font.family: Fonts.mono; font.pixelSize: 2.2 * block.mm; font.letterSpacing: 0.3 * block.mm
                     color: block.faint
                 }
                 Text {
                     x: 2 * block.mm; width: parent.width - 4 * block.mm
                     anchors.bottom: parent.bottom; anchors.bottomMargin: 1.6 * block.mm
-                    text: modelData[5]
+                    text: Fonts.lettered(modelData, shell.glyphs)
                     textFormat: Text.StyledText
                     elide: Text.ElideRight
                     fontSizeMode: Text.HorizontalFit      // shrink a long reading before cutting it
                     minimumPixelSize: 2.4 * block.mm
                     font.family: Fonts.mono
-                    font.pixelSize: (modelData[3] > 12 ? 9 : 3.6) * block.mm
-                    color: modelData[8] ? block.theme.alert : block.ink
+                    font.pixelSize: (modelData.large ? 9 : 3.6) * block.mm
+                    color: modelData.ink === "alert" ? block.theme.alert : block.ink
                 }
                 // a cell that does something: the whole of it, to the middle of its rules (no dead pixel
                 // between two), takes the click, and shows it under the pointer with a faint tint
@@ -126,11 +131,16 @@ Item {
                     id: hit
                     anchors.fill: parent
                     anchors.margins: -1.5 / block.edge.dpr
-                    enabled: modelData[6] !== null || modelData[7] !== null
+                    enabled: modelData.action !== undefined || modelData.action_right !== undefined
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: e => { const f = e.button === Qt.RightButton ? modelData[7] : modelData[6]; if (f) f() }
+                    onClicked: e => {
+                        const name = e.button === Qt.RightButton ? modelData.action_right : modelData.action
+                        if (name === "run.custom_left") shell.run(block.custom.left)
+                        else if (name === "run.custom_right") shell.run(block.custom.right)
+                        else shell.act(name, block.edge.screen.name)
+                    }
                 }
                 Rectangle {
                     anchors.fill: parent

@@ -71,30 +71,41 @@ ShellRoot {
         return hit ? hit[1] : "󰖯"
     }
     // "2" and, with glyphs, the apps on it: "2 <firefox> <terminal>"
-    function spaceMarkup(space) {
-        if (!space) return ""
-        if (!glyphs) return String(space.number)
-        const seen = []
-        for (const w of Compositor.windows)
-            if (w.workspace === space.number && !w.parked) {
-                const c = appGlyph(w.app_id)
-                if (seen.indexOf(c) < 0) seen.push(c)
-            }
-        return String(space.number) + (seen.length ? " " + seen.slice(0, 3).map(c => g(c).trim()).join(" ") : "")
-    }
     // a temperature's label as a glyph (CPU, SSD, memory, fan), or the label itself
-    function tempLabel(label) {
-        const k = { CPU: "󰘚", NVME: "󰋊", SSD: "󰋊", RAM: "󰍛", FAN: "󰈐" }[label]
-        return glyphs && k ? g(k) : label + " "
-    }
 
-    // ---- readings ----
-    Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 5000 }
-    readonly property var readings: { try { return JSON.parse(readingsPoll.output) } catch (e) { return { temps: [], hot: false, power: null, profile: "", bt: [] } } }
-    // the memory, the CPU line and the backlight read in place (Watch.qml: no process started); the network
-    // comes with the readings (`draftpaper readings`: wifi, wired)
-    Watch { id: meminfo; path: "/proc/meminfo"; interval: 5000 }
-    Watch { id: stat; path: "/proc/stat"; interval: 2000 }
+    // ---- what the sheet says (docs/sheet-content.md) ----
+    // One account, shared with the sheet's own client: `draftpaper sheet` says what is lettered in every
+    // slot of every display, and this decides none of it. What is left here is the one question a
+    // renderer must answer — whether this machine can draw an entry's glyphs — and the live state a
+    // snapshot cannot hold: the notifications, and the levels lettered for a moment after they move.
+    // a schedule that is a note of something moving is read oftener while it stands on the sheet, as
+    // the shell polled it before the document carried it
+    Poll {
+        id: sheetPoll
+        // the shell holds which schedule is out, so it says so rather than the compositor being asked
+        command: [root.bin, "sheet", root.schedule, root.scheduleOn]
+        interval: root.schedule === "processes" ? 2000 : root.schedule === "revisions" ? 4000 : 5000
+    }
+    readonly property var doc: { try { return JSON.parse(sheetPoll.output).displays || {} } catch (e) { return {} } }
+    // the backlight's own path never changes while the session lasts, so it is asked for rarely
+    Poll { id: readingsPoll; command: [root.bin, "readings"]; interval: 60000 }
+    readonly property var readings: { try { return JSON.parse(readingsPoll.output) } catch (e) { return {} } }
+
+    // what a click on a slot does, by the name the document gives it
+    function act(name, screenName) {
+        if (!name) return
+        const dot = name.indexOf("."), what = name.slice(0, dot), which = name.slice(dot + 1)
+        if (what === "graph") toggleGraph(which, screenName)
+        else if (what === "schedule") toggleSchedule(which, screenName)
+        else if (what === "profile") run([root.bin, "profile", which])
+        else if (what === "theme") run([root.bin, "theme", which])
+        else if (what === "settings") settings.visible ? settings.cancel() : settings.open()
+        else if (what === "window") Compositor.action("unpark " + which)
+        else if (name === "run.screenshot") run(theme.commands.screenshot)
+        else if (name === "run.bluetooth") run(["blueman-manager"])
+    }
+    // the backlight is read in place (Watch.qml: no process started); the memory and the processor are
+    // the document's now (docs/sheet-content.md)
     Watch { id: backlightNow; path: root.readings.backlight ? root.readings.backlight + "/brightness" : ""; interval: 1000 }
     Watch { id: backlightMax; path: root.readings.backlight ? root.readings.backlight + "/max_brightness" : ""; interval: 60000 }
     Poll {
@@ -104,24 +115,6 @@ ShellRoot {
         interval: theme.cells.length > 0 ? (theme.cells[0].interval || 5) * 1000 : 60000
     }
 
-    readonly property real memUsed: {
-        const m = {}
-        meminfo.output.split("\n").forEach(l => { const p = l.split(/\s+/); m[p[0]] = Number(p[1]) })
-        return m["MemTotal:"] ? 1 - m["MemAvailable:"] / m["MemTotal:"] : -1
-    }
-    property var cpuPrev: null
-    property real cpuBusy: -1
-    Connections {
-        target: stat
-        function onOutputChanged() {
-            const f = stat.output.split(/\s+/).slice(1, 9).map(Number)
-            const idle = f[3] + f[4], total = f.reduce((a, b) => a + b, 0)
-            if (root.cpuPrev && total > root.cpuPrev[1]) root.cpuBusy = 1 - (idle - root.cpuPrev[0]) / (total - root.cpuPrev[1])
-            root.cpuPrev = [idle, total]
-        }
-    }
-    // a second sample a quarter second in, so the CPU reading is there from the start (not after 2 s)
-    Timer { interval: 250; running: true; onTriggered: stat.rerun() }
 
     // ---- the notes on the sheet (issue #49): the schedules (Mod+i) and a reading's last ten minutes ----
     // the schedule shown ("", "equipment", "processes") and on which screen: the focused one when it came
@@ -131,9 +124,9 @@ ShellRoot {
     function showSchedule(which) {
         scheduleOn = focusedName()
         schedule = which
-        if (which === "equipment") machinePoll.rerun()
-        if (which === "processes") processPoll.rerun()
-        if (which === "revisions") revisionsPoll.rerun()
+        // the document says which schedule is out and what it holds, so it is asked for again at once
+        // rather than at the next tick
+        sheetPoll.rerun()
     }
     // a schedule's cell in the title block (PROJECT, PROCESSES): it on that screen, or away if it is there
     function toggleSchedule(which, screenName) {
@@ -147,10 +140,6 @@ ShellRoot {
         const order = theme.title.revisions === true ? ["", "equipment", "processes"] : ["", "equipment", "processes", "revisions"]
         showSchedule(order[(order.indexOf(schedule) + 1) % order.length])
     }
-    Poll { id: machinePoll; command: [root.bin, "machine"]; interval: 60000; running: root.schedule === "equipment" }
-    readonly property var machine: { try { return machinePoll.output ? JSON.parse(machinePoll.output) : null } catch (e) { return null } }
-    Poll { id: processPoll; command: [root.bin, "processes"]; interval: 2000; running: root.schedule === "processes" }
-    readonly property var processes: { try { return processPoll.output ? JSON.parse(processPoll.output) : null } catch (e) { return null } }
 
     // the graph: which readings ("", "load", "temperature", "power", "battery", "network", "disk") on which
     // screen; a click on their cell in the title block (the disks: the STORAGE row of the equipment schedule)
@@ -168,7 +157,7 @@ ShellRoot {
     // everything the title block letters is in (the readings, the network, memory and CPU): told to the
     // compositor once, a few frames later, so the session's opening reveals a lettered desktop and nothing
     // is painted in after it (compositor/src/opening.rs)
-    readonly property bool lettered: readingsPoll.ran && meminfo.ran && cpuBusy >= 0 && Compositor.outputs.length > 0
+    readonly property bool lettered: sheetPoll.ran && Compositor.outputs.length > 0
     property bool readySent: false
     onLetteredChanged: if (lettered && !readySent) { readySent = true; readyTimer.start() }
     Timer { id: readyTimer; interval: 150; onTriggered: Compositor.send({ request: "ready" }) }
@@ -182,52 +171,13 @@ ShellRoot {
     SystemClock { id: clock; precision: SystemClock.Minutes }
     readonly property var now: clock.date
 
+    // the battery is UPower's still, for the lock and greeter; what the sheet says of it is the
+    // document's (docs/sheet-content.md)
     readonly property var battery: UPower.displayDevice
-    readonly property bool batteryLow: battery.isLaptopBattery && battery.percentage * 100 < (theme.alerts.battery || 15)
-        && battery.state !== UPowerDeviceState.Charging
-    readonly property bool charging: battery.state === UPowerDeviceState.Charging
-    readonly property string batteryText: !battery.isLaptopBattery ? "-"
-        : glyphs ? g(charging ? "󰂄" : ramp(battery.percentage, ["󰁺", "󰁼", "󰁾", "󰂀", "󰁹"])) + Math.round(battery.percentage * 100) + "%"
-        : Math.round(battery.percentage * 100) + "%" + (charging ? " charging" : "")
-    readonly property string powerText: g("󱐋") + (readings.power !== null && readings.power !== undefined ? readings.power + " W" : "mains")
-    // with its glyph the cell holds a shorter word: "power-saver" and "performance" do not fit beside it
-    readonly property string profileText: !readings.profile ? ""
-        : !glyphs ? readings.profile
-        : g({ "power-saver": "󰌪", balanced: "󰾅", performance: "󰓅" }[readings.profile] || "󰾅")
-          + ({ "power-saver": "saver", performance: "perf" }[readings.profile] || readings.profile)
-    readonly property string loadText: {
-        const cpu = cpuBusy >= 0 ? Math.round(cpuBusy * 100) + "%" : "-", mem = memUsed >= 0 ? Math.round(memUsed * 100) + "%" : "-"
-        return glyphs ? g("󰻠") + cpu + "  " + g("󰍛") + mem : cpu + " / " + mem
-    }
-    // the Wi-Fi in use (`draftpaper readings`: its signal 0..100 and name)
-    readonly property var wifiNow: readings.wifi ? { signal: readings.wifi.signal / 100, ssid: readings.wifi.ssid } : null
-    readonly property string networkText: wifiNow ? g(ramp(wifiNow.signal, ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"])) + wifiNow.ssid
-        : readings.wired ? (glyphs ? g("󰈁") : "wired ") + readings.wired
-        : (glyphs ? g("󰤮") : "") + "offline"
-    readonly property bool tempHot: readings.hot === true
-    readonly property string tempText: (readings.temps || []).map(t => tempLabel(t.label) + t.value).join("  ")
     readonly property string customText: customPoll.output.split("\n")[0]
 
-    // the revisions' rows (RevisionSchedule.qml): the focused window's repository, polled while
-    // [title] revisions = true, and again at once when the focus moves
-    Poll {
-        id: revisionsPoll
-        command: [root.bin, "revisions"]
-        interval: 4000
-        running: theme.title.revisions === true || root.schedule === "revisions"
-    }
-    // nothing focused (every window parked): the last rows stay, so the bare sheet shows the work just left
-    property var revisions: ({})
-    Connections {
-        target: revisionsPoll
-        function onOutputChanged() {
-            let v = {}
-            try { v = JSON.parse(revisionsPoll.output) } catch (e) {}
-            if (v.focused !== false) root.revisions = v
-        }
-    }
-    readonly property var focusedWindow: { const w = Compositor.windows.find(w => w.focused); return w ? w.id : null }
-    onFocusedWindowChanged: revisionsPoll.rerun()
+    readonly property var focusedWindow: { const w = Compositor.windows.find(w => w.focused); return w ? w.id : null } // the revisions follow it
+    onFocusedWindowChanged: sheetPoll.rerun()
 
     // volume and brightness are lettered for a few seconds after they change (volume stays while muted)
     property bool settled: false
@@ -409,6 +359,11 @@ ShellRoot {
             required property var modelData
             readonly property var screen: modelData
             readonly property var output: Compositor.output(modelData.name)
+            // what the sheet says on this display (docs/sheet-content.md)
+            readonly property var doc: root.doc[modelData.name] || ({})
+            // what the document says about one of this display's workspaces; the compositor says which is
+            // focused and shown, and a click on one is its business too
+            function said(n) { return ((doc.top || {}).workspaces || []).find(w => w.number === n) }
             readonly property real dpr: output ? output.scale : (modelData.devicePixelRatio || 1)
             readonly property real mm: output ? output.px_per_mm : 6.2 / dpr        // logical px per millimetre
             readonly property real margin: output ? output.margin : Math.round(6 * mm)
@@ -448,14 +403,20 @@ ShellRoot {
 
             TitleBlock { shell: root; edge: edge; spaceName: root.spaceLabel(edge.activeSpace) }
             // the schedules take turns in one place; the graph keeps clear of whichever is out
-            MachineSchedule { id: equip; shell: root; edge: edge; other: load; wanted: root.schedule === "equipment" && root.scheduleOn === edge.screen.name }
-            ProcessSchedule { id: procs; shell: root; edge: edge; other: load; wanted: root.schedule === "processes" && root.scheduleOn === edge.screen.name }
-            // the revisions: chosen, or by themselves (with [title] revisions = true) when nothing is, on the focused
-            // screen
-            RevisionSchedule {
-                id: revs; shell: root; edge: edge; other: load
-                wanted: (root.schedule === "revisions" && root.scheduleOn === edge.screen.name)
-                    || (root.schedule === "" && theme.title.revisions === true && !!edge.output && edge.output.focused)
+            // whichever is out, as the document gives it: its heading, its columns and its rows
+            // (docs/sheet-content.md). Which that is, and whether the revisions are out by themselves
+            // with [title] revisions = true, is settled there too.
+            Schedule {
+                id: sched
+                shell: root; edge: edge; other: load
+                readonly property var said: edge.doc.schedule || null
+                wanted: said !== null
+                title: said ? said.title : ""
+                meta: said ? said.meta : ""
+                columns: said ? said.columns : []
+                rows: said ? said.rows.map(r => ({ cells: r.cells, note: r.note || "", heavyAbove: r.heavy === true, share: r.share, action: r.action })) : []
+                noteCol: said ? said.note : -1
+                barCol: said ? said.bar : -1
             }
             LoadGraph { id: load; shell: root; edge: edge; domain: root.graphOn === edge.screen.name ? root.graph : "" }
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
@@ -486,7 +447,7 @@ ShellRoot {
                                 horizontalAlignment: Text.AlignHCenter
                                 fontSizeMode: Text.HorizontalFit
                                 minimumPixelSize: edge.fontPx * 0.6
-                                text: root.spaceMarkup(modelData)
+                                text: Fonts.lettered(edge.said(modelData.number), root.glyphs)
                                 textFormat: Text.StyledText
                                 // focused: bold in the theme's strong ink; shown on its screen but not focused: bold in the others'
                                 // ink; the rest: regular, lighter
@@ -559,8 +520,16 @@ ShellRoot {
                         id: topStatus
                         anchors.centerIn: parent
                         spacing: 4 * edge.mm
-                        Cell { visible: root.tempHot; size: edge.fontPx; text: root.tempText; color: theme.alert }
-                        Cell { visible: root.batteryLow; size: edge.fontPx; text: (root.glyphs ? root.g("󰂃") : "BAT ") + Math.round(root.battery.percentage * 100) + "%"; color: theme.alert }
+                        // what wants saying now, as the document says it (docs/sheet-content.md)
+                        Repeater {
+                            model: (edge.doc.top || {}).status || []
+                            Cell {
+                                required property var modelData
+                                size: edge.fontPx
+                                text: Fonts.lettered(modelData, root.glyphs)
+                                color: modelData.ink === "alert" ? theme.alert : edge.ink
+                            }
+                        }
                         Cell {
                             readonly property var a: root.audio
                             visible: a !== null && (root.volumeLit || a.muted)
@@ -610,11 +579,10 @@ ShellRoot {
                     Cell {
                         anchors.centerIn: parent
                         size: edge.fontPx
-                        readonly property var devices: root.readings.bt || []
-                        text: root.glyphs ? root.g(devices.length ? "󰂱" : "󰂯") + devices.join(", ")
-                            : "BT " + (devices.length ? devices.join(", ") : "-")
+                        readonly property var said: (edge.doc.bottom || {}).start
+                        text: Fonts.lettered(said, root.glyphs)
                         color: edge.ink
-                        onLeft: () => root.run(["blueman-manager"])
+                        onLeft: () => root.act(said ? said.action : "", edge.screen.name)
                     }
                 }
                 ZoneNumbers {   // the columns' numbers, in the zones nothing else takes
@@ -657,18 +625,19 @@ ShellRoot {
                 }
                 Zone {
                     band: bottomMargin; index: -1
-                    Row {
+                    Row {       // the screenshot and the theme, as the document gives them
                         anchors.centerIn: parent
                         spacing: 4 * edge.mm
-                        Cell {
-                            visible: (theme.commands.screenshot || []).length > 0
-                            size: edge.fontPx; text: root.glyphs ? root.g("󰹑").trim() : "SHOT"; color: edge.ink
-                            onLeft: () => root.run(theme.commands.screenshot)
-                        }
-                        Cell {      // the theme: left, the picker; right, the next theme
-                            size: edge.fontPx; text: theme.label.toUpperCase(); color: edge.ink
-                            onLeft: () => settings.visible ? settings.cancel() : settings.open()
-                            onRight: () => root.run([root.bin, "theme", "next"])
+                        Repeater {
+                            model: (edge.doc.bottom || {}).end || []
+                            Cell {
+                                required property var modelData
+                                size: edge.fontPx
+                                text: Fonts.lettered(modelData, root.glyphs)
+                                color: edge.ink
+                                onLeft: () => root.act(modelData.action, edge.screen.name)
+                                onRight: modelData.action_right ? () => root.act(modelData.action_right, edge.screen.name) : null
+                            }
                         }
                     }
                 }

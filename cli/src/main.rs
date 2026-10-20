@@ -70,6 +70,7 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               tmux's sessions kept across a reboot ([session] apps: run by tmux itself)
   draftpaper readings         the readings the shell polls, as JSON
   draftpaper sheet            what the sheet says, as JSON: one account for whoever letters it
+  draftpaper profile next     put the machine on the next power profile
   draftpaper revisions        the focused window's repository and latest commits, as JSON (the revision block)
   draftpaper machine          the machine schedule's facts, as JSON: machine, processor, graphics, memory,
                               storage, system, versions, uptime
@@ -159,8 +160,10 @@ fn main() {
         ["lock-on-sleep", how, ..] => lock_on_sleep(&p, how),
         ["lock-on-sleep"] => lock_on_sleep(&p, "toggle"),
         ["readings", ..] => readings::main(&p),
+        // the title block's PROFILE cell, and the document's `profile.next` (docs/sheet-content.md)
+        ["profile", "next", ..] => std::process::exit(if draftpaper::dbus::cycle_profile() { 0 } else { 1 }),
         // what the sheet says, for whoever letters it (docs/sheet-content.md)
-        ["sheet", ..] => content::main(&p),
+        ["sheet", rest @ ..] => content::main(&p, rest),
         ["revisions", ..] => revisions::main(&p),
         ["machine", ..] => machine::main(&p),
         ["processes", ..] => processes::main(40),

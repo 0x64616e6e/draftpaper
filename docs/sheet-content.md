@@ -1,6 +1,6 @@
 # The sheet's content: one account of what the drawing says
 
-Status: stages 0 to 2 built, 2026-10-20; stages 3 to 5 proposed. The sheet is lettered by the shell again
+Status: stages 0 to 3 built, 2026-10-20; stages 4 and 5 proposed. The sheet is lettered by the shell again
 (`[sheet] lettering = "shell"`); the client in `sheet/` stays in the tree and still passes its tests.
 
 ## Why
@@ -165,9 +165,9 @@ Each one leaves the sheet working and the tests green.
 2. **The client letters from it.** ✅ Built 2026-10-20. `sheet/src` keeps the font, the drawing and the
    placing, and decides nothing about words. Its content tests moved to the CLI with the code, and the
    `Theme` it reads lost `project`, `drawn` and `label`: nothing in the client reads them any more.
-3. **The shell letters from it.** The poll changes, the twelve-row table and the text properties go.
-   This is where the second account stops existing, and where the ten defects above become impossible
-   rather than fixed.
+3. **The shell letters from it.** ✅ Built 2026-10-20. The poll changed, and the twelve-row table, the
+   dozen text properties and the three schedule components went. The second account no longer exists:
+   the ten defects above are impossible rather than fixed, and PROJECT now reads the same on both.
 4. **The diff harness as a test.** One document, both renderers, headless, screenshots compared. It can
    only be written while both exist.
 5. **Extensions.** A program or a file that contributes `Text` entries to `bottom.cells`, or a whole

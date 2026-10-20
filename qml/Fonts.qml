@@ -23,6 +23,29 @@ Singleton {
         return all.find(f => / Nerd Font Mono$/.test(f)) || ""
     }
 
+    // What the sheet can letter of one entry of the document (docs/sheet-content.md): its `text` with
+    // the glyphs set in the face that has them, or its plain `words` where there is no such face or the
+    // config has turned glyphs off. This is the whole of what a renderer decides about words, and it is
+    // a decision only a renderer can make: the document is written by something that does not know
+    // which faces are on the machine.
+    function lettered(entry, on) {
+        if (!entry) return ""
+        var text = entry.text || ""
+        if (!on || fonts.glyph === "") return entry.words !== undefined ? entry.words : text
+        var out = ""
+        for (var i = 0; i < text.length; i++) {
+            var c = text.charCodeAt(i), ch = text.charAt(i)
+            if (c >= 0xD800 && c <= 0xDBFF && i + 1 < text.length) {   // one glyph, two code units
+                c = (c - 0xD800) * 0x400 + text.charCodeAt(i + 1) - 0xDC00 + 0x10000
+                ch = text.substr(i, 2)
+                i++
+            }
+            var pua = (c >= 0xE000 && c <= 0xF8FF) || (c >= 0xF0000 && c <= 0xFFFFD)
+            out += pua ? "<font face='" + fonts.glyph + "'>" + ch + "</font>" : ch
+        }
+        return out
+    }
+
     FileView {
         path: Quickshell.env("DRAFTPAPER_CACHE") + "/theme.json"
         watchChanges: true

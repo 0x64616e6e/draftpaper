@@ -1,7 +1,7 @@
 // A schedule on the sheet (issue #49): a drawing's ruled table, as part of the sheet: no outline, no panel,
 // no margin of its own, only its heading, its rules and its lettering, on the paper under every window
 // (over a wallpaper, on the theme's paper tinted as the title block is, to be read). The equipment
-// (MachineSchedule.qml) and the processes (ProcessSchedule.qml) take turns in one place: Mod+i, or
+// and the processes take turns in one place: Mod+i, or
 // `draftpaper schedule next|equipment|processes|hide`; each fades in and out.
 //
 // Where: [sheet] schedule_at, millimetres from the frame's corner ([10, 10], the default) or a zone
@@ -296,7 +296,7 @@ Item {
                         if (d && start && (d.x !== start.x || d.y !== start.y)) sched.shell.setConfig(["sheet.schedule_at=[" + d.x + ", " + d.y + "]"])
                         keep.restart()
                     }
-                    onClicked: e => { const r = sched.rowAt(e.y); if (r && !moved) r.action() }
+                    onClicked: e => { const r = sched.rowAt(e.y); if (r && !moved) shell.act(r.action, edge.screen.name) }
                 }
                 Timer { id: keep; interval: 1500; onTriggered: sched.dragged = null }
             }
