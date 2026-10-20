@@ -69,7 +69,7 @@ fn cell(label: &str, text: String, words: Option<String>, action: Option<&str>) 
 
 /// The title block's twelve cells, in the order the compositor measures them
 /// (compositor/src/title.rs). `theme` is the theme as `draftpaper` writes it to its cache.
-pub fn title(theme: &Value, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>) -> Vec<Value> {
+pub fn title(theme: &Value, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>, mine: &[Value]) -> Vec<Value> {
     let (date, time) = clock(now);
     let named = |which: &str| {
         r.get("temps")
@@ -147,7 +147,18 @@ pub fn title(theme: &Value, workspace: u64, now: std::time::SystemTime, r: &Valu
             None,
             Some("schedule.processes"),
         ),
-        cell("DRAWN", of("title", "drawn"), None, None),
+        // the last cell is the first of the user's own where there is one, as DRAWN's place has always
+        // been its to take (README, docs/sheet-content.md)
+        match mine.first() {
+            Some(first) => {
+                let mut c = first.clone();
+                if c.get("label").is_none() {
+                    c["label"] = json!("");
+                }
+                c
+            }
+            None => cell("DRAWN", of("title", "drawn"), None, None),
+        },
     ]
 }
 
@@ -338,6 +349,101 @@ fn status(r: &Value) -> Vec<Value> {
     row
 }
 
+/// The sheet carries what the user puts on it as well: the `[[cell]]`s of the config, and the
+/// extensions beside it in `extensions/`. Both are the same thing — a program that prints what it has
+/// to say — and both end up as entries of this document like any other, so an extension cannot letter
+/// in a face of its own, an ink off the theme's palette, or anywhere but the slot it was given. It
+/// supplies words. The sheet sets them.
+///
+/// What a program prints is its say. A line of text is the whole of it; a JSON object with a `text` in
+/// it is an entry of this document (docs/sheet-content.md), so an extension that wants a glyph, the
+/// alert ink or words to fall back on can have them.
+///
+/// Each says how often it wants running and is run no oftener: what it printed last is kept beside the
+/// theme with the second it was printed in, and given back until its time is up. One that hangs is
+/// killed after a second and the last answer stands, and once a second and a half has gone on them
+/// altogether the rest are left for the next time the sheet is read. A sheet is drawn every few
+/// seconds; nothing the user puts on it is allowed to be the reason it is not.
+pub fn extensions(p: &crate::util::Paths) -> Vec<Value> {
+    const EACH: u64 = 1;
+    const ALL: std::time::Duration = std::time::Duration::from_millis(1500);
+    let cfg = crate::config::load(p);
+    let mut said = Vec::new();
+    let mut declared: Vec<(String, Value)> = cfg
+        .get("cell")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().enumerate().map(|(i, c)| (format!("cell-{i}"), c.clone())).collect())
+        .unwrap_or_default();
+    // the extensions proper: one to a file, in the order their names fall
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(p.config_dir.join("draftpaper/extensions"))
+        .map(|r| r.filter_map(|e| e.ok().map(|e| e.path())).filter(|f| f.extension().is_some_and(|x| x == "toml")).collect())
+        .unwrap_or_default();
+    files.sort();
+    for f in files {
+        let Some(stem) = f.file_stem().and_then(|s| s.to_str()).map(str::to_string) else { continue };
+        let Ok(text) = std::fs::read_to_string(&f) else { continue };
+        if let Ok(v) = toml::from_str::<Value>(&text) {
+            declared.push((format!("ext-{stem}"), v));
+        }
+    }
+    let kept = p.cache.join("extensions");
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let started = std::time::Instant::now();
+    for (key, d) in declared {
+        let command: Vec<String> = d.get("command").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(str::to_string).collect()).unwrap_or_default();
+        if command.is_empty() {
+            continue;
+        }
+        let every = d.get("interval").and_then(Value::as_u64).unwrap_or(5).max(1);
+        let note = kept.join(format!("{key}.json"));
+        let before: Value = std::fs::read_to_string(&note).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(Value::Null);
+        let stamp = before.get("stamp").and_then(Value::as_u64).unwrap_or(0);
+        let mut out = before.get("out").and_then(Value::as_str).unwrap_or("").to_string();
+        if now.saturating_sub(stamp) >= every && started.elapsed() < ALL {
+            let argv: Vec<&str> = command.iter().map(String::as_str).collect();
+            if let Some(fresh) = crate::util::run(&argv, EACH) {
+                out = fresh;
+                let _ = std::fs::create_dir_all(&kept);
+                crate::util::write(&note, &crate::util::dumps(&json!({ "stamp": now, "out": out })));
+            }
+        }
+        let line = out.lines().next().unwrap_or("").trim().to_string();
+        if line.is_empty() {
+            continue;
+        }
+        // its own say, where it printed one; else the line it printed
+        let mut v = match serde_json::from_str::<Value>(&line) {
+            Ok(v) if v.get("text").is_some() => v,
+            _ => say(line, None),
+        };
+        if let Some(label) = d.get("label").and_then(Value::as_str) {
+            v["label"] = json!(label);
+        }
+        for (side, name) in [("left", "action"), ("right", "action_right")] {
+            if d.get(side).and_then(Value::as_array).is_some_and(|a| !a.is_empty()) {
+                v[name] = json!(format!("{key}.{side}"));
+            }
+        }
+        said.push(v);
+    }
+    said
+}
+
+/// What a `{key}.left` or `{key}.right` runs: whatever the cell or the extension it names says to.
+pub fn runs(p: &crate::util::Paths, action: &str) -> Option<Vec<String>> {
+    let (key, side) = action.rsplit_once('.')?;
+    let cfg = crate::config::load(p);
+    let d = if let Some(i) = key.strip_prefix("cell-") {
+        cfg.get("cell")?.as_array()?.get(i.parse::<usize>().ok()?)?.clone()
+    } else {
+        let stem = key.strip_prefix("ext-")?;
+        let text = std::fs::read_to_string(p.config_dir.join("draftpaper/extensions").join(format!("{stem}.toml"))).ok()?;
+        toml::from_str::<Value>(&text).ok()?
+    };
+    let cmd: Vec<String> = d.get(side)?.as_array()?.iter().filter_map(Value::as_str).map(str::to_string).collect();
+    (!cmd.is_empty()).then_some(cmd)
+}
+
 /// The volume, and whether it is muted. The sheet letters this for a few seconds after it moves, so
 /// the level itself is whoever letters the sheet's to watch — but how it reads is said here, so that
 /// two renderers cannot come to letter it differently (docs/sheet-content.md).
@@ -372,10 +478,12 @@ fn foot(theme: &Value) -> Vec<Value> {
 }
 
 /// What the margins of one display carry.
-pub fn margins(theme: &Value, r: &Value, spaces: &[Value], windows: &[Value], display: &str, workspace: u64) -> Value {
+pub fn margins(theme: &Value, r: &Value, spaces: &[Value], windows: &[Value], display: &str, workspace: u64, mine: &[Value]) -> Value {
     json!({
         "top": { "workspaces": workspaces(spaces, windows, display), "status": status(r) },
-        "bottom": { "start": bluetooth(r), "end": foot(theme) },
+        // the user's own after the first, a zone each along the foot; the first took the title block's
+        // last cell (`title`)
+        "bottom": { "start": bluetooth(r), "end": foot(theme), "cells": mine.iter().skip(1).cloned().collect::<Vec<Value>>() },
         "sides": parked(windows, workspace),
     })
 }
@@ -639,12 +747,15 @@ pub fn document(p: &crate::util::Paths, want: Option<(&str, &str)>) -> Value {
     std::thread::sleep(std::time::Duration::from_millis(120));
     let busy = cpu.busy();
 
+    // the user's own, run once for the whole sheet rather than once a display
+    let mine = extensions(p);
+
     let mut displays_out = serde_json::Map::new();
     for o in &outputs {
         let Some(name) = o.get("name").and_then(Value::as_str) else { continue };
         let workspace = o.get("workspace").and_then(Value::as_u64).unwrap_or(1);
-        let mut d = margins(&theme, &readings, &spaces, &windows, name, workspace);
-        d["title"] = json!(title(&theme, workspace, now, &readings, busy));
+        let mut d = margins(&theme, &readings, &spaces, &windows, name, workspace, &mine);
+        d["title"] = json!(title(&theme, workspace, now, &readings, busy, &mine));
         // whichever the compositor says is out — or the revisions by themselves, where the config asks
         // for them and nothing else is chosen, on the display in use (qml/shell.qml)
         let named = match want {
@@ -680,7 +791,7 @@ mod tests {
 
     #[test]
     fn twelve_cells_in_the_order_the_compositor_measures_them() {
-        let cells = title(&theme(), 3, std::time::SystemTime::now(), &Value::Null, None);
+        let cells = title(&theme(), 3, std::time::SystemTime::now(), &Value::Null, None, &[]);
         let labels: Vec<&str> = cells.iter().map(|c| c["label"].as_str().unwrap()).collect();
         assert_eq!(
             labels,
@@ -695,7 +806,7 @@ mod tests {
     fn only_the_clock_is_lettered_large() {
         // said, not worked out from the cell: the block stretches the top row past the height the
         // shell's own table uses, so a renderer that measures letters eleven cells at the clock's size
-        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None);
+        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None, &[]);
         let large: Vec<&str> = cells.iter().filter(|c| c["large"] == true).map(|c| c["label"].as_str().unwrap()).collect();
         assert_eq!(large, ["TIME"]);
     }
@@ -708,7 +819,7 @@ mod tests {
             "temps": [{ "label": "CPU", "value": "57°" }, { "label": "FAN", "value": "2322" }],
             "hot": true
         });
-        let cells = title(&theme(), 1, std::time::SystemTime::now(), &r, Some(0.08));
+        let cells = title(&theme(), 1, std::time::SystemTime::now(), &r, Some(0.08), &[]);
         let c = |l| by(&cells, l).clone();
         assert_eq!(c("POWER")["text"], format!("{BOLT} 12.3 W"));
         assert_eq!(c("POWER")["words"], "12.3 W");
@@ -729,7 +840,7 @@ mod tests {
 
     #[test]
     fn what_is_not_there_is_said_rather_than_left_out() {
-        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None);
+        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None, &[]);
         let c = |l| by(&cells, l).clone();
         assert_eq!(c("BATTERY")["text"], "-");
         assert_eq!(c("PROCESSES")["text"], "-");
@@ -741,7 +852,7 @@ mod tests {
     #[test]
     fn a_low_battery_is_lettered_in_the_alert_ink() {
         let low = json!({ "battery": 0.08, "battery_low": true });
-        let cells = title(&theme(), 1, std::time::SystemTime::now(), &low, None);
+        let cells = title(&theme(), 1, std::time::SystemTime::now(), &low, None, &[]);
         assert_eq!(by(&cells, "BATTERY")["ink"], "alert");
         // and the ink is a role, never a colour: the theme resolves it
         assert!(by(&cells, "BATTERY")["ink"].as_str().unwrap().chars().all(|c| c.is_ascii_lowercase()));
@@ -749,7 +860,7 @@ mod tests {
 
     #[test]
     fn a_cell_that_does_something_says_what_by_name() {
-        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None);
+        let cells = title(&theme(), 1, std::time::SystemTime::now(), &Value::Null, None, &[]);
         assert_eq!(by(&cells, "POWER")["action"], "graph.power");
         assert_eq!(by(&cells, "PROFILE")["action"], "profile.next");
         assert_eq!(by(&cells, "PROCESSES")["action"], "schedule.processes");

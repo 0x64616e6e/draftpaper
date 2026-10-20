@@ -1,6 +1,6 @@
 # The sheet's content: one account of what the drawing says
 
-Status: stages 0 to 4 built, 2026-10-20; stage 5 proposed. The sheet is lettered by the shell again
+Status: all five stages built, 2026-10-20. The sheet is lettered by the shell again
 (`[sheet] lettering = "shell"`); the client in `sheet/` stays in the tree and still passes its tests.
 
 ## Why
@@ -145,8 +145,9 @@ and the glyph helper — go away entirely.
 - **The notifications.** They belong to whichever process took the name on the session bus, which is
   the renderer, and a polled snapshot cannot see them. The formatting is the one place a disagreement
   could still hide; closing it means a daemon that holds them, which is a bigger decision than this.
-- **The config's own `[[cell]]`s.** Each is a command with an interval of its own, and folding them
-  into one poll would change the cadence the config asks for. They stay with whoever letters the sheet.
+- ~~The config's own `[[cell]]`s.~~ In it since stage 5, with the extensions: each is run no oftener than
+  its own interval asks, because what it last printed is kept beside the theme with the second it was
+  printed in. That is also what let the extensions in at all.
 - **Levels that are lit for four seconds.** The volume and the brightness are lettered for a moment
   after they move, which is faster than a five-second poll. For now the renderer keeps watching them and
   overlays them on `top.status`. If that proves to be where the next disagreement lives, the document
@@ -174,9 +175,10 @@ Each one leaves the sheet working and the tests green.
    run, that the Nerd Font glyphs come out smaller in the client than in the shell: the same character,
    asked for at the same size, out of the same file, whose metrics the two agree on exactly. That is
    still open.
-5. **Extensions.** A program or a file that contributes `Text` entries to `bottom.cells`, or a whole
-   `Schedule`. The shape is already settled by then, and an extension that can only supply words cannot
-   break the grid, the face, the ink or the pixel snapping.
+5. **Extensions.** ✅ Built 2026-10-20. A program in `extensions/NAME.toml`, or a `[[cell]]` of the
+   config, contributing entries to the title block's last cell and the foot's zones. The shape was
+   settled by then, and an extension that can only supply words cannot break the grid, the face, the ink
+   or the pixel snapping. Schedules of their own are the next thing it could carry and do not yet.
 
 ## Testing
 

@@ -19,7 +19,6 @@ Item {
     readonly property color ink: theme.ink
     readonly property color line: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.85 * theme.inkAlpha + 0.1))
     readonly property color faint: Qt.rgba(ink.r, ink.g, ink.b, Math.min(1, 0.6 * theme.inkAlpha + 0.1))
-    readonly property var custom: theme.cells.length > 0 ? theme.cells[0] : null
 
     // the block and its cells from the compositor, in logical pixels of the output; a compositor before
     // 0.3.0 sends none, and the shell draws the rules itself (from the millimetres below)
@@ -44,17 +43,11 @@ Item {
         [34, 12, 24, 12], [58, 12, 22, 12], [80, 12, 22, 12], [102, 12, 28, 12],
         [0, 24, 34, 12], [34, 24, 52, 12], [86, 24, 16, 12], [102, 24, 28, 12],
     ]
-    // the twelfth cell is the config's first [[cell]] where it has one: a command with an interval of
-    // its own, which is why it is not in the document (docs/sheet-content.md)
+    // every cell is the document's, the twelfth included: a `[[cell]]` of the config's own takes its
+    // place there, and the document is where that happens now (docs/sheet-content.md)
     readonly property var cells: {
         const said = block.edge.doc.title || []
-        if (!said.length) return block.places.map(() => ({}))
-        if (!custom) return said
-        const mine = said.slice()
-        mine[11] = { label: custom.label || "", text: shell.customText || "-",
-                     action: custom.left ? "run.custom_left" : undefined,
-                     action_right: custom.right ? "run.custom_right" : undefined }
-        return mine
+        return said.length ? said : block.places.map(() => ({}))
     }
 
     PanelWindow {
@@ -137,9 +130,7 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: e => {
                         const name = e.button === Qt.RightButton ? modelData.action_right : modelData.action
-                        if (name === "run.custom_left") shell.run(block.custom.left)
-                        else if (name === "run.custom_right") shell.run(block.custom.right)
-                        else shell.act(name, block.edge.screen.name)
+                        shell.act(name, block.edge.screen.name)
                     }
                 }
                 Rectangle {

@@ -220,6 +220,17 @@ icc = "~/.local/share/icc/panel.icc"   # its calibration curves into the gamma t
 "Mod+Return" = "spawn foot"
 ```
 
+Put a `[[cell]]` in a file of its own and it is an extension: `~/.config/draftpaper/extensions/NAME.toml`,
+with the same keys, read in the order the names fall. A cell or an extension is run no oftener than its
+`interval` asks, is killed if it hangs for a second, and is left for the next reading once a second and a
+half has gone on them altogether — nothing you put on the sheet can be the reason it stops being drawn.
+
+Its first line of output is what is lettered. Print a JSON object instead and you get the whole of what a
+slot can say: `{"text": "\uf0599 12°", "words": "12°", "ink": "alert"}` — a glyph, with words to fall back
+on where no Nerd Font is installed, and the theme's alert ink. Nothing else: an extension supplies words
+and the sheet sets them, so it cannot letter in a face of its own, a colour off the palette, or anywhere
+but the slot it was given (docs/sheet-content.md).
+
 ## Rulers
 
 Mod+r brings out two rulers, as clear acrylic on the drawing: a horizontal and a vertical one, each

@@ -141,6 +141,9 @@ struct Sheet {
     /// from and which what is under the pointer is read from
     raw_spaces: Vec<serde_json::Value>,
     raw_windows: Vec<serde_json::Value>,
+    /// what the user puts on the sheet themselves: the config's `[[cell]]`s and the extensions beside
+    /// it, each run no oftener than it asks for (draftpaper::content::extensions)
+    mine: Vec<serde_json::Value>,
     /// what the sheet says, by display (draftpaper::content)
     content: HashMap<String, serde_json::Value>,
     seats: SeatState,
@@ -200,6 +203,7 @@ fn main() {
         parked: Vec::new(),
         raw_spaces: Vec::new(),
         raw_windows: Vec::new(),
+        mine: Vec::new(),
         content: HashMap::new(),
         seats: SeatState::new(&globals, &qh),
         pointer: None,
@@ -490,7 +494,7 @@ impl Sheet {
     /// A reading too wide for its cell is lettered smaller before it is cut, as the shell does.
     fn letter_title(&mut self, canvas: &mut paint::Canvas, s: &sheet::Screen, scale: f64, hover: Option<(f64, f64)>) {
         let (Some(block), Some(face)) = (s.title.as_ref(), self.face.as_mut()) else { return };
-        let cells = title::cells(&self.theme, face, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy);
+        let cells = title::cells(&self.theme, face, s.workspace, std::time::SystemTime::now(), &self.readings, self.busy, &self.mine);
         // a millimetre of this display, in the physical pixels the buffer is in
         let mm = (s.mm * scale) as f32;
         let (ink, faint, alert) = (self.theme.ink, self.theme.faint(), self.theme.alert);
@@ -595,11 +599,12 @@ impl Sheet {
     /// (`draftpaper::content`, docs/sheet-content.md). The windows parked down the sides come from it
     /// too, so what is lettered in a cell and what a click on that cell does are the same list.
     fn reread_content(&mut self) {
+        self.mine = draftpaper::content::extensions(&draftpaper::util::Paths::new());
         self.content = self
             .screens
             .values()
             .map(|s| {
-                let doc = draftpaper::content::margins(&self.theme.raw, &self.readings, &self.raw_spaces, &self.raw_windows, &s.name, s.workspace);
+                let doc = draftpaper::content::margins(&self.theme.raw, &self.readings, &self.raw_spaces, &self.raw_windows, &s.name, s.workspace, &self.mine);
                 (s.name.clone(), doc)
             })
             .collect();

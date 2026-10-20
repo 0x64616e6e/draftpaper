@@ -41,6 +41,14 @@ cat > "$t/readings.json" <<'JSON'
  "wifi": {"signal": 62, "ssid": "a network"}, "wired": null, "backlight": null,
  "battery": 0.78, "charging": false, "battery_low": false}
 JSON
+# one of the user's own, so that what an extension puts on the sheet is compared too: both renderers
+# take it from the document and neither runs it (docs/sheet-content.md)
+mkdir -p "$t/.config/draftpaper/extensions"
+cat > "$t/.config/draftpaper/extensions/ticket.toml" <<'TOML'
+label = "TICKET"
+command = ["echo", "DRAFT-42"]
+interval = 1
+TOML
 NOW=1792400000
 pids=
 # KEEP=1 leaves the screenshots and the logs behind, for looking at what differed

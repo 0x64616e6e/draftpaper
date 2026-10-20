@@ -140,8 +140,22 @@ pub fn letter(canvas: &mut Canvas, face: &mut Face, s: &Screen, theme: &Theme, s
             let w = face.width(&bt, px, 0.0);
             let at = (band.here((start + end) / 2.0) * scale) as f32 - w / 2.0;
             face.draw(canvas, at, middle(&band, scale, face, px), &bt, px, 0.0, soft.premultiplied());
-            // the figures over the scale bar's rules
-            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), |_| false);
+            // the user's own, after the first, a zone each: what each says is the document's, and the
+            // zones the scale bar and the theme's name have are not theirs to take
+            let mine = doc["bottom"]["cells"].as_array().unwrap_or(&empty);
+            let free = band.zones.saturating_sub(2) as usize;
+            let taken = |k: u32| (k as usize) <= mine.len().min(free.saturating_sub(1));
+            for (i, cell) in mine.iter().take(free.saturating_sub(1)).enumerate() {
+                let (start, end) = band.zone(i as u32 + 1);
+                let label = cell["label"].as_str().filter(|l| !l.is_empty()).map(|l| format!("{l} ")).unwrap_or_default();
+                let text = format!("{label}{}", crate::glyph::pick(face, theme.glyphs, cell));
+                let w = face.width(&text, px, 0.0);
+                let colour = if cell["ink"] == "alert" { theme.alert } else { soft };
+                let at = (band.here((start + end) / 2.0) * scale) as f32 - w / 2.0;
+                face.draw(canvas, at, middle(&band, scale, face, px), &text, px, 0.0, colour.premultiplied());
+            }
+            // the figures over the scale bar's rules, in the zones nothing of the user's has taken
+            numbers(canvas, face, &band, scale, px, soft, 1, band.zones.saturating_sub(2), taken);
             figures(canvas, face, s, scale, px, soft);
             // the last zone: the screenshot and the theme's name, a row of them centred in it
             let row: Vec<String> = doc["bottom"]["end"].as_array().unwrap_or(&empty).iter().map(|e| crate::glyph::pick(face, theme.glyphs, e)).collect();

@@ -164,6 +164,11 @@ fn main() {
         ["profile", "next", ..] => std::process::exit(if draftpaper::dbus::cycle_profile() { 0 } else { 1 }),
         // what the sheet says, for whoever letters it (docs/sheet-content.md)
         ["sheet", rest @ ..] => content::main(&p, rest),
+        // what a cell or an extension of the user's own says a click on it does (docs/sheet-content.md)
+        ["cell", action, ..] => {
+            let Some(cmd) = content::runs(&p, action) else { std::process::exit(1) };
+            let _ = std::process::Command::new(&cmd[0]).args(&cmd[1..]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+        }
         ["revisions", ..] => revisions::main(&p),
         ["machine", ..] => machine::main(&p),
         ["processes", ..] => processes::main(40),

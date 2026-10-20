@@ -23,8 +23,8 @@ pub struct Cell {
 /// says (`draftpaper::content`, docs/sheet-content.md). Nothing is decided here: the document carries
 /// each reading with its glyphs in `text` and without them in `words`, and this picks between them,
 /// which only a renderer can do — it is the only one that knows which faces are installed.
-pub fn cells(theme: &crate::sheet::Theme, face: &mut crate::font::Face, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>) -> Vec<Cell> {
-    draftpaper::content::title(&theme.raw, workspace, now, r, cpu)
+pub fn cells(theme: &crate::sheet::Theme, face: &mut crate::font::Face, workspace: u64, now: std::time::SystemTime, r: &Value, cpu: Option<f64>, mine: &[Value]) -> Vec<Cell> {
+    draftpaper::content::title(&theme.raw, workspace, now, r, cpu, mine)
         .iter()
         .map(|c| Cell {
             label: c["label"].as_str().unwrap_or("").to_string(),

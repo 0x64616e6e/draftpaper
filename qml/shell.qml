@@ -103,17 +103,14 @@ ShellRoot {
         else if (what === "window") Compositor.action("unpark " + which)
         else if (name === "run.screenshot") run(theme.commands.screenshot)
         else if (name === "run.bluetooth") run(["blueman-manager"])
+        // a cell or an extension of the user's own: what it runs is its own to say, and `draftpaper`
+        // looks it up rather than this holding a copy of the config
+        else run([root.bin, "cell", name])
     }
     // the backlight is read in place (Watch.qml: no process started); the memory and the processor are
     // the document's now (docs/sheet-content.md)
     Watch { id: backlightNow; path: root.readings.backlight ? root.readings.backlight + "/brightness" : ""; interval: 1000 }
     Watch { id: backlightMax; path: root.readings.backlight ? root.readings.backlight + "/max_brightness" : ""; interval: 60000 }
-    Poll {
-        id: customPoll
-        command: theme.cells.length > 0 && theme.cells[0].command ? theme.cells[0].command : ["true"]
-        running: theme.cells.length > 0 && !!theme.cells[0].command
-        interval: theme.cells.length > 0 ? (theme.cells[0].interval || 5) * 1000 : 60000
-    }
 
 
     // ---- the notes on the sheet (issue #49): the schedules (Mod+i) and a reading's last ten minutes ----
@@ -174,7 +171,6 @@ ShellRoot {
     // the battery is UPower's still, for the lock and greeter; what the sheet says of it is the
     // document's (docs/sheet-content.md)
     readonly property var battery: UPower.displayDevice
-    readonly property string customText: customPoll.output.split("\n")[0]
 
     readonly property var focusedWindow: { const w = Compositor.windows.find(w => w.focused); return w ? w.id : null } // the revisions follow it
     onFocusedWindowChanged: sheetPoll.rerun()
@@ -594,31 +590,26 @@ ShellRoot {
                     visible: edge.scaleBar !== null
                     band: bottomMargin; edge: edge; bar: edge.scaleBar || { zone: { x: 0, width: 0 }, measured: false, marks: [] }
                 }
-                Repeater {      // the second and later [[cell]]s of the config, each in its own zone (issue #6)
+                Repeater {      // the user's own, after the first, a zone each (issue #6). What each says
+                                // and how often it is asked are the document's (docs/sheet-content.md)
                     id: extraCells
-                    model: theme.cells.slice(1)
+                    model: (edge.doc.bottom || {}).cells || []
                     Item {
                         id: extra
                         required property var modelData
                         required property int index
                         // the last zone is taken, and the one before by the scale bar; the rest are dropped
                         visible: index + 1 < edge.bottomFree
-                        readonly property bool busy: visible && extraPoll.output !== ""
-                        Poll {
-                            id: extraPoll
-                            command: extra.modelData.command || ["true"]
-                            interval: (extra.modelData.interval || 5) * 1000
-                        }
+                        readonly property bool busy: visible
                         Zone {
                             band: bottomMargin; index: extra.index + 1
                             Cell {
                                 anchors.centerIn: parent
-                                visible: extraPoll.output !== ""
                                 size: edge.fontPx
-                                text: (extra.modelData.label ? extra.modelData.label + " " : "") + extraPoll.output.split("\n")[0]
-                                color: edge.ink
-                                onLeft: extra.modelData.left ? () => root.run(extra.modelData.left) : null
-                                onRight: extra.modelData.right ? () => root.run(extra.modelData.right) : null
+                                text: (extra.modelData.label ? extra.modelData.label + " " : "") + Fonts.lettered(extra.modelData, root.glyphs)
+                                color: extra.modelData.ink === "alert" ? theme.alert : edge.ink
+                                onLeft: () => root.act(extra.modelData.action, edge.screen.name)
+                                onRight: extra.modelData.action_right ? () => root.act(extra.modelData.action_right, edge.screen.name) : null
                             }
                         }
                     }
