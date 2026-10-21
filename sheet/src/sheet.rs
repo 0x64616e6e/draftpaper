@@ -43,6 +43,8 @@ pub struct Screen {
     pub graph: String,
     /// whether the keymap is to be lettered over this sheet: Mod is being held (legend.rs)
     pub legend: bool,
+    /// and whether Mod was tapped rather than held, so the next key composes: the heading says which
+    pub leader: bool,
 }
 
 /// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
@@ -114,6 +116,7 @@ pub fn parse(outputs: &Value) -> Vec<Screen> {
                 schedule: o.get("schedule").and_then(Value::as_str).unwrap_or("").to_string(),
                 graph: o.get("graph").and_then(Value::as_str).unwrap_or("").to_string(),
                 legend: o.get("legend").and_then(Value::as_bool).unwrap_or(false),
+                leader: o.get("leader").and_then(Value::as_bool).unwrap_or(false),
             })
         })
         .collect()
@@ -384,7 +387,7 @@ mod tests {
     }
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new(), legend: false }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new(), legend: false, leader: false }
     }
 
     #[test]

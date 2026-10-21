@@ -169,6 +169,8 @@ struct Sheet {
     schedule: Option<schedule::Schedule>,
     /// the compositor's keymap, asked for once: what the legend letters while Mod is held (legend.rs)
     keymap: Vec<legend::Key>,
+    /// what the legend is lettered with, from the document (legend.rs): read once, like its millimetres
+    words: legend::Words,
     /// the reading plotted, and the store it is plotted from
     plotting: graph::Domain,
     readings_over_time: Option<graph::Readings>,
@@ -227,6 +229,7 @@ fn main() {
         showing: String::new(),
         keymap: legend::keys(),
         schedule: None,
+        words: legend::Words::read(),
         plotting: graph::Domain::None,
         readings_over_time: None,
         notices: std::sync::Arc::new(notices::Notices::default()),
@@ -511,7 +514,7 @@ impl Sheet {
                 // Mod is not being held
             } else if let Some(face) = self.face.as_mut() {
                 if let Some(at) = legend::place(&s, self.keymap.len(), left, !marks.is_empty()) {
-                    legend::draw(&mut canvas, face, &self.keymap, &marks, &at, &s, &self.theme, scale);
+                    legend::draw(&mut canvas, face, &self.keymap, &marks, &at, &s, &self.theme, scale, &self.words);
                 }
             }
         } else if side == Side::Schedule {

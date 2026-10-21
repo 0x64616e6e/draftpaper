@@ -358,6 +358,20 @@ cell_click schedule.equipment; sched_change "" > /dev/null; cell_click schedule.
 ok "another cell's schedule takes its place" "$(sched_change equipment)" "processes"
 cell_click schedule.processes
 ok "and that one goes the same way" "$(sched_change processes)" ""
+# the leader (docs/keyboard.md): Mod tapped arms it, and the legend stands while it is armed — a mode
+# you cannot see is the one the design argues against, so the two are one state, not two. A key cannot
+# be tapped in a headless compositor, so it is armed the way a binding of one's own would arm it.
+leader_state() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0] | "\(.leader)/\(.legend)"'; }
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg leader > /dev/null 2>&1; sleep 1
+ok "the leader armed brings the legend with it" "$(leader_state)" "true/true"
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg leader off > /dev/null 2>&1; sleep 1
+ok "and spent, both go" "$(leader_state)" "false/false"
+# the legend put away takes the leader with it: the legend is how the leader is not silent, so the
+# leader cannot outlive it
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg leader > /dev/null 2>&1; sleep 1
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg legend off > /dev/null 2>&1; sleep 1
+ok "the legend put away takes the leader with it" "$(leader_state)" "false/false"
+
 # the graph: a reading's year, called up by name and by its cell in the title block
 run "$repo/cli/target/release/draftpaper" graph load > /dev/null 2>&1
 sleep 2

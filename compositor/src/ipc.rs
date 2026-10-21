@@ -12,6 +12,8 @@
 //!   {"request": "rulers"}                                  put away
 //!   {"request": "gamma"}                                   each display's gamma ramps, as loaded (gamma.rs)
 //!   {"request": "pointer"}                                 where the pointer is
+//!   {"request": "legend", "on": true}                      the keymap lettered over the sheet
+//!   {"request": "leader", "on": true}                      the legend, and the next key read as a chord
 //!   {"request": "schedule", "which": "equipment"}          which schedule is out ("hide": none)
 //!   {"request": "schedule", "which": "equipment", "toggle": true}   away again if it is the one already out here
 //!   {"request": "graph", "which": "load"}                  a reading's year plotted (the same again: away)
@@ -184,6 +186,20 @@ impl Draftpaper {
             "outputs" => Ok(self.ipc_outputs()),
             "workspaces" => Ok(self.ipc_workspaces()),
             "windows" => Ok(self.ipc_windows()),
+            // the leader armed or spent without the gesture: what the tests drive it with, since a key
+            // cannot be tapped in a headless compositor, and what a binding of one's own would run for
+            // anyone who would rather press a chord than tap Mod (docs/keyboard.md)
+            "leader" => {
+                let on = request.get("on").and_then(Value::as_bool).unwrap_or(false);
+                if on {
+                    self.leader = true;
+                    self.legend = true;
+                    self.touched = true;
+                } else {
+                    self.drop_leader();
+                }
+                Ok(json!(self.leader))
+            }
             // the legend put out or away without the gesture: what the tests drive it with, and what a
             // binding of one's own would run for anyone who would rather tap than hold (docs/keyboard.md)
             "legend" => {
@@ -191,6 +207,9 @@ impl Draftpaper {
                 if self.legend != on {
                     self.legend = on;
                     self.touched = true;
+                }
+                if !on {
+                    self.drop_leader();
                 }
                 Ok(json!(self.legend))
             }
@@ -464,6 +483,7 @@ impl Draftpaper {
                         // Mod is being held and the legend is out (docs/keyboard.md). What it letters is
                         // the "keys" request's answer, which is asked for once and does not change.
                         "legend": self.legend,
+                        "leader": self.leader,
                         // where a focus key would land, by the window it would land on: the legend marks
                         // each of them with the key bound to it, so the mark on a window is the key that
                         // really takes you there. Worked out here because only the compositor knows the
@@ -699,7 +719,7 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|legend|leader|subscribe KIND...|ACTION");
             return 2;
         }
         Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames" | "keys")) => {
@@ -709,6 +729,8 @@ pub fn msg(args: &[String]) -> i32 {
         Some("pointer") if args.len() == 1 => json!({ "request": "pointer" }),
         // the legend out or away without holding Mod (docs/keyboard.md): `msg legend` puts it out
         Some("legend") => json!({ "request": "legend", "on": args.get(1).map(|a| a != "off").unwrap_or(true) }),
+        // and the leader armed without tapping Mod, which a headless compositor cannot be made to do
+        Some("leader") => json!({ "request": "leader", "on": args.get(1).map(|a| a != "off").unwrap_or(true) }),
         Some("subscribe") => json!({ "request": "subscribe", "events": args[1..] }),
         Some(_) => json!({ "request": "action", "action": args.join(" ") }),
     };

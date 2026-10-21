@@ -46,6 +46,25 @@ pub struct Mm {
     pub gutter: f64,
 }
 
+/// What the legend is lettered with (`draftpaper::content::legend()`). The compositor keeps whether the
+/// legend is up and the leader armed; what those are called is the sheet's lettering, so it comes from
+/// the document and neither renderer carries a word of its own (docs/keyboard.md).
+#[derive(Debug, Clone)]
+pub struct Words {
+    pub title: String,
+    pub held: String,
+    pub leader: String,
+    pub more: String,
+}
+
+impl Words {
+    pub fn read() -> Words {
+        let v = draftpaper::content::legend();
+        let w = |k: &str, d: &str| v.get(k).and_then(Value::as_str).unwrap_or(d).to_string();
+        Words { title: w("title", "LEGEND"), held: w("held", "MOD HELD"), leader: w("leader", "LEADER"), more: w("more", "MORE") }
+    }
+}
+
 impl Mm {
     pub fn read() -> Mm {
         let v = draftpaper::content::legend();
@@ -158,7 +177,7 @@ pub struct Mark {
 }
 
 /// The legend lettered: the table of the keymap, and a mark on each window a focus key would reach.
-pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], at: &Placed, s: &Screen, theme: &Theme, scale: f64) {
+pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], at: &Placed, s: &Screen, theme: &Theme, scale: f64, words: &Words) {
     let mm = (s.mm * scale) as f32;
     let px = |v: f64| (v * s.mm * scale) as f32;
     let ink = theme.ink;
@@ -177,8 +196,9 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], 
     let paper = Ink { a: 1.0, ..theme.paper };
     canvas.fill(px(p0) as i32, px(q0) as i32, (px(p1) - px(p0)) as i32, (px(q1) - px(q0)) as i32, paper.premultiplied());
 
-    face.draw(canvas, px(g), px(g + 1.0) + face.ascent(2.8 * mm), "LEGEND", 2.8 * mm, 0.25 * mm, ink.premultiplied());
-    let meta = if at.over > 0 { format!("MOD HELD · {} MORE", at.over) } else { "MOD HELD".to_string() };
+    face.draw(canvas, px(g), px(g + 1.0) + face.ascent(2.8 * mm), &words.title, 2.8 * mm, 0.25 * mm, ink.premultiplied());
+    let how = if s.leader { &words.leader } else { &words.held };
+    let meta = if at.over > 0 { format!("{how} · {} {}", at.over, words.more) } else { how.clone() };
     let w = face.width(&meta, 2.0 * mm, 0.3 * mm);
     face.draw(canvas, px(g) + wide - w, px(g + 1.6) + face.ascent(2.0 * mm), &meta, 2.0 * mm, 0.3 * mm, faint.premultiplied());
     canvas.fill(px(g) as i32, px(g + at.mm.head - 2.0) as i32, wide as i32, heavy as i32, ink.premultiplied());

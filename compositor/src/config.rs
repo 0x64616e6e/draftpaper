@@ -371,6 +371,23 @@ impl Config {
             ctrl: mods.ctrl,
             alt: tty && mods.alt,          // nested, Alt is Mod itself
         };
+        self.bound(pressed, sym, raw)
+    }
+
+    /// The action for a key typed after the leader: Mod tapped and let go, then this key
+    /// (docs/keyboard.md). It is the chord's own table, looked up with Mod held, so `Mod` tap then `h`
+    /// is `Mod+h` by construction and not by a second list that could say otherwise. Whatever else is
+    /// held still counts, so the leader reaches `Mod+Shift+Left` as well.
+    pub fn led(&self, mods: &ModifiersState, sym: Keysym, raw: Option<Keysym>, tty: bool) -> Option<Action> {
+        self.bound(
+            Mods { main: true, shift: mods.shift, ctrl: mods.ctrl, alt: tty && mods.alt },
+            sym,
+            raw,
+        )
+    }
+
+    /// The binding for these modifiers and this key, however they came to be pressed.
+    fn bound(&self, pressed: Mods, sym: Keysym, raw: Option<Keysym>) -> Option<Action> {
         let lower = |k: Keysym| xkb::keysym_from_name(&xkb::keysym_get_name(k).to_lowercase(), xkb::KEYSYM_CASE_INSENSITIVE);
         let keys = [Some(sym), raw, raw.map(lower), Some(lower(sym))];
         self.bindings

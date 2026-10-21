@@ -125,6 +125,12 @@ pub struct Draftpaper {
     /// told in the outputs it is sent, as it is told which schedule is up; the compositor draws no text.
     pub legend: bool,
     pub legend_timer: Option<smithay::reexports::calloop::RegistrationToken>,
+    /// the leader (docs/keyboard.md): Mod tapped — pressed and let go with nothing in between, before
+    /// the hold's time was up — and the next key is read as though Mod were still down. The legend
+    /// stands while it is armed, because a mode you cannot see is the one Raskin's argument is against:
+    /// no silent leader. Esc leaves, a key that is bound runs, a key that is not disarms, and the keys
+    /// it takes do not reach whatever has the focus.
+    pub leader: bool,
     /// screencopy frames waiting for the backend's next frame (screencopy.rs)
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
     /// the output-management clients and what they were last told (output_management.rs)
@@ -254,6 +260,7 @@ impl Draftpaper {
             key_repeat: None,
             legend: false,
             legend_timer: None,
+            leader: false,
             pointer_over: (None, None),
             screencopies: Vec::new(),
             output_management: Default::default(),

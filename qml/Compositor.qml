@@ -15,6 +15,8 @@ Singleton {
     // Mod is being held and the keymap belongs on the sheet (docs/keyboard.md). The compositor decides
     // it, being the only thing that sees every key, and says so with the outputs.
     readonly property bool legend: outputs.some(o => o.legend === true)
+    // and whether it was tapped rather than held: the next key composes, and the heading says so
+    readonly property bool leader: outputs.some(o => o.leader === true)
     // its keymap, asked for once and kept: the bindings as its own table and the config write them.
     // Nothing here keeps a second copy, so the legend cannot letter a key the compositor would not act on.
     property var keys: []

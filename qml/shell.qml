@@ -424,7 +424,8 @@ ShellRoot {
             SideCells { shell: root; edge: edge; space: edge.activeSpace ? String(edge.activeSpace.number) : "" }
             // Mod held alone long enough: the keymap lettered on the sheet's free side, gone the moment
             // it is let go. The compositor says when; the keys are its own (docs/keyboard.md).
-            Legend { shell: root; edge: edge; wanted: Compositor.legend; keys: Compositor.keys; avoid: sched
+            Legend { shell: root; edge: edge; wanted: Compositor.legend; leader: Compositor.leader
+                     keys: Compositor.keys; avoid: sched
                      mmFrom: root.legendMm; windows: Compositor.windows }
 
             // ---- top margin: workspaces in the first zone | alerts, volume, brightness, tray in the last ----

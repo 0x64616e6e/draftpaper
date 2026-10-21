@@ -294,6 +294,7 @@ pub mod tests {
             schedule: String::new(),
             graph: String::new(),
             legend: false,
+            leader: false,
         }
     }
 

@@ -1,6 +1,7 @@
 # The keyboard: the legend, the leader, and binding by pointing
 
-Status: step 1 built — the hold overlay, in both renderers (2026-10-21); the rest designed. Against 0.7.5.
+Status: steps 1 and 3 built — the hold overlay and the leader, in both renderers (2026-10-21); the rest
+designed. Against 0.7.5.
 Where this disagrees with the code, the code has not been written yet — except where it is marked built,
 and there the code wins.
 
@@ -183,6 +184,30 @@ in a block or a file Draftpaper owns, and the config always wins over it.
    `msg legend [on|off]` puts it out without the gesture, which is what the tests drive it with and what
    a binding of one's own would run.
 2. **The legend**, once there is more to say than a mark can carry.
-3. **The leader**, mirroring the chord map exactly.
+3. **The leader**, mirroring the chord map exactly. ✅ Built 2026-10-21, in the compositor; both
+   renderers letter it.
+
+   Mod **tapped** — pressed and let go with nothing in between, before `legend_after` is up — arms
+   it. That is the same gesture the hold already starts, told apart by whether the wait is still
+   running when Mod comes up, so there is no second threshold and no second key. The legend comes up
+   and **stays**: no silent leader, which is the whole condition for admitting a mode at all.
+
+   The next key is looked up in the chord map with Mod held (`config::led`), so `Mod` tap then `h`
+   runs what `Mod+h` runs by construction rather than by a second table that could disagree. Whatever
+   else is held still counts, and a modifier on its own does not spend it, so the leader reaches
+   `Mod+Shift+Left`. `Esc` leaves having run nothing; a click leaves; a key with no binding leaves.
+   While it is armed the keys it takes do not reach the focused window — the one place any of this
+   takes a key away.
+
+   The compositor keeps it (`leader` in the outputs, beside `legend`), as it keeps the hold. What the
+   heading is *called* in each state is the document's (`content::legend()`: `title`, `held`,
+   `leader`, `more`), because that is lettering and lettering is the document's — the two renderers
+   had a copy of the words each until now. `msg leader [on|off]` arms it without the gesture, which is
+   what the tests drive it with, a key being untappable in a headless compositor.
+
+   Still not done: **a key with no binding does nothing and does not say so.** It disarms, and the
+   legend going is all the answer you get. Saying so wants a passing word on the sheet, and that is
+   the same channel the binding prompt of step 4 needs, so it is designed once, there, rather than
+   bolted on twice.
 4. **Binding by pointing**, which wants the tree to place things in.
 5. **Extending the tree** past what a chord can express — if by then it is still wanted.

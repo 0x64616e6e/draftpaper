@@ -18,7 +18,14 @@ Item {
     required property var shell
     required property var edge
     property bool wanted: false                // the compositor says Mod is being held
+    property bool leader: false                // ... or that it was tapped: the next key composes
     property var keys: []                      // [{ keys: "Mod+h", action: "focus left" }]
+    // what it is lettered with, from the document: neither renderer keeps a word of its own
+    // (docs/keyboard.md, content::legend())
+    readonly property string titleWord: mmFrom && mmFrom.title ? mmFrom.title : "LEGEND"
+    readonly property string heldWord: mmFrom && mmFrom.held ? mmFrom.held : "MOD HELD"
+    readonly property string leaderWord: mmFrom && mmFrom.leader ? mmFrom.leader : "LEADER"
+    readonly property string moreWord: mmFrom && mmFrom.more ? mmFrom.more : "MORE"
 
     readonly property var theme: shell.theme
     readonly property var out: edge.output
@@ -175,7 +182,7 @@ Item {
                     Text {          // the heading, as a schedule's
                         x: legend.ix(legend.gap); y: legend.iy(headRule.vMm - 7); height: legend.iy(headRule.vMm) - y
                         verticalAlignment: Text.AlignVCenter
-                        text: "LEGEND"
+                        text: legend.titleWord
                         font.family: Fonts.mono; font.pixelSize: 2.8 * legend.mm; font.bold: true
                         font.letterSpacing: 0.25 * legend.mm
                         color: legend.ink
@@ -184,7 +191,8 @@ Item {
                         x: legend.ix(legend.gap + legend.tableW) - width
                         y: legend.iy(headRule.vMm - 7); height: legend.iy(headRule.vMm) - y
                         verticalAlignment: Text.AlignVCenter
-                        text: legend.over > 0 ? "MOD HELD · " + legend.over + " MORE" : "MOD HELD"
+                        readonly property string how: legend.leader ? legend.leaderWord : legend.heldWord
+                        text: legend.over > 0 ? how + " · " + legend.over + " " + legend.moreWord : how
                         font.family: Fonts.mono; font.pixelSize: 2.0 * legend.mm; font.letterSpacing: 0.3 * legend.mm
                         color: legend.faint
                     }

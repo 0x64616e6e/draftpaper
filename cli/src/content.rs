@@ -954,6 +954,13 @@ pub fn document(p: &crate::util::Paths, want: Option<(&str, &str)>) -> Value {
 /// these seven numbers would letter two different legends the day one of them was edited.
 pub fn legend() -> Value {
     json!({
+        // what it is lettered with. The compositor keeps whether the legend is up and whether the
+        // leader is armed; what those are *called* is the sheet's lettering and belongs here, so that
+        // neither renderer carries a word of its own to drift (docs/keyboard.md).
+        "title": "LEGEND",
+        "held": "MOD HELD",     // the heading's right, with Mod held down
+        "leader": "LEADER",     // and with Mod tapped: the next key composes
+        "more": "MORE",         // "... · 12 MORE": the bindings the sheet had no room for
         "gap": 6,       // in from the frame's corner, and clear of the title block
         "pad": 4,       // the paper under the table, out past it on every side
         "head": 10,     // the heading and its rule

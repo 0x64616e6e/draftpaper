@@ -37,13 +37,25 @@ impl Draftpaper {
                     self.loop_handle.remove(token);
                 }
 
-                let action = self.seat.get_keyboard().unwrap().input::<(Action, bool), _>(
+                let action = self.seat.get_keyboard().unwrap().input::<Option<(Action, bool)>, _>(
                     self,
                     event.key_code(),
                     event.state(),
                     serial,
                     time,
                     |state, mods, keysym| {
+                        // the leader is armed (Mod tapped): this key is read as though Mod were still
+                        // down, and it does not reach whatever has the focus — the one place anything
+                        // here takes a key away (docs/keyboard.md)
+                        if pressed && state.leader {
+                            if spends_leader(keysym.modified_sym()) {
+                                let act = state.leader_key(mods, keysym.modified_sym(), keysym.raw_latin_sym_or_raw_current_sym(), tty);
+                                // a leader never repeats: the key it was typed with is already up
+                                return FilterResult::Intercept(act.map(|a| (a, false)));
+                            }
+                            // a modifier on its own does not spend it: Mod tap, Shift, Left is Mod+Shift+Left
+                            return FilterResult::Intercept(None);
+                        }
                         // the legend watches every key go by without taking any of them (docs/keyboard.md)
                         state.legend_key(pressed, keysym.modified_sym(), locked);
                         match pressed
@@ -63,13 +75,13 @@ impl Draftpaper {
                                 let name = smithay::input::keyboard::xkb::keysym_get_name(keysym.modified_sym());
                                 let held = matches!(action, Action::Resize(_))
                                     || matches!(name.as_str(), "XF86AudioRaiseVolume" | "XF86AudioLowerVolume" | "XF86MonBrightnessUp" | "XF86MonBrightnessDown");
-                                FilterResult::Intercept((action, held))
+                                FilterResult::Intercept(Some((action, held)))
                             }
                             None => FilterResult::Forward,
                         }
                     },
                 );
-                if let Some((action, held)) = action {
+                if let Some((action, held)) = action.flatten() {
                     self.act(action.clone());
                     if held {
                         self.repeat(action);
@@ -105,6 +117,9 @@ impl Draftpaper {
                 self.follow_mouse(pos);
             }
             InputEvent::PointerButton { event, .. } => {
+                // the leader is spent by reaching for the pointer: you have gone somewhere else, and a
+                // mode left armed behind a click is the kind you forget you are in (docs/keyboard.md)
+                self.drop_leader();
                 let pointer = self.seat.get_pointer().unwrap();
                 let keyboard = self.seat.get_keyboard().unwrap();
 
@@ -295,11 +310,54 @@ impl Draftpaper {
     /// the legend on its way to the picker. Nothing here is a mode: the key is held, so it cannot be
     /// forgotten (Raskin's quasimode, the argument the design doc sets out).
     fn legend_key(&mut self, pressed: bool, sym: smithay::input::keyboard::Keysym, locked: bool) {
-        if arms_legend(pressed, sym, !locked && !self.greeter) {
+        let usable = !locked && !self.greeter;
+        if arms_legend(pressed, sym, usable) {
             self.arm_legend();
-        } else {
-            self.drop_legend();
+            return;
         }
+        // Mod let go before the hold's time was up, with nothing in between: a tap, and the leader arms
+        // (docs/keyboard.md). Held past it the legend is already out, and letting go puts it away as it
+        // always did — the same gesture, told apart by whether the wait is still running.
+        if taps_leader(pressed, sym, self.legend_timer.is_some(), self.legend, usable) {
+            self.drop_legend();
+            self.arm_leader();
+            return;
+        }
+        self.drop_legend();
+    }
+
+    /// Mod tapped: the legend comes up and stays, and the next key composes with it. There is no silent
+    /// leader — a mode you cannot see is the one Raskin's argument is against — so this arms nothing
+    /// when the legend is turned off ([keys] legend_after = 0), which the pending timer already settles.
+    fn arm_leader(&mut self) {
+        self.leader = true;
+        self.legend = true;
+        self.touched = true;
+    }
+
+    pub fn drop_leader(&mut self) {
+        if self.leader {
+            self.leader = false;
+            self.legend = false;
+            self.touched = true;
+        }
+    }
+
+    /// The key typed after the leader. It always disarms: one key, then the leader is spent, whether it
+    /// was bound or not. `Esc` leaves without running anything, as it must for a mode to be admissible.
+    /// A key with no binding does nothing — and, for now, does not say so (docs/keyboard.md).
+    fn leader_key(
+        &mut self,
+        mods: &smithay::input::keyboard::ModifiersState,
+        sym: smithay::input::keyboard::Keysym,
+        raw: Option<smithay::input::keyboard::Keysym>,
+        tty: bool,
+    ) -> Option<Action> {
+        self.drop_leader();
+        if sym == smithay::input::keyboard::Keysym::Escape {
+            return None;
+        }
+        self.config.led(mods, sym, raw, tty)
     }
 
     fn arm_legend(&mut self) {
@@ -510,10 +568,55 @@ fn arms_legend(pressed: bool, sym: smithay::input::keyboard::Keysym, usable: boo
     pressed && is_mod && usable
 }
 
+/// Whether Mod going up is a **tap** — the gesture that arms the leader (docs/keyboard.md).
+///
+/// It is a tap when the hold's wait is still running: Mod went down, nothing came between (anything
+/// that did would have cancelled the wait), and it came up before the legend was lettered. Held past
+/// that and `legend` is already true, which is the hold ending, not a tap. One gesture on one key,
+/// told apart by the clock that was already there.
+fn taps_leader(pressed: bool, sym: smithay::input::keyboard::Keysym, waiting: bool, legend_up: bool, usable: bool) -> bool {
+    use smithay::input::keyboard::Keysym;
+    let is_mod = matches!(sym, Keysym::Super_L | Keysym::Super_R | Keysym::Alt_L | Keysym::Alt_R);
+    !pressed && is_mod && waiting && !legend_up && usable
+}
+
+/// Whether a key typed with the leader armed spends it. A modifier on its own does not: `Mod` tapped,
+/// then Shift, then Left must reach `Mod+Shift+Left`, so the leader waits for the key being modified.
+/// Everything else spends it, bound or not.
+fn spends_leader(sym: smithay::input::keyboard::Keysym) -> bool {
+    use smithay::input::keyboard::Keysym;
+    !matches!(
+        sym,
+        Keysym::Shift_L | Keysym::Shift_R | Keysym::Control_L | Keysym::Control_R | Keysym::Alt_L | Keysym::Alt_R
+            | Keysym::Super_L | Keysym::Super_R | Keysym::Meta_L | Keysym::Meta_R
+            | Keysym::ISO_Level3_Shift | Keysym::Caps_Lock | Keysym::Num_Lock
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::arms_legend;
+    use super::{arms_legend, spends_leader, taps_leader};
     use smithay::input::keyboard::Keysym;
+
+    #[test]
+    fn mod_let_go_before_the_legend_is_a_tap_and_after_it_is_not() {
+        assert!(taps_leader(false, Keysym::Super_L, true, false, true), "let go while the wait runs: a tap");
+        assert!(!taps_leader(false, Keysym::Super_L, false, true, true), "let go with the legend out: the hold ending");
+        assert!(!taps_leader(false, Keysym::Super_L, false, false, true), "no wait and no legend: the wait was cancelled by a chord");
+        assert!(!taps_leader(true, Keysym::Super_L, true, false, true), "Mod going down is not a tap");
+        assert!(!taps_leader(false, Keysym::h, true, false, true), "nor is any other key");
+        assert!(!taps_leader(false, Keysym::Super_L, true, false, false), "nothing is bound on the lock screen");
+    }
+
+    #[test]
+    fn a_modifier_does_not_spend_the_leader_but_a_key_does() {
+        assert!(!spends_leader(Keysym::Shift_L), "Mod tap, Shift, Left must reach Mod+Shift+Left");
+        assert!(!spends_leader(Keysym::Control_R));
+        assert!(!spends_leader(Keysym::Super_L));
+        assert!(spends_leader(Keysym::h), "a key spends it");
+        assert!(spends_leader(Keysym::Escape), "Escape spends it, and runs nothing");
+        assert!(spends_leader(Keysym::Left));
+    }
 
     #[test]
     fn mod_held_alone_arms_the_legend_and_anything_else_puts_it_away() {
