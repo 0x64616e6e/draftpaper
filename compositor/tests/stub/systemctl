@@ -1,0 +1,7 @@
+#!/bin/sh
+# A test's `draftpaper apply` restarts draftpaper-idle.service (cli/src/theme.rs), and systemctl talks to
+# the session's own manager: HOME and XDG_CONFIG_HOME do not reach it, so the live service would restart
+# and its ExecStartPre would apply the logged-in user's theme over the test's. This stands on the tests'
+# PATH so a run keeps to itself. Scripts that need a systemctl of their own still plant one in $t/bin,
+# which comes first.
+exit 0

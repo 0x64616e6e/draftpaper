@@ -10,6 +10,16 @@
 # screenshot of the equipment and the load (SHOT_PROC, SHOT_NET, SHOT_DISK: of those graphs; KEPT=FILE: from
 # that store).
 set -u
+# `draftpaper apply` sets the desktop's colour scheme and GTK theme with gsettings, and gsettings
+# reaches the dconf service over the session bus -- past HOME, past XDG_CONFIG_HOME, into the
+# settings of whoever is logged in. A test run would leave the machine wearing the theme this
+# test picked, and every application that follows the system scheme would flap. In memory, then.
+export GSETTINGS_BACKEND=memory
+# and it restarts draftpaper-idle.service with systemctl, which reaches the session's own manager
+# the same way: the live service would restart and its ExecStartPre would apply the logged-in
+# user's theme over this test's. A stub on PATH keeps the run to itself (tests/stub/systemctl).
+PATH="$(cd "$(dirname "$0")" && pwd)/stub:$PATH"
+export PATH
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
 cli=$repo/cli/target/release/draftpaper
@@ -59,6 +69,10 @@ until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ 
 layers() { run "$comp" msg outputs | jq -r ".[0].layers[]" | grep -c "draftpaper-$1"; }
 waitcfg() { i=0; until grep -q "$1" "$cfg" || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done; grep -c "$1" "$cfg"; }
 waitlayers() { i=0; until [ "$(layers "$1")" = "$2" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; layers "$1"; }
+# the shell's answer to `graph state`, waited for: a click goes to the compositor, from there to the
+# shell and back out of its IPC, and how long that takes is not ours to assume. Sleeping a fixed moment
+# and reading once made this flap.
+waitgraph() { i=0; until [ "$(graph state)" = "$1" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; graph state; }
 shot() {
     rm -f "$t"/Pictures/*.png
     kill -USR1 $nest
@@ -135,17 +149,26 @@ graph toggle disk
 ok "the disks: their graph (read and written)" "$(waitlayers load 1)/$(graph state)" "1/disk"
 # a click on the title block's NETWORK cell: the network's graph; again: away
 click() { run "$comp" msg pointer "$1" "$2" > /dev/null; sleep 0.15; run "$comp" msg button left down > /dev/null; sleep 0.1; run "$comp" msg button left up > /dev/null; sleep 0.3; }
-cx=$(awk -v x="$(o .title.rect.x)" -v m="$mmL" 'BEGIN { print x + 17 * m }'); cy=$(awk -v y="$(o .title.rect.y)" -v m="$mmL" 'BEGIN { print y + 30 * m }')
+# the cell is found by what the document says it does, and clicked in the middle: which cells there are
+# depends on the machine (no POWER off the mains) and the rows of the grid shift by a millimetre with the
+# sheet, so a cell picked by a measured offset from the title block's corner lands next to a rule as
+# often as on the cell. Hunting one down that way is what made this flap.
+cell_mid() {
+    i=$(run "$cli" sheet | jq -r --arg a "$1" '[.displays[]][0].title | map(.action == $a) | index(true)')
+    [ "$i" = null ] && { echo "  FAIL: no cell does $1 on this machine"; fail=1; return 1; }
+    cx=$(o ".title.cells[$i] | .x + .width / 2"); cy=$(o ".title.cells[$i] | .y + .height / 2")
+}
+cell_mid graph.network || true
 click "$cx" "$cy"
-ok "a click on NETWORK: its graph" "$(graph state)" "network"
+ok "a click on NETWORK: its graph" "$(waitgraph network)" "network"
 click "$cx" "$cy"
-ok "again: away" "$(graph state)" ""
+ok "again: away" "$(waitgraph "")" ""
 # a click on the equipment schedule's STORAGE row (wherever this machine's rows put it): the disks' graph
 sched equipment > /dev/null
 sx=$(awk -v x="$(o .title.rect.x)" -v m="$mmL" 'BEGIN { print x + 60 * m }')
 k=20; top=$(awk -v y="$(o .title.rect.y)" -v f="$fyL" -v m="$mmL" 'BEGIN { print int((y - f) / m) - 2 }')
 while [ "$(graph state)" != "disk" ] && [ $k -lt "$top" ]; do click "$sx" "$(awk -v f="$fyL" -v m="$mmL" -v k="$k" 'BEGIN { print f + k * m }')"; k=$((k + 3)); done
-ok "a click on STORAGE: the disks' graph" "$(graph state)" "disk"
+ok "a click on STORAGE: the disks' graph" "$(waitgraph disk)" "disk"
 graph toggle power > /dev/null
 # SHOT_NET=FILE, SHOT_DISK=FILE: the network's graph, the disks'
 snap() { [ -n "$2" ] || return 0; graph toggle "$1"; sleep "${SHOT_AFTER:-3}"; shot "$t/$1.png"; cp "$t/$1.png" "$2"; graph toggle power > /dev/null; sleep 0.5; }

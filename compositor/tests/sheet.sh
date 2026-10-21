@@ -6,6 +6,16 @@
 # on its pixel at every scale, 1.25 and 1.75 included, which is what a client that takes fractional scale
 # for granted gets wrong. Two displays of different densities get their own geometry.
 set -u
+# `draftpaper apply` sets the desktop's colour scheme and GTK theme with gsettings, and gsettings
+# reaches the dconf service over the session bus -- past HOME, past XDG_CONFIG_HOME, into the
+# settings of whoever is logged in. A test run would leave the machine wearing the theme this
+# test picked, and every application that follows the system scheme would flap. In memory, then.
+export GSETTINGS_BACKEND=memory
+# and it restarts draftpaper-idle.service with systemctl, which reaches the session's own manager
+# the same way: the live service would restart and its ExecStartPre would apply the logged-in
+# user's theme over this test's. A stub on PATH keeps the run to itself (tests/stub/systemctl).
+PATH="$(cd "$(dirname "$0")" && pwd)/stub:$PATH"
+export PATH
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
 client=$repo/sheet/target/release/draftpaper-sheet
@@ -325,19 +335,29 @@ sleep 2
 # a schedule's cell in the title block is a switch: PROJECT calls the equipment schedule up, and a
 # second click on it puts the schedule away again, as the graph's cells do (docs/sheet-content.md)
 sched_now() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].schedule'; }
+# the compositor's answer, waited for until it is no longer what it was: a click travels to whoever is
+# lettering the sheet and back before the schedule changes, and how long that takes is not ours to
+# assume. Waiting for the value we want instead would pass the moment it was asked, where what we want
+# is "none" and none is what is already there (notes.sh's waitgraph, for the same reason).
+sched_change() { i=0; until [ "$(sched_now)" != "$1" ] || [ $i -gt 80 ]; do sleep 0.1; i=$((i + 1)); done; sched_now; }
+# the cell is found by what the document says it does, never by a measured offset: which cells there are
+# depends on the machine, and the grid's rows shift by a millimetre with the sheet (notes.sh says the
+# same, for the same reason)
 cell_click() {
-    act pointer "$(o 0 ".title.cells[$1] | .x + .width / 2")" "$(o 0 ".title.cells[$1] | .y + .height / 2")"
-    sleep 0.4; act button left down; sleep 0.1; act button left up; sleep 1.5
+    i=$(run "$repo/cli/target/release/draftpaper" sheet | jq -r --arg a "$1" '[.displays[]][0].title | map(.action == $a) | index(true)')
+    if [ "$i" = null ]; then echo "  FAIL: no cell does $1 on this machine"; fail=1; return 1; fi
+    act pointer "$(o 0 ".title.cells[$i] | .x + .width / 2")" "$(o 0 ".title.cells[$i] | .y + .height / 2")"
+    sleep 0.4; act button left down; sleep 0.1; act button left up
 }
-cell_click 3
-ok "a click on PROJECT calls the equipment schedule up" "$(sched_now)" "equipment"
-cell_click 3
-ok "and a second click on it puts the schedule away" "$(sched_now)" ""
+cell_click schedule.equipment
+ok "a click on PROJECT calls the equipment schedule up" "$(sched_change "")" "equipment"
+cell_click schedule.equipment
+ok "and a second click on it puts the schedule away" "$(sched_change equipment)" ""
 # another schedule's cell takes its place rather than toggling: PROCESSES over the equipment
-cell_click 3; cell_click 10
-ok "another cell's schedule takes its place" "$(sched_now)" "processes"
-cell_click 10
-ok "and that one goes the same way" "$(sched_now)" ""
+cell_click schedule.equipment; sched_change "" > /dev/null; cell_click schedule.processes
+ok "another cell's schedule takes its place" "$(sched_change equipment)" "processes"
+cell_click schedule.processes
+ok "and that one goes the same way" "$(sched_change processes)" ""
 # the graph: a reading's year, called up by name and by its cell in the title block
 run "$repo/cli/target/release/draftpaper" graph load > /dev/null 2>&1
 sleep 2

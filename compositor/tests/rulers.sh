@@ -7,6 +7,16 @@
 # 120° (along each ruler); put away, it moves freely again. The panel by the zero hides (its tab stays)
 # and shows. SHOT=FILE keeps the screenshot of the rulers.
 set -u
+# `draftpaper apply` sets the desktop's colour scheme and GTK theme with gsettings, and gsettings
+# reaches the dconf service over the session bus -- past HOME, past XDG_CONFIG_HOME, into the
+# settings of whoever is logged in. A test run would leave the machine wearing the theme this
+# test picked, and every application that follows the system scheme would flap. In memory, then.
+export GSETTINGS_BACKEND=memory
+# and it restarts draftpaper-idle.service with systemctl, which reaches the session's own manager
+# the same way: the live service would restart and its ExecStartPre would apply the logged-in
+# user's theme over this test's. A stub on PATH keeps the run to itself (tests/stub/systemctl).
+PATH="$(cd "$(dirname "$0")" && pwd)/stub:$PATH"
+export PATH
 repo=$(cd "$(dirname "$0")/../.." && pwd)
 comp=$repo/compositor/target/release/draftpaper-compositor
 cli=$repo/cli/target/release/draftpaper
