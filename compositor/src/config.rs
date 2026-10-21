@@ -32,7 +32,7 @@
 //!     "Mod+d" = "spawn fuzzel"
 //!
 //!     [keys]                           # the legend (docs/keyboard.md): Mod held alone this long
-//!     legend_after = 300               # letters the keymap over the sheet; 0 turns it off
+//!     legend_after = 500               # letters the keymap over the sheet; 0 turns it off
 //!
 //! Actions: focus|move|resize left|right|up|down, workspace N, send N, fullscreen, close, quit,
 //! spawn COMMAND (run by sh -c). The file is read again when it changes (see main.rs); a file that does
@@ -354,7 +354,7 @@ impl Config {
         let scale_bar = table.get("title").and_then(|v| v.get("scale")).and_then(|v| v.as_bool()).unwrap_or(true);
         let key_plan = table.get("title").and_then(|v| v.get("key_plan")).and_then(|v| v.as_bool()).unwrap_or(true);
         // [keys] legend_after: milliseconds, 0 to turn the legend off
-        let after = table.get("keys").and_then(|v| v.get("legend_after")).and_then(|v| v.as_integer()).unwrap_or(300).clamp(0, 5000) as u64;
+        let after = table.get("keys").and_then(|v| v.get("legend_after")).and_then(|v| v.as_integer()).unwrap_or(500).clamp(0, 5000) as u64;
         let legend_after = (after > 0).then(|| std::time::Duration::from_millis(after));
         Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan, legend_after })
     }

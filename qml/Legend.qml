@@ -93,7 +93,9 @@ Item {
     readonly property int keyMm: mmFrom ? mmFrom.key : 28
     readonly property int actMm: mmFrom ? mmFrom.act : 35
     readonly property int innerMm: mmFrom ? mmFrom.inner : 2
-    readonly property int pairMm: keyMm + innerMm + actMm + (mmFrom ? mmFrom.gutter : 3)
+    readonly property int gutterMm: mmFrom ? mmFrom.gutter : 3
+    readonly property int padMm: mmFrom ? mmFrom.pad : 4
+    readonly property int pairMm: keyMm + innerMm + actMm + gutterMm
     readonly property int cols: Math.max(1, Math.floor(wMm / pairMm))
     readonly property int rowsPerCol: Math.max(0, Math.floor((roomMm - headMm) / rowMm))
     readonly property int room: cols * rowsPerCol
@@ -153,12 +155,15 @@ Item {
                     anchors.fill: parent
 
 
-                    Rectangle {     // the paper under the table, always: it stands over the windows
-                        x: legend.ix(legend.gap); y: legend.iy(legend.gap)
-                        width: legend.ix(legend.gap + legend.tableW) - x
-                        height: legend.iy(legend.gap + legend.tableH) - y
-                        color: Qt.rgba(legend.theme.paper.r, legend.theme.paper.g, legend.theme.paper.b,
-                                       Math.max(0.92, legend.theme.titleTint))
+                    // the paper under the table, always: it stands over the windows, so it is the theme's
+                    // paper and nothing of them shows through it. It reaches `pad` out past the table on
+                    // every side; the last column's gutter is already slack on the right, so the pad is
+                    // measured from inside it and the margin is the same all the way round.
+                    Rectangle {
+                        x: legend.ix(legend.gap - legend.padMm); y: legend.iy(legend.gap - legend.padMm)
+                        width: legend.ix(legend.gap + legend.tableW - legend.gutterMm + legend.padMm) - x
+                        height: legend.iy(legend.gap + legend.tableH + legend.padMm) - y
+                        color: Qt.rgba(legend.theme.paper.r, legend.theme.paper.g, legend.theme.paper.b, 1)
                     }
 
                     Text {          // the heading, as a schedule's
@@ -228,7 +233,7 @@ Item {
                             Rectangle {
                                 x: legend.ix(bx); y: legend.iy(by)
                                 width: legend.ix(bx + parent.boxMm) - x; height: legend.iy(by + 8) - y
-                                color: Qt.rgba(legend.theme.paper.r, legend.theme.paper.g, legend.theme.paper.b, 0.94)
+                                color: Qt.rgba(legend.theme.paper.r, legend.theme.paper.g, legend.theme.paper.b, 1)
                                 border.width: Math.max(2, Math.round(0.35 * legend.mm))
                                 border.color: modelData.here ? legend.faint : legend.ink
                             }

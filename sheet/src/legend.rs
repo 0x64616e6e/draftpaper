@@ -37,6 +37,7 @@ pub fn keys() -> Vec<Key> {
 #[derive(Debug, Clone, Copy)]
 pub struct Mm {
     pub gap: f64,
+    pub pad: f64,
     pub head: f64,
     pub row: f64,
     pub key: f64,
@@ -51,6 +52,7 @@ impl Mm {
         let n = |k: &str, d: f64| v.get(k).and_then(Value::as_f64).unwrap_or(d);
         Mm {
             gap: n("gap", 6.0),
+            pad: n("pad", 4.0),
             head: n("head", 10.0),
             row: n("row", 6.0),
             key: n("key", 28.0),
@@ -161,8 +163,14 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], 
     let wide = px(at.table_w);
 
     // ---- the table ----
-    let tint = Ink { a: theme.title_tint.max(0.92), ..theme.paper };
-    canvas.fill(px(g) as i32, px(g) as i32, (px(g + at.table_w) - px(g)) as i32, (px(g + at.table_h) - px(g)) as i32, tint.premultiplied());
+    // the paper under it, `pad` out past the table on every side: it stands over the windows, so it is
+    // the theme's paper and nothing of them shows through it. The last column's gutter is already slack
+    // on the right, so the pad is measured from inside it and the margin is the same all the way round.
+    let pad = at.mm.pad;
+    let (p0, p1) = (g - pad, g + at.table_w - at.mm.gutter + pad);
+    let (q0, q1) = (g - pad, g + at.table_h + pad);
+    let paper = Ink { a: 1.0, ..theme.paper };
+    canvas.fill(px(p0) as i32, px(q0) as i32, (px(p1) - px(p0)) as i32, (px(q1) - px(q0)) as i32, paper.premultiplied());
 
     face.draw(canvas, px(g), px(g + 1.0) + face.ascent(2.8 * mm), "LEGEND", 2.8 * mm, 0.25 * mm, ink.premultiplied());
     let meta = if at.over > 0 { format!("MOD HELD · {} MORE", at.over) } else { "MOD HELD".to_string() };
@@ -191,7 +199,7 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], 
         let box_mm = if m.here { 10.0 } else { 14.0 };
         let bx = m.x + (m.w - box_mm) / 2.0;
         let by = m.y + (m.h - 8.0) / 2.0;
-        let tint = Ink { a: 0.94, ..theme.paper };
+        let tint = Ink { a: 1.0, ..theme.paper };
         canvas.fill(px(bx) as i32, px(by) as i32, (px(bx + box_mm) - px(bx)) as i32, (px(by + 8.0) - px(by)) as i32, tint.premultiplied());
         let rule = if m.here { faint } else { ink };
         let (x0, y0, x1, y1) = (px(bx) as i32, px(by) as i32, px(bx + box_mm) as i32, px(by + 8.0) as i32);

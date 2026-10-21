@@ -156,8 +156,12 @@ in a block or a file Draftpaper owns, and the config always wins over it.
 
 1. **The hold overlay over the existing keymap.** ✅ Built 2026-10-20; in both renderers
    2026-10-21. Read-only, nothing generated, no new actions. Mod held alone past
-   `[keys] legend_after` (300 ms) and the keymap is lettered on the sheet's free side, as many
+   `[keys] legend_after` (500 ms) and the keymap is lettered on the sheet's free side, as many
    columns of it as the sheet will take; let Mod go, or press anything at all, and it is gone.
+
+   It stands on the theme's paper, opaque, `pad` millimetres out past the table on every side: it is
+   over the windows, and a legend you can read the window through is not a legend. The paper, like
+   everything else it is set out on, is measured in the document (`content::legend()`).
 
    The compositor keeps the gesture, being the only thing that sees every key, and says so with
    the outputs (`legend`); it draws no text, as it draws none of the sheet's lettering. The keys

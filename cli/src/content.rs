@@ -955,6 +955,7 @@ pub fn document(p: &crate::util::Paths, want: Option<(&str, &str)>) -> Value {
 pub fn legend() -> Value {
     json!({
         "gap": 6,       // in from the frame's corner, and clear of the title block
+        "pad": 4,       // the paper under the table, out past it on every side
         "head": 10,     // the heading and its rule
         "row": 6,       // a key and what it does
         "key": 28,      // the key's column
