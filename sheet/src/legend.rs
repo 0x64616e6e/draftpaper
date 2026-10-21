@@ -124,14 +124,19 @@ pub fn place(s: &Screen, n: usize, avoid: Option<f64>, marked: bool) -> Option<P
         return None;
     }
     let shown = n.min(fits);
-    let down = shown.div_ceil(cols.max(1)).min(rows_per_col);
+    // the columns and the rows the table actually uses, which is not what it has room for: a column is
+    // filled to the bottom before the next is begun (`draw`), so a table of 67 in 4 columns of 44 is two
+    // full-height columns, not four of 17. Measuring it the other way left the paper short of the
+    // lettering on a sheet with room to spare.
+    let across = shown.div_ceil(rows_per_col.max(1)).min(cols).max(1);
+    let down = shown.min(rows_per_col);
     Some(Placed {
         // the surface is the frame's interior, so a mark can go wherever its window is
         x: fx,
         y: fy,
         width: frame_w,
         height: frame_h,
-        table_w: (cols as f64) * mm.pair(),
+        table_w: (across as f64) * mm.pair(),
         table_h: mm.head + (down as f64) * mm.row,
         cols,
         rows_per_col,
@@ -283,4 +288,53 @@ pub fn marks(s: &Screen, out: &serde_json::Value, windows: &[Value], keys: &[Key
         });
     }
     out_marks
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A sheet big enough that the table has room to spare: four columns' width and far more rows per
+    /// column than there are keys to put in them.
+    fn roomy() -> Screen {
+        let mut s = crate::schedule::tests::tests_screen();
+        // 3840x2160 at scale 2, as the 4K display stands: a frame of 610 mm by 339 mm
+        s.width = 1920.0;
+        s.height = 1080.0;
+        s.mm = 3.096_774;
+        s.frame = (15.0, 15.0, 1890.0, 1050.0);
+        s.title = Some(crate::sheet::Block { rect: (1200.0, 920.0, 690.0, 130.0), cells: Vec::new() });
+        s
+    }
+
+    /// A column is filled to its foot before the next is begun, so the paper must be as deep as the
+    /// first column — not as deep as the keys divided by the columns there was room for. The bug this
+    /// holds off showed only on a sheet with room to spare: where the table is exactly full the two
+    /// ways of measuring it agree, which is why every smaller display looked right.
+    #[test]
+    fn the_paper_is_cut_to_the_rows_and_columns_the_table_uses() {
+        let s = roomy();
+        let at = place(&s, 67, None, true).expect("the legend has room on a sheet this size");
+        assert!(at.rows_per_col > 44, "this sheet should have room to spare: {}", at.rows_per_col);
+        assert!(at.cols >= 2, "and more than one column: {}", at.cols);
+        let shown = 67usize.min(at.cols * at.rows_per_col);
+        // every key is lettered at its own row, and the deepest of them must be on the paper
+        let deepest = (0..shown).map(|i| i % at.rows_per_col).max().unwrap();
+        let foot = at.mm.head + ((deepest + 1) as f64) * at.mm.row;
+        assert!(at.table_h >= foot, "the paper stops at {} and the lettering reaches {foot}", at.table_h);
+        // and no wider than the columns it fills
+        let across = (0..shown).map(|i| i / at.rows_per_col).max().unwrap() + 1;
+        assert_eq!(at.table_w, (across as f64) * at.mm.pair(), "the paper is wider than the columns it covers");
+    }
+
+    /// Where the table is exactly full the paper is the whole of it, which is the case the old
+    /// arithmetic got right and must go on getting right.
+    #[test]
+    fn a_table_filled_to_the_brim_is_covered_to_its_edges() {
+        let s = roomy();
+        let at = place(&s, 4000, None, true).expect("the legend has room");
+        assert_eq!(at.table_h, at.mm.head + (at.rows_per_col as f64) * at.mm.row);
+        assert_eq!(at.table_w, (at.cols as f64) * at.mm.pair());
+        assert!(at.over > 0, "more keys than fit are counted, not dropped in silence");
+    }
 }

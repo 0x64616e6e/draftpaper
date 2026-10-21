@@ -110,8 +110,14 @@ Item {
     readonly property bool shown: wanted && !!out && laid.length > 0 && wMm >= 60
 
     // the drawn height: the heading and the rows that fit
-    readonly property int tableH: headMm + Math.min(rowsPerCol, Math.ceil(laid.length / Math.max(1, cols))) * rowMm
-    readonly property int tableW: cols * pairMm
+    // the columns and the rows the table actually uses, which is not what it has room for: a column is
+    // filled to the bottom before the next is begun (`laid`), so a table of 67 in 4 columns of 44 is two
+    // full-height columns, not four of 17. Measuring it the other way left the paper short of the
+    // lettering on a sheet with room to spare.
+    readonly property int colsUsed: Math.max(1, Math.min(cols, Math.ceil(laid.length / Math.max(1, rowsPerCol))))
+    readonly property int rowsUsed: Math.min(rowsPerCol, laid.length)
+    readonly property int tableH: headMm + rowsUsed * rowMm
+    readonly property int tableW: colsUsed * pairMm
     readonly property int hMm: Math.floor(frame.h)
     readonly property int fullW: Math.floor(frame.w)
 
