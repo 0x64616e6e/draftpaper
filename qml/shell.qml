@@ -130,7 +130,9 @@ ShellRoot {
     }
     // a schedule's cell in the title block (PROJECT, PROCESSES): it on that screen, or away if it is there
     function toggleSchedule(which, screenName) {
-        if (schedule === which && scheduleOn === screenName) { schedule = ""; return }
+        // away again: the document carries what the schedule holds, so it is asked for at once rather
+        // than at the next tick — otherwise the cell is clicked and the schedule sits there for seconds
+        if (schedule === which && scheduleOn === screenName) { schedule = ""; sheetPoll.rerun(); return }
         showSchedule(which)
         scheduleOn = screenName
     }

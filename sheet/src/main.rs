@@ -966,7 +966,9 @@ impl Sheet {
             Some(Act::Workspace(n)) => sheet::action(&format!("workspace {n}")),
             Some(Act::Unpark(id)) => sheet::action(&format!("unpark {id}")),
             Some(Act::Park(cell, workspace)) => sheet::action(&format!("park_at {cell} {workspace}")),
-            Some(Act::Schedule(which)) => sheet::ask(&serde_json::json!({ "request": "schedule", "which": which }).to_string()),
+            // a cell in the title block is a switch: clicked again it puts its schedule away, as the
+            // graph's cells do. `draftpaper schedule NAME` still says which it wants (ipc.rs).
+            Some(Act::Schedule(which)) => sheet::ask(&serde_json::json!({ "request": "schedule", "which": which, "toggle": true }).to_string()),
             Some(Act::Graph(which)) => sheet::ask(&serde_json::json!({ "request": "graph", "which": which }).to_string()),
             Some(Act::Profile) => {
                 let now = self.readings.get("profile").and_then(serde_json::Value::as_str).unwrap_or("");

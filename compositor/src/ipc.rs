@@ -12,6 +12,9 @@
 //!   {"request": "rulers"}                                  put away
 //!   {"request": "gamma"}                                   each display's gamma ramps, as loaded (gamma.rs)
 //!   {"request": "pointer"}                                 where the pointer is
+//!   {"request": "schedule", "which": "equipment"}          which schedule is out ("hide": none)
+//!   {"request": "schedule", "which": "equipment", "toggle": true}   away again if it is the one already out here
+//!   {"request": "graph", "which": "load"}                  a reading's year plotted (the same again: away)
 //!
 //! Replies are {"ok": true, "for": REQUEST, "reply": ...} or {"ok": false, "for": REQUEST, "error": "..."};
 //! `for` is what was asked, for a client that keeps one socket for events and requests both. After a subscribe the client
@@ -290,13 +293,20 @@ impl Draftpaper {
             // and so what comes after the one that is out, is `draftpaper schedule next`'s to say
             // (docs/sheet-content.md) — the three the sheet comes with and whatever the user has added,
             // which this has no way of knowing. It is sent a name and keeps it.
+            // With "toggle": true the one already out here goes away instead — a cell in the title block
+            // is a switch, as the graph's cells are, and clicking PROJECT a second time puts the
+            // equipment schedule away. A plain request sets what it is given, so `draftpaper schedule
+            // NAME` keeps saying which schedule it wants rather than meaning "the other one".
             "schedule" => {
                 let which = request.get("which").and_then(Value::as_str).unwrap_or("");
+                let toggle = request.get("toggle").and_then(Value::as_bool).unwrap_or(false);
+                let here = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();
                 self.schedule = match which {
                     "hide" => String::new(),
+                    other if toggle && other == self.schedule && here == self.schedule_on => String::new(),
                     other => other.to_string(),
                 };
-                self.schedule_on = self.screens.get(self.active).map(|s| s.output.name()).unwrap_or_default();
+                self.schedule_on = here;
                 self.touched = true;
                 Ok(json!(self.schedule))
             }

@@ -322,6 +322,22 @@ sleep 2
 ok "the next takes its place" "$(layer_sched)" "1"
 run "$repo/cli/target/release/draftpaper" schedule hide > /dev/null 2>&1
 sleep 2
+# a schedule's cell in the title block is a switch: PROJECT calls the equipment schedule up, and a
+# second click on it puts the schedule away again, as the graph's cells do (docs/sheet-content.md)
+sched_now() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0].schedule'; }
+cell_click() {
+    act pointer "$(o 0 ".title.cells[$1] | .x + .width / 2")" "$(o 0 ".title.cells[$1] | .y + .height / 2")"
+    sleep 0.4; act button left down; sleep 0.1; act button left up; sleep 1.5
+}
+cell_click 3
+ok "a click on PROJECT calls the equipment schedule up" "$(sched_now)" "equipment"
+cell_click 3
+ok "and a second click on it puts the schedule away" "$(sched_now)" ""
+# another schedule's cell takes its place rather than toggling: PROCESSES over the equipment
+cell_click 3; cell_click 10
+ok "another cell's schedule takes its place" "$(sched_now)" "processes"
+cell_click 10
+ok "and that one goes the same way" "$(sched_now)" ""
 # the graph: a reading's year, called up by name and by its cell in the title block
 run "$repo/cli/target/release/draftpaper" graph load > /dev/null 2>&1
 sleep 2
