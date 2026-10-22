@@ -74,6 +74,12 @@ pids="$pids $!"
 i=0
 until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 ipc() { run qs ipc -p "$repo/qml/shell.qml" call settings "$@" 2> /dev/null; }
+# a row by the key it writes, not by where it falls: the settings were rearranged into the
+# canvas's ten pages and every index moved (qml/Settings.qml).
+row() {
+    got=$(run qs ipc -p "$repo/qml/shell.qml" call settings rowKey "$1" 2>/dev/null)
+    if [ "$got" != "$1" ]; then echo "  FAIL: no row writes $1 on this page"; fail=1; return 1; fi
+}
 shot() {
     rm -f "$t"/Pictures/*.png
     kill -USR1 $nest
@@ -89,14 +95,14 @@ ok "config json: the system's text where config.toml sets none" "$(run "$cli" co
 ipc toggle
 # the settings load the config (config json) as they open: time for that on a loaded machine
 sleep 2.5
-ipc page text
+ipc page appearance
 sleep 1
-ipc row 2
+row text.size
 ipc step 1
 ok "interface size 12 in config.toml's [text]" "$(waitfor '^size = 12$' "$cfg")" "1"
 ok "GTK: Cantarell 12" "$(waitfor '^font-name=Cantarell 12$' "$t/gsettings.log")" "1"
 ok "Qt: Cantarell 12, the rest of its line kept" "$(qtline general)" 'general="Cantarell,12,-1,5,400,0,0,0,0,0,0,0,0,0,0,1,Regular"'
-ipc row 3
+row text.mono_size
 ipc step -1
 ok "monospace size 9 in Alacritty's draftpaper.toml" "$(waitfor '^size = 9.0$' "$t/.config/alacritty/draftpaper.toml")" "1"
 ok "what the system had, kept" "$([ -s "$t/.local/state/draftpaper/text.json" ] && echo kept)" "kept"

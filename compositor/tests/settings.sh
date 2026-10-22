@@ -65,6 +65,12 @@ pids="$pids $!"
 i=0
 until run "$comp" msg outputs 2>/dev/null | grep -q draftpaper-title-block || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 ipc() { run qs ipc -p "$repo/qml/shell.qml" call settings "$@" 2> /dev/null; }
+# a row is reached by the key it writes, never by where it falls on the page: the pages were
+# rearranged into the canvas's ten and every index moved. `rowKey` answers with the key it found.
+row() {
+    got=$(run qs ipc -p "$repo/qml/shell.qml" call settings rowKey "$1" 2>/dev/null)
+    if [ "$got" != "$1" ]; then echo "  FAIL: no row writes $1 on this page"; fail=1; return 1; fi
+}
 shot() {
     rm -f "$t"/Pictures/*.png
     kill -USR1 $nest
@@ -82,12 +88,12 @@ shot "$t/before.png"
 ok "the frame at 6 mm" "$([ "$("$check" "$t/before.png" 1.5 6.4 6 lum $edge6 $row)" -lt 120 ] && echo dark)" "dark"
 ipc toggle
 sleep 1
-ipc page sheet
+ipc page layout
 sleep 0.3
-ipc row 0
+row margin
 ipc step 1
 ok "margin 8 written, its comment kept" "$(waitfor '^margin = 8                 # millimetres between')" "1"
-ipc row 2
+row title.revisions
 ipc step 1
 ok "the revision block on, in a [title] of its own" "$(waitfor '^revisions = true')" "1"
 ok "[title] added once" "$(grep -c '^\[title\]' "$cfg")" "1"
@@ -106,35 +112,35 @@ ok "no mark left" "$(ls "$t/run" | grep -c config.mark)" "0"
 
 ipc toggle
 sleep 1
-ipc page rulers
+ipc page appearance
 sleep 0.3
-ipc row 4
+row rulers.numbers_h
 ipc step 1
 ok "rulers: the horizontal one numbered at the bottom, quoted, in a new [rulers]" "$(waitfor '^numbers_h = "bottom"$')" "1"
 ok "theme.json carries it to the shell" "$(grep -c '"numbers_h": "bottom"' "$t/.cache/draftpaper/theme.json")" "1"
 # the touchpad and the touchscreen, each in a table of its own: a touchpad is not a mouse and a
 # touchscreen is neither, and [input] used to be read into all three (compositor/src/config.rs).
 # These are the first pages to ask for a table config.toml has never had.
-ipc page touchpad
+ipc page pointer
 sleep 0.3
-ipc row 5
+row touchpad.scroll_method
 ipc step 1
 sleep 0.8
 if [ -n "${SHOT2:-}" ]; then shot "$t/touchpad.png"; cp "$t/touchpad.png" "$SHOT2"; fi
 ok "touchpad: scrolling at the edge, quoted, in a new [touchpad]" "$(waitfor '^scroll_method = "edge"$')" "1"
 ok "[touchpad] added once" "$(grep -c '^\[touchpad\]' "$cfg")" "1"
-ipc row 0
+row touchpad.tap
 ipc step 1
 ok "and tapping off, in the table the first row made" "$(waitfor '^tap = false$')" "1"
 ok "[touchpad] still added once" "$(grep -c '^\[touchpad\]' "$cfg")" "1"
-ipc page touch
+ipc page pointer
 sleep 0.3
-ipc row 0
+row touchscreen.enabled
 ipc step 1
 ok "the touchscreen turned off, in a new [touchscreen]" "$(waitfor '^enabled = false$')" "1"
-ipc page idle
+ipc page startup
 sleep 0.3
-ipc row 1
+row idle.lock_after
 ipc step 1
 ok "lock after 5 set in the commented example's place" "$(waitfor '^lock_after = 5             # minutes until')" "1"
 ipc keep

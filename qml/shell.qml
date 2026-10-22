@@ -243,6 +243,16 @@ ShellRoot {
             else settings.row = Math.max(0, Math.min(settings.rows.length, n))
         }
         function page(name: string): void { if (settings.visible) settings.page = name }
+        // a row by the key it writes, not by where it falls on the page: the pages are rearranged
+        // from time to time and an index is a promise about an arrangement. Returns "" when the page
+        // showing has no such row, so a test says which key it could not find.
+        function rowKey(key: string): string {
+            if (!settings.visible) return ""
+            const i = settings.cfgRows.findIndex(r => r.key === key)
+            if (i < 0) return ""
+            settings.cfgRow = i
+            return key
+        }
         function step(n: int): void { if (settings.visible) settings.step(n) }
         function keep(): void { if (settings.visible) settings.keep() }
         function cancel(): void { if (settings.visible) settings.cancel() }

@@ -76,15 +76,17 @@ PanelWindow {
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
-    readonly property var pageList: [["layout", "LAYOUT"], ["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["text", "TEXT"], ["sheet", "SHEET"], ["rulers", "RULERS"],
-                                     ["session", "SESSION"], ["input", "INPUT"], ["touchpad", "TOUCHPAD"], ["touch", "TOUCH"],
-                                     ["idle", "IDLE · LOCK"]]
+    // the canvas's ten, in its order. Draftpaper's settings are distributed into them: the drawings,
+    // the wallpaper, the faces and the rulers are all how the sheet is finished, so they are one
+    // Appearance page as the canvas has one, and it scrolls as its artboards do.
+    readonly property var pageList: [["layout", "LAYOUT"], ["workspaces", "WORKSPACES"], ["rules", "WINDOW RULES"],
+                                     ["displays", "DISPLAYS"], ["keyboard", "KEYBOARD"], ["pointer", "POINTER"],
+                                     ["bindings", "BINDINGS"], ["appearance", "APPEARANCE"], ["motion", "MOTION"],
+                                     ["startup", "STARTUP"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
     // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
-    readonly property var cfgPages: ({
-        displays: settings.dispRows,
-        text: settings.textRows,
-        sheet: [
+    readonly property var cfgPagesRaw: ({
+        layout: [
             { key: "margin", name: "MARGIN", def: 6, note: "between the screen's edge and the frame",
               options: [[4, "4 mm"], [5, "5 mm"], [6, "6 mm"], [8, "8 mm"], [10, "10 mm"]] },
             { key: "title.scale", name: "SCALE BAR", def: true, note: "true to size; NTS where a display reports no size",
@@ -102,11 +104,17 @@ PanelWindow {
             { key: "sheet.schedule_at", zone: "col", name: "SCHEDULES · ZONE COLUMN", def: "auto", note: "",
               options: settings.zoneCols() },
             { key: "glyphs", name: "GLYPHS", def: true, note: "Nerd Font glyphs before the readings",
-              options: [[true, "on"], [false, "words only"]] },
-            { key: "animations.enabled", name: "MOTION", def: true, note: "parking, workspaces, the settings",
-              options: [[true, "on"], [false, "reduced"]] }
+              options: [[true, "on"], [false, "words only"]] }
         ],
-        rulers: [
+        // [animations]: what Motion sets, and the programme it draws
+        motion: [
+            { key: "animations.enabled", name: "MOTION", def: true, note: "parking, unparking, switching workspaces",
+              options: [[true, "on"], [false, "reduced"]] },
+            { key: "animations.duration_ms", name: "DURATION", def: 220, scale: true,
+              note: "how long one of them takes, end to end",
+              options: [[120, "120 ms"], [160, "160 ms"], [220, "220 ms"], [300, "300 ms"], [420, "420 ms"]] }
+        ],
+        rulerRowsHolder: [
             { key: "rulers.step", name: "MOVE STEP", def: 1, note: "the crossing, by key or drag; the pointer held to it",
               options: [[0.5, "0.5 mm"], [1, "1 mm"], [2, "2 mm"]] },
             { key: "rulers.step_shift", name: "WITH SHIFT", def: 10, note: "",
@@ -126,18 +134,20 @@ PanelWindow {
             { key: "rulers.width", name: "WIDTH", def: 16, note: "",
               options: [[12, "12 mm"], [16, "16 mm"], [20, "20 mm"]] }
         ],
-        session: [
+        startup: [
             { key: "session.restore", name: "RESTORE", def: true, note: "the windows back in their places at login",
               options: [[true, "on"], [false, "off"]] },
             { key: "session.apps", name: "APPLICATIONS' STATE", def: true, note: "tabs, files, editors, tmux",
               options: [[true, "on"], [false, "off"]] }
         ],
-        input: [
+        keyboard: [
             { key: "input.repeat_delay", name: "REPEAT DELAY", def: 200, note: "before a held key repeats",
               options: [[150, "150 ms"], [200, "200 ms"], [300, "300 ms"], [400, "400 ms"]] },
             { key: "input.repeat_rate", name: "REPEAT RATE", def: 25,
               note: "how fast a held key repeats once it has started",
               options: [[20, "20/s"], [25, "25/s"], [30, "30/s"], [40, "40/s"]] },
+        ],
+        mouseRows: [
             { key: "input.focus_follows_mouse", name: "FOCUS FOLLOWS THE MOUSE", def: true, note: "",
               options: [[true, "on"], [false, "off"]] },
             { key: "pointer.natural_scroll", name: "MOUSE · NATURAL SCROLLING", def: false, note: "a wheel, and the TrackPoint",
@@ -150,7 +160,7 @@ PanelWindow {
         ],
         // the built-in pad has a table of its own: a touchpad is not a mouse, and one [input] read
         // into both was one setting doing two jobs (compositor/src/config.rs)
-        touchpad: [
+        pointerRows: [
             { key: "touchpad.tap", name: "TAP TO CLICK", def: true, note: "a tap is a click, without pressing the pad",
               options: [[true, "on"], [false, "off"]] },
             { key: "touchpad.tap_and_drag", name: "TAP AND DRAG", def: true, note: "tap, then tap and hold: the second tap drags",
@@ -174,8 +184,7 @@ PanelWindow {
         ],
         // a touch device reports where it was touched and nothing else, so there is little to set:
         // whether it is listened to, and which display it is the surface of
-        touch: settings.touchRows,
-        idle: [
+        idleRows: [
             { key: "idle.screens_off", name: "SCREENS OFF AFTER", def: 15, note: "any input wakes them",
               options: [[5, "5 min"], [10, "10 min"], [15, "15 min"], [30, "30 min"], [0, "never"]] },
             { key: "idle.lock_after", name: "LOCK AFTER", def: 0, note: "Mod+Shift+x locks now",
@@ -183,6 +192,24 @@ PanelWindow {
             { key: "idle.lock_on_sleep", name: "LOCK BEFORE SUSPEND", def: false, note: "Mod+Shift+p: for the day",
               options: [[false, "off"], [true, "on"]] }
         ]
+    })
+    // the groups above, gathered onto the canvas's pages. The rulers, the faces and the wallpaper's
+    // treatments are all how the sheet is finished, so they are the one Appearance page it has.
+    readonly property var rulerRows: cfgPagesRaw.rulerRowsHolder
+    readonly property var wallRows: wpRows
+    readonly property var pointerAll: cfgPagesRaw.mouseRows.concat(cfgPagesRaw.pointerRows, touchRows)
+    readonly property var startupAll: cfgPagesRaw.startup.concat(cfgPagesRaw.idleRows)
+    readonly property var cfgPages: ({
+        layout: cfgPagesRaw.layout,
+        workspaces: [],
+        rules: [],
+        displays: dispRows,
+        keyboard: cfgPagesRaw.keyboard,
+        pointer: pointerAll,
+        bindings: [],
+        appearance: textRows.concat(rulerRows),
+        motion: cfgPagesRaw.motion,
+        startup: startupAll
     })
     // the speeds a pointing device is set to: libinput takes -1 (slow) to 1 (fast), and these are the
     // five of them the sheet offers rather than a slider it has nowhere to draw
@@ -198,18 +225,16 @@ PanelWindow {
 
     // the pages, numbered as the canvas numbers them, each with the line that says what it is for
     readonly property var pageSays: ({
-        layout: "How windows divide a display. The sheet is a grid of zones -- columns numbered across it, rows lettered down it -- and the plan shows what is built on them.",
-        scheme: "The drawing the sheet is made in: its paper, its ink and what it lights things with. Pick one, or build your own from the rows below it.",
-        wallpaper: "The picture behind the frame, and how much of the paper is left in it. The sheet redraws as you pick; nothing is kept until you apply.",
-        displays: "Every display this machine has, where it sits beside the others, and how large the sheet is drawn on each.",
-        text: "The faces the sheet is lettered in, and their sizes against the distance you sit from it.",
-        sheet: "The frame, the title block, and what the sheet carries inside them.",
-        rulers: "The two lines that cross the sheet at the pointer, and where their figures are read.",
-        session: "What comes back when you log in: the windows that were open, and where they were.",
-        input: "The keyboard's repeat, and what a mouse or the TrackPoint does.",
-        touchpad: "The built-in pad: what a tap means, which way the content moves, and how far a finger carries the pointer.",
-        touch: "The touchscreen, and which display a finger is touching.",
-        idle: "What happens when the machine is left alone, and what it takes to get back in."
+        layout: "How windows divide a display. The sheet is a grid of zones — columns numbered across it, rows lettered down it — and the plan shows what is built on them.",
+        workspaces: "Workspaces stack like the floors of a building, workspace 1 at ground level. Empty floors are hatched.",
+        rules: "A specification for new windows. Each clause matches windows as they open and decides where they go; clauses are read top to bottom, and later ones override earlier ones.",
+        displays: "The site plan of your desktop. Each display is drawn at its logical size — resolution divided by scale — measured from a single origin.",
+        keyboard: "What each key means and how it repeats. The elevation shows one second of a key held down.",
+        pointer: "How the hand reaches the screen. The plan maps what each part of the touchpad does, drawn at the pad's own proportion.",
+        bindings: "Every combination the compositor acts on. Choose a modifier layer; the schedule lists the whole of it.",
+        appearance: "How the sheet is finished: the drawing it is made in, the picture behind the frame, the faces it is lettered in and the rulers that cross it.",
+        motion: "How long things take, and how they arrive. The profile plots progress against time for one event; the programme sets every event on the same clock.",
+        startup: "What runs between login and a ready desktop. Phases climb in order; each waits for the one below it."
     })
     function pageSaid(name) { return pageSays[name] || "" }
     // The canvas sets its names in sentence case, not capitals. The rows are written here in capitals
@@ -803,9 +828,19 @@ PanelWindow {
     readonly property real mainW: appW - sideW - 2 * padX
     readonly property real mainY: padTop
     // how deep the page showing is, so the scroller knows how far it goes
-    readonly property real pageDeep: page === "layout" ? cfgTop + layoutPage.deep + 64
-        : cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64
-        : page === "scheme" ? builderY + rows.length * rowH + 64 : 0
+    // how deep the page showing is: its figure, and then the rows under it
+    readonly property real figureDeep:
+          page === "layout" ? layoutPage.deep
+        : page === "workspaces" ? wsPage.deep
+        : page === "rules" ? rulesPage.deep
+        : page === "keyboard" ? kbdPage.deep
+        : page === "pointer" ? padPage.deep
+        : page === "bindings" ? bindPage.deep
+        : page === "motion" ? motionPage.deep
+        : page === "startup" ? startPage.deep
+        : 0
+    readonly property real pageDeep: page === "appearance" ? builderY + rows.length * rowH + 64
+        : cfgTop + figureDeep + cfgRows.length * rowPitch + 64
     readonly property real rowPitch: 69        // 16px padding, a 14px label over a 12px hint
     readonly property real cfgTop: pageHead.foot + 24 + (cfgPage.bandH || 0)
 
@@ -1280,11 +1315,603 @@ PanelWindow {
             readonly property real deep: acrossChain.height + planH + 14 + 20
         }
 
+        // ---- 02 Workspaces: the section ----
+        // "Workspaces stack like the floors of a building, workspace 1 at ground level." So it is a
+        // section rather than a plan: the floors drawn one above another, hatched where nothing is
+        // built on them, the one you are on outlined, and the ground ruled under the lot.
+        Item {
+            id: wsPage
+            visible: settings.page === "workspaces"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property var floors: {
+                const all = Compositor.workspaces.filter(w => !settings.out || w.output === settings.out.name)
+                return all.slice().sort((a, b) => b.number - a.number)      // the top floor first
+            }
+            readonly property real storey: 46
+            readonly property real planW: Math.min(width - 120, 560)
+
+            Repeater {
+                model: wsPage.floors
+                Item {
+                    id: floor
+                    required property var modelData
+                    required property int index
+                    readonly property bool empty: modelData.windows === 0 && modelData.parked === 0
+                    y: index * wsPage.storey
+                    width: wsPage.planW; height: wsPage.storey
+                    Rectangle {         // the storey itself
+                        anchors.fill: parent; anchors.bottomMargin: 6
+                        color: floor.empty ? settings.plan : settings.sheetWhite
+                        border.width: floor.modelData.focused ? 2 : 1
+                        border.color: settings.ink
+                        Hatching {
+                            anchors.fill: parent; anchors.margins: 1
+                            visible: floor.empty
+                            stroke: settings.hatch; pitch: 8
+                        }
+                    }
+                    Text {              // its number, outside the building as a section numbers a level
+                        x: -34; anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: -3
+                        text: settings.twoDigits(floor.modelData.number)
+                        font.family: settings.code; font.pixelSize: 11
+                        color: floor.modelData.focused ? settings.accent : settings.ink4
+                    }
+                    Row {
+                        x: 14; anchors.verticalCenter: parent.verticalCenter
+                        anchors.verticalCenterOffset: -3
+                        spacing: 8
+                        Rectangle {
+                            visible: floor.modelData.focused
+                            width: 6; height: 6; color: settings.accent
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: floor.empty ? "empty"
+                                : floor.modelData.windows + (floor.modelData.windows === 1 ? " window" : " windows")
+                                  + (floor.modelData.parked ? " · " + floor.modelData.parked + " parked" : "")
+                            font.family: settings.sans; font.pixelSize: 12
+                            font.weight: floor.modelData.focused ? Font.Medium : Font.Normal
+                            color: floor.empty ? settings.ink4 : settings.ink
+                        }
+                    }
+                }
+            }
+            Rectangle {         // the ground the building stands on, heavier than the storeys
+                y: wsPage.floors.length * wsPage.storey - 6
+                width: wsPage.planW + 24; x: -12; height: 2
+                color: settings.ink
+            }
+            Text {
+                y: wsPage.floors.length * wsPage.storey + 6
+                text: "GROUND · workspace 1 at this level, and a workspace made when one is wanted"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: floors.length * storey + 40
+        }
+
+        // ---- 03 Window rules: the clauses ----
+        // "Each clause matches windows as they open and decides where they go; clauses are read top to
+        // bottom, and later ones override earlier ones." Drawn as a specification is drawn: numbered,
+        // ruled between, the match on the left and what it decides on the right.
+        Item {
+            id: rulesPage
+            visible: settings.page === "rules"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property var clauses: (settings.cfg && settings.cfg.rule) || []
+            Repeater {
+                model: rulesPage.clauses
+                Item {
+                    required property var modelData
+                    required property int index
+                    y: index * 56
+                    width: rulesPage.width; height: 56
+                    Rectangle { width: parent.width; height: 1; color: settings.line }
+                    Text {
+                        x: 0; y: 18
+                        text: settings.twoDigits(index + 1)
+                        font.family: settings.code; font.pixelSize: 11
+                        color: settings.ink4
+                    }
+                    Text {
+                        x: 38; y: 15
+                        text: modelData.app_id ? "app_id ~ " + modelData.app_id
+                            : modelData.title ? "title ~ " + modelData.title : "every window"
+                        font.family: settings.code; font.pixelSize: 12
+                        color: settings.ink
+                    }
+                    Text {
+                        x: 38; y: 32
+                        text: {
+                            const says = []
+                            for (const k of ["float", "sticky", "place", "focus", "pip"])
+                                if (modelData[k] !== undefined) says.push(k + " " + modelData[k])
+                            return says.join(" · ")
+                        }
+                        font.family: settings.sans; font.pixelSize: 12
+                        color: settings.ink3
+                    }
+                }
+            }
+            Item {              // nothing written: say so, and say where it would go
+                visible: rulesPage.clauses.length === 0
+                width: parent.width; height: 120
+                Rectangle {
+                    anchors.fill: parent
+                    color: settings.plan
+                    border.width: 1; border.color: settings.line
+                    Hatching { anchors.fill: parent; anchors.margins: 1; stroke: settings.hatch; pitch: 8 }
+                }
+                Column {
+                    anchors.centerIn: parent; spacing: 6
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "NO CLAUSES"
+                        font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                        color: settings.ink3
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "every window opens where the layout puts it"
+                        font.family: settings.sans; font.pixelSize: 12
+                        color: settings.ink4
+                    }
+                }
+            }
+            Text {
+                y: rulesPage.clauses.length ? rulesPage.clauses.length * 56 + 14 : 134
+                text: "[[rule]] in config.toml · read top to bottom, later clauses overriding earlier"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: (clauses.length ? clauses.length * 56 + 14 : 134) + 30
+        }
+
+        // ---- 05 Keyboard: one second of a key held ----
+        // "The elevation shows one second of a key held down." Time runs along the baseline; the first
+        // stroke is the press, then nothing until [input] repeat_delay is up, then a stroke at every
+        // 1/repeat_rate. The whole of the keyboard's timing is in the drawing rather than in a number.
+        Item {
+            id: kbdPage
+            visible: settings.page === "keyboard"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property real delay: Number(settings.cfgGet({ key: "input.repeat_delay", def: 200 }))
+            readonly property real rate: Number(settings.cfgGet({ key: "input.repeat_rate", def: 25 }))
+            readonly property real planW: Math.min(width - 72, 620)
+            readonly property real second: 1000          // the elevation is one second wide
+
+            Chain {
+                id: kbdChain
+                width: kbdPage.planW; height: 40
+                face: settings.code
+                marks: [0, 0.25, 0.5, 0.75, 1]
+                labels: [{ text: "250 ms", strong: true }, { text: "500", strong: false },
+                         { text: "750", strong: false }, { text: "1 s", strong: false }]
+            }
+            Item {
+                id: kbdPlot
+                y: kbdChain.height
+                width: kbdPage.planW; height: 120
+                Rectangle {
+                    anchors.fill: parent
+                    color: settings.plan
+                    border.width: 1; border.color: settings.ink
+                }
+                Rectangle {     // the stretch before it repeats, hatched: nothing happens there
+                    x: 1; y: 1
+                    width: Math.max(0, kbdPage.delay / kbdPage.second * (kbdPlot.width - 2))
+                    height: kbdPlot.height - 2
+                    color: "transparent"
+                    Hatching { anchors.fill: parent; stroke: settings.hatch; pitch: 8 }
+                }
+                Repeater {      // the press, then every repeat until the second is out
+                    model: {
+                        const out = [0]
+                        const every = 1000 / Math.max(1, kbdPage.rate)
+                        for (let t = kbdPage.delay; t <= kbdPage.second; t += every) out.push(t)
+                        return out
+                    }
+                    Rectangle {
+                        required property real modelData
+                        required property int index
+                        x: Math.round(modelData / kbdPage.second * (kbdPlot.width - 2)) + 1
+                        y: index === 0 ? 10 : 34
+                        width: index === 0 ? 2 : 1
+                        height: kbdPlot.height - y - 10
+                        color: index === 0 ? settings.accent : settings.ink
+                    }
+                }
+                Text {
+                    x: 10; y: 10
+                    text: "PRESS"
+                    font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                    color: settings.accent
+                }
+                Text {
+                    x: Math.round(kbdPage.delay / kbdPage.second * (kbdPlot.width - 2)) + 10
+                    y: 34
+                    visible: x < kbdPlot.width - 90
+                    text: "REPEATS"
+                    font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                    color: settings.ink3
+                }
+            }
+            Text {
+                y: kbdChain.height + kbdPlot.height + 14
+                text: kbdPage.delay + " ms held before it repeats, then " + kbdPage.rate + " a second · "
+                      + (1 + Math.max(0, Math.floor((kbdPage.second - kbdPage.delay) / (1000 / Math.max(1, kbdPage.rate))) + 1))
+                      + " strokes in the second drawn"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: kbdChain.height + kbdPlot.height + 14 + 30
+        }
+
+        // ---- 06 Pointer: the pad, drawn to its own size ----
+        // "The plan maps what each part of the touchpad does." The pad is 114 by 58 mm on this
+        // machine and is drawn at that proportion: the click areas where a press lands left, right or
+        // middle, and the edges that scroll where edge scrolling is set.
+        Item {
+            id: padPage
+            visible: settings.page === "pointer"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property string clickBy: String(settings.cfgGet({ key: "touchpad.click_method", def: "button-areas" }))
+            readonly property string scrollBy: String(settings.cfgGet({ key: "touchpad.scroll_method", def: "two-finger" }))
+            readonly property real padW: Math.min(width - 160, 420)
+            readonly property real padH: padW * 58 / 114
+
+            Chain {
+                id: padChain
+                width: padPage.padW; height: 40
+                face: settings.code
+                marks: [0, 1]
+                labels: [{ text: "114 mm", strong: true }]
+            }
+            Item {
+                id: padPlan
+                y: padChain.height
+                width: padPage.padW; height: padPage.padH
+                Rectangle {
+                    anchors.fill: parent
+                    color: settings.sheetWhite
+                    border.width: 1; border.color: settings.ink
+                }
+                // button areas: the foot of the pad divided left, middle, right
+                Item {
+                    anchors.fill: parent
+                    visible: padPage.clickBy === "button-areas"
+                    Rectangle {
+                        y: parent.height * 0.75; width: parent.width; height: 1
+                        color: settings.ink
+                    }
+                    Repeater {
+                        model: [["left", 0, 0.4], ["middle", 0.4, 0.6], ["right", 0.6, 1]]
+                        Item {
+                            required property var modelData
+                            x: modelData[1] * padPlan.width
+                            y: padPlan.height * 0.75
+                            width: (modelData[2] - modelData[1]) * padPlan.width
+                            height: padPlan.height * 0.25
+                            Rectangle {
+                                visible: modelData[1] > 0
+                                width: 1; height: parent.height; color: settings.ink
+                            }
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData[0]
+                                font.family: settings.code; font.pixelSize: 11
+                                color: settings.ink3
+                            }
+                        }
+                    }
+                }
+                Text {      // clickfinger: the whole pad is the button, and the fingers decide
+                    visible: padPage.clickBy === "clickfinger"
+                    anchors { horizontalCenter: parent.horizontalCenter; bottom: parent.bottom; bottomMargin: 12 }
+                    text: "one finger left · two right · three middle"
+                    font.family: settings.code; font.pixelSize: 11
+                    color: settings.ink3
+                }
+                // the scrolling edges, hatched as a drawing hatches a reserved strip
+                Item {
+                    visible: padPage.scrollBy === "edge"
+                    x: padPlan.width - padPlan.width * 0.12; y: 1
+                    width: padPlan.width * 0.12 - 1; height: padPlan.height * 0.75 - 1
+                    Hatching { anchors.fill: parent; stroke: settings.hatch; pitch: 6 }
+                    Rectangle { width: 1; height: parent.height; color: settings.line }
+                }
+                Text {
+                    visible: padPage.scrollBy === "two-finger"
+                    anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 14 }
+                    text: "two fingers scroll, anywhere"
+                    font.family: settings.code; font.pixelSize: 11
+                    color: settings.ink3
+                }
+            }
+            Text {
+                x: padPage.padW + 16; y: padChain.height + padPage.padH / 2 - 7
+                text: "58 mm"
+                font.family: settings.code; font.pixelSize: 11
+                color: settings.ink4
+            }
+            Text {
+                y: padChain.height + padPage.padH + 14
+                text: "ELAN0676 · the built-in pad, drawn to its own proportion"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: padChain.height + padH + 14 + 30
+        }
+
+        // ---- 07 Bindings: the schedule of the layer ----
+        // "Choose a modifier layer, then a key; the schedule lists the whole layer." The compositor
+        // is the only thing that knows the keymap and is asked for it once (docs/keyboard.md), so
+        // this is that table, sorted into the layers the chords fall into.
+        Item {
+            id: bindPage
+            visible: settings.page === "bindings"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            property string tier: "Mod"
+            readonly property var layers: {
+                const seen = {}
+                for (const k of Compositor.keys) {
+                    const parts = k.keys.split("+")
+                    seen[parts.slice(0, -1).join("+") || "plain"] = 1
+                }
+                return Object.keys(seen).sort((a, b) => a.length - b.length || (a < b ? -1 : 1))
+            }
+            readonly property var shown: Compositor.keys.filter(k => {
+                const parts = k.keys.split("+")
+                return (parts.slice(0, -1).join("+") || "plain") === bindPage.tier
+            })
+
+            Row {               // the layers, as the canvas picks one
+                id: layerRow
+                spacing: 0
+                Repeater {
+                    model: bindPage.tiers
+                    Rectangle {
+                        required property var modelData
+                        required property int index
+                        readonly property bool here: bindPage.tier === modelData
+                        width: layerLabel.implicitWidth + 32; height: 38
+                        color: here ? settings.ink : "transparent"
+                        Rectangle { width: 1; height: parent.height; visible: index > 0; color: settings.ink }
+                        Rectangle { y: 0; width: parent.width; height: 1; color: settings.ink }
+                        Rectangle { y: parent.height - 1; width: parent.width; height: 1; color: settings.ink }
+                        Rectangle { x: 0; width: 1; height: parent.height; visible: index === 0; color: settings.ink }
+                        Rectangle { x: parent.width - 1; width: 1; height: parent.height
+                                    visible: index === bindPage.tiers.length - 1; color: settings.ink }
+                        Text {
+                            id: layerLabel
+                            anchors.centerIn: parent
+                            text: modelData
+                            font.family: settings.code; font.pixelSize: 12; font.weight: Font.Medium
+                            color: parent.here ? settings.sheetWhite : settings.ink3
+                        }
+                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onPressed: bindPage.tier = modelData }
+                    }
+                }
+            }
+            Column {            // the schedule itself
+                y: layerRow.height + 24
+                width: parent.width
+                Repeater {
+                    model: bindPage.shown
+                    Item {
+                        required property var modelData
+                        width: bindPage.width; height: 32
+                        Rectangle { width: parent.width; height: 1; color: settings.line }
+                        Text {
+                            x: 0; anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.keys
+                            font.family: settings.code; font.pixelSize: 12
+                            color: settings.ink
+                        }
+                        Text {
+                            x: 220; anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.action
+                            font.family: settings.sans; font.pixelSize: 13
+                            color: settings.ink3
+                        }
+                    }
+                }
+            }
+            Text {
+                y: layerRow.height + 24 + bindPage.shown.length * 32 + 14
+                text: bindPage.shown.length + " of " + Compositor.keys.length
+                      + " bindings · the compositor's own table, asked for once"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: layerRow.height + 24 + shown.length * 32 + 14 + 30
+        }
+
+        // ---- 09 Motion: progress against time ----
+        // "The profile plots progress against time for one event; the programme sets every event on
+        // the same clock." The curve is the easing the compositor animates with, drawn on axes, and
+        // the programme is the events ranged under it against the same seconds.
+        Item {
+            id: motionPage
+            visible: settings.page === "motion"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property bool on: settings.cfgGet({ key: "animations.enabled", def: true }) === true
+            readonly property real ms: Number(settings.cfgGet({ key: "animations.duration_ms", def: 220 }))
+            readonly property real plotW: Math.min(width - 160, 420)
+            readonly property real plotH: 200
+
+            Item {
+                id: motionPlot
+                width: motionPage.plotW; height: motionPage.plotH
+                Rectangle { anchors.fill: parent; color: settings.plan; border.width: 1; border.color: settings.ink }
+                Hatching { anchors.fill: parent; anchors.margins: 1; visible: !motionPage.on; stroke: settings.hatch; pitch: 8 }
+                Canvas {        // the curve: ease-out cubic, which is what the shell animates with
+                    id: curve
+                    anchors.fill: parent; anchors.margins: 1
+                    visible: motionPage.on
+                    onWidthChanged: requestPaint()
+                    onHeightChanged: requestPaint()
+                    onPaint: {
+                        const c = getContext("2d")
+                        c.reset(); c.strokeStyle = "#2B45B5"; c.lineWidth = 2
+                        c.beginPath()
+                        for (let i = 0; i <= 60; i++) {
+                            const t = i / 60, p = 1 - Math.pow(1 - t, 3)
+                            const x = t * width, y = height - p * height
+                            if (i === 0) c.moveTo(x, y); else c.lineTo(x, y)
+                        }
+                        c.stroke()
+                    }
+                }
+                Text {
+                    x: 10; y: 8
+                    text: motionPage.on ? "EASE OUT" : "REDUCED"
+                    font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                    color: motionPage.on ? settings.accent : settings.ink3
+                }
+                Text {
+                    x: 10; anchors { bottom: parent.bottom; bottomMargin: 8 }
+                    text: "0"
+                    font.family: settings.code; font.pixelSize: 11
+                    color: settings.ink4
+                }
+                Text {
+                    anchors { right: parent.right; rightMargin: 10; bottom: parent.bottom; bottomMargin: 8 }
+                    text: motionPage.on ? motionPage.ms + " ms" : "0 ms"
+                    font.family: settings.code; font.pixelSize: 11
+                    color: settings.ink4
+                }
+            }
+            Text {
+                x: -34; y: motionPage.plotH / 2 - 7
+                rotation: -90
+                text: "PROGRESS"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            Column {            // the programme: every event on the same clock
+                x: motionPage.plotW + 56; y: 0
+                spacing: 14
+                Repeater {
+                    model: [["Parking a window", 1], ["Unparking", 1], ["Switching workspace", 1], ["The settings opening", 0.7]]
+                    Item {
+                        required property var modelData
+                        width: 260; height: 26
+                        Text {
+                            text: modelData[0]
+                            font.family: settings.sans; font.pixelSize: 13
+                            color: settings.ink
+                        }
+                        Rectangle {
+                            y: 18; width: parent.width; height: 1; color: settings.line
+                        }
+                        Rectangle {
+                            y: 16; height: 5
+                            width: motionPage.on ? Math.max(2, modelData[1] * motionPage.ms / 420 * parent.width) : 2
+                            color: settings.accent
+                        }
+                    }
+                }
+            }
+            Text {
+                y: motionPage.plotH + 14
+                text: motionPage.on ? "every event eased out over " + motionPage.ms + " ms, measured against 420"
+                                    : "reduced motion: every change arrives at once"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: plotH + 14 + 30
+        }
+
+        // ---- 10 Startup: the phases, climbing ----
+        // "Phases climb in order; items in a phase start together, and a phase lasts as long as the
+        // slowest item it waits for." Drawn as a section again: each phase a tread above the last.
+        Item {
+            id: startPage
+            visible: settings.page === "startup"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property var phases: [
+                ["Compositor", ["the sheet, the frame, the zones"], true],
+                ["Shell", ["the margins, the title block, the legend"], true],
+                ["Session", settings.cfgGet({ key: "session.restore", def: true }) === true
+                            ? ["the windows back in their places"] : ["nothing restored"],
+                 settings.cfgGet({ key: "session.restore", def: true }) === true],
+                ["Applications", settings.cfgGet({ key: "session.apps", def: true }) === true
+                                 ? ["their own state: tabs, files, editors, tmux"] : ["started bare"],
+                 settings.cfgGet({ key: "session.apps", def: true }) === true]
+            ]
+            readonly property real tread: 64
+            readonly property real rise: 22
+
+            Repeater {
+                model: startPage.phases
+                Item {
+                    id: step
+                    required property var modelData
+                    required property int index
+                    readonly property int fromTop: startPage.phases.length - 1 - index
+                    x: index * 26
+                    y: fromTop * startPage.tread
+                    width: Math.min(startPage.width - index * 26 - 40, 460)
+                    height: startPage.tread
+                    Rectangle {
+                        anchors.fill: parent; anchors.bottomMargin: 8
+                        color: modelData[2] ? settings.sheetWhite : settings.plan
+                        border.width: 1; border.color: settings.ink
+                        Hatching {
+                            anchors.fill: parent; anchors.margins: 1
+                            visible: !step.modelData[2]
+                            stroke: settings.hatch; pitch: 8
+                        }
+                    }
+                    Text {
+                        x: -24; y: 14
+                        text: settings.twoDigits(index + 1)
+                        font.family: settings.code; font.pixelSize: 11
+                        color: settings.ink4
+                    }
+                    Text {
+                        x: 14; y: 12
+                        text: modelData[0]
+                        font.family: settings.sans; font.pixelSize: 13; font.weight: Font.Medium
+                        color: settings.ink
+                    }
+                    Text {
+                        x: 14; y: 30
+                        text: modelData[1].join(" · ")
+                        font.family: settings.sans; font.pixelSize: 12
+                        color: settings.ink3
+                    }
+                }
+            }
+            Rectangle {
+                y: startPage.phases.length * startPage.tread - 8
+                x: -12; width: Math.min(startPage.width, 520); height: 2
+                color: settings.ink
+            }
+            Text {
+                y: startPage.phases.length * startPage.tread + 6
+                text: "LOGIN · each phase waits for the one below it"
+                font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: phases.length * tread + 40
+        }
+
         // ---- the wallpaper page ----
         Item {
             id: wallPage
             anchors.fill: parent
-            visible: settings.page === "wallpaper"
+            visible: settings.page === "appearance"
             // This page previews the picked picture behind the whole panel -- that is what it is for,
             // since BRIGHTNESS, PAPER WASH and BLUR are only judgeable against the real thing. So its
             // lettering has no fixed ground, and no one ink can sit on a photograph that is near-white
@@ -1577,7 +2204,7 @@ PanelWindow {
                     readonly property bool isSlider: !!modelData.scale
                     readonly property string said: (opts.find(o => o[0] === cr.value) || ["", ""])[1]
                     x: settings.mainX
-                    y: settings.cfgTop + index * settings.rowPitch
+                    y: settings.cfgTop + settings.figureDeep + index * settings.rowPitch
                     width: settings.mainW; height: settings.rowPitch
 
                     Rectangle { width: parent.width; height: 1; color: settings.line }
@@ -1715,7 +2342,7 @@ PanelWindow {
         // ---- the colour scheme page ----
         Item {
             anchors.fill: parent
-            visible: settings.page === "scheme"
+            visible: settings.page === "appearance"
 
         // the drawings
         Text {
