@@ -878,8 +878,11 @@ PanelWindow {
             // and those two are the whole of it: the title block is under the board while the
             // settings are up, so nothing on the sheet is a way out either.
             // It still takes the press, the settings being modal: it simply does nothing with it.
+            //
+            // It takes no wheel either. Rolling it used to step the row the keys were on, so a scroll
+            // meant to move the page changed a setting instead -- the pointer need not even be near
+            // the row. The wheel moves the pages and the sections it is over, and picks nothing.
             anchors.fill: parent
-            onWheel: w => settings.step(w.angleDelta.y < 0 || w.angleDelta.x < 0 ? 1 : -1)
         }
 
         // ---- the header ----
