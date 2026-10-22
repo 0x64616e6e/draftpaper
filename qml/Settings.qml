@@ -135,13 +135,15 @@ PanelWindow {
         input: [
             { key: "input.repeat_delay", name: "REPEAT DELAY", def: 200, note: "before a held key repeats",
               options: [[150, "150 ms"], [200, "200 ms"], [300, "300 ms"], [400, "400 ms"]] },
-            { key: "input.repeat_rate", name: "REPEAT RATE", def: 25, note: "",
+            { key: "input.repeat_rate", name: "REPEAT RATE", def: 25,
+              note: "how fast a held key repeats once it has started",
               options: [[20, "20/s"], [25, "25/s"], [30, "30/s"], [40, "40/s"]] },
             { key: "input.focus_follows_mouse", name: "FOCUS FOLLOWS THE MOUSE", def: true, note: "",
               options: [[true, "on"], [false, "off"]] },
             { key: "pointer.natural_scroll", name: "MOUSE · NATURAL SCROLLING", def: false, note: "a wheel, and the TrackPoint",
               options: [[false, "off"], [true, "on"]] },
-            { key: "pointer.speed", name: "MOUSE · SPEED", def: 0, note: "",
+            { key: "pointer.speed", name: "MOUSE · SPEED", def: 0, scale: true,
+              note: "how far the mouse or the TrackPoint carries the pointer",
               options: settings.speeds },
             { key: "pointer.left_handed", name: "MOUSE · LEFT-HANDED", def: false, note: "the buttons swapped",
               options: [[false, "off"], [true, "on"]] }
@@ -159,9 +161,11 @@ PanelWindow {
               options: [[true, "on"], [false, "off"]] },
             { key: "touchpad.click_method", name: "CLICK", def: "button-areas", note: "where a press of the pad is left, right or middle",
               options: [["button-areas", "by area"], ["clickfinger", "by fingers"]] },
-            { key: "touchpad.scroll_method", name: "SCROLL", def: "two-finger", note: "",
+            { key: "touchpad.scroll_method", name: "SCROLL", def: "two-finger",
+              note: "two fingers anywhere on the pad, or one along its right and bottom edges",
               options: [["two-finger", "two fingers"], ["edge", "the edge"]] },
-            { key: "touchpad.speed", name: "SPEED", def: 0, note: "",
+            { key: "touchpad.speed", name: "SPEED", def: 0, scale: true,
+              note: "how far a finger carries the pointer: libinput's acceleration, −1 to 1",
               options: settings.speeds },
             { key: "touchpad.middle_emulation", name: "MIDDLE BUTTON", def: false, note: "both buttons at once is the middle one",
               options: [[false, "off"], [true, "on"]] },
@@ -519,10 +523,11 @@ PanelWindow {
         const n = Math.max(0, Math.min(vals.length - 1, (i < 0 ? 0 : i) + dir))
         if (n !== i) cfgSet(row, vals[n])
     }
+    // a value as TOML writes it: a list in brackets, the rest as it is. The notes corner letters
+    // the same string, so what it says a row is set to is what would be written.
+    function raw(v) { return Array.isArray(v) ? "[" + v.join(", ") + "]" : String(v) }
     function cfgApply() {
         const keys = Object.keys(cfgVals)
-        // a list as TOML writes it ([0, 0]), the rest as it is
-        const raw = v => Array.isArray(v) ? "[" + v.join(", ") + "]" : String(v)
         if (keys.length) queue(["config", "set"].concat(keys.map(k => k + "=" + raw(cfgVals[k]))), "config")
     }
     // the sheet shows a change a moment after the picking pauses
@@ -672,11 +677,28 @@ PanelWindow {
     // the board takes the theme the sheet shows: the picked drawing's
     // and the picture picked on the wallpaper page, once it has loaded
     Board {
-        id: board; out: settings.out; t: settings.picked; keepBlock: false
+        // keepBlock: the sheet's own title block shows through the corner the panel used to paint over,
+        // so the quiet field below the rows ends on something real rather than running out
+        id: board; out: settings.out; t: settings.picked; keepBlock: true
         wallpaper: settings.wp ? (settings.wpPicture ? "file://" + settings.wpPicture : "") : settings.wallpaper
     }
 
     // ---- the layout ----
+    // The ladders (docs/interface.md): one ratio, root 2, every value a whole millimetre so the
+    // sheet's pixel snapping is unchanged. Three lettering sizes assigned by role, two rule weights
+    // in a 2:1 group, and seven spacings. A size is chosen by asking what the text *is*.
+    readonly property real dpr: board.dpr
+    readonly property real head: 5 * mm          // a heading: the page's name, once
+    readonly property real title: 3.5 * mm       // a title: a row's name, a page's name in the list
+    readonly property real note: 2.5 * mm        // a note, a unit, a caption
+    function rule(w) { return Math.max(1, Math.round(w * mm * dpr) / dpr) }
+    readonly property real thin: rule(0.25)
+    readonly property real heavy: rule(0.5)
+    // the one accent on the sheet, and it answers "where am I" (docs/design-research.md: hue pops
+    // out but cannot carry magnitude, so it is spent on attention and nothing else). `strong` is
+    // what the theme lights things with, so it follows the drawing being previewed.
+    readonly property color accent: board.t && board.t.strong ? board.t.strong : shell.theme.accent
+
     readonly property real gutter: 8 * mm
     readonly property color ink: board.ink
     function inkA(a) { return Qt.rgba(ink.r, ink.g, ink.b, a) }
@@ -685,6 +707,15 @@ PanelWindow {
     readonly property real catW: 42 * mm
     readonly property real x0: catX + catW + gutter
     readonly property real cw: board.inX + board.inW - gutter - x0
+    // 16 mm of air under the headings, 8 mm between rows: three intervals off the one ladder rather
+    // than one interval everywhere, which is the thin answer to the coldness a strict grid is
+    // recorded as producing (docs/design-research.md)
+    readonly property real headY: board.inY + gutter + head
+    readonly property real bodyY: headY + 16 * mm
+    readonly property real pitch: 8 * mm
+    // the notes corner: one field, in the place a drawing keeps its notes, reading whatever row the
+    // keys are on. Fixed, so nothing moves when the row changes -- only what it says changes.
+    readonly property real notesY: board.inY + board.inH - 48 * mm
     readonly property real cardGap: 5 * mm
     readonly property real cardW: Math.min(70 * mm, (cw - (cards.length - 1) * cardGap) / Math.max(1, cards.length))
     readonly property real cardH: cardW * height / Math.max(1, width)
@@ -737,30 +768,100 @@ PanelWindow {
             onWheel: w => settings.step(w.angleDelta.y < 0 || w.angleDelta.x < 0 ? 1 : -1)
         }
 
-        // the pages, ruled like the title block's cells: the one shown in heavier ink
+        // ---- the headings, and the only rule on the sheet ----
+        Text {
+            x: settings.catX; y: settings.headY - settings.head
+            text: "SETTINGS"
+            font.family: Fonts.mono; font.pixelSize: settings.head; font.letterSpacing: 0.6 * settings.mm
+            color: settings.inkA(0.62)
+        }
+        Text {
+            x: settings.x0; y: settings.headY - settings.head
+            text: (settings.pageList.find(p => p[0] === settings.page) || ["", ""])[1]
+            font.family: Fonts.mono; font.pixelSize: settings.head; font.letterSpacing: 0.6 * settings.mm
+            color: settings.ink
+        }
+        Rectangle {     // one rule, the whole measure, tying the two columns into one composition
+            x: settings.catX; y: settings.headY + 3 * settings.mm
+            width: board.inX + board.inW - settings.gutter - settings.catX
+            height: settings.thin
+            color: settings.inkA(0.55)
+        }
+
+        // ---- the notes corner ----
+        // One field, in the place a drawing keeps its notes, reading whatever row the keys are on.
+        // The nine permanent captions are gone: at a glance the sheet says one thing and the detail
+        // is here on the next look (docs/design-research.md, Neurath's fourth-look rule). The field
+        // never moves -- only what it reads changes -- so the sheet is still a drawing.
+        Item {
+            id: notes
+            readonly property var row: settings.cfgRows[settings.cfgRow] || null
+            // where the lines under the note begin: a row with nothing to say leaves no hole
+            readonly property real after: notesBody.y + (notesBody.visible ? notesBody.height + 6 * settings.mm : 0)
+            visible: !!row
+            x: settings.catX; y: settings.notesY
+            width: Math.min(board.block.x - settings.catX - settings.gutter,
+                            board.inX + board.inW - settings.gutter - settings.catX)
+            Text {
+                id: notesLabel
+                text: "NOTE"
+                font.family: Fonts.mono; font.pixelSize: settings.note; font.letterSpacing: 0.3 * settings.mm
+                color: settings.inkA(0.34)
+            }
+            Text {
+                id: notesBody
+                y: notesLabel.height + 4 * settings.mm
+                width: parent.width
+                visible: text !== ""          // a row with nothing to say leaves no hole
+                wrapMode: Text.WordWrap
+                text: notes.row ? (notes.row.note || "") : ""
+                font.family: Fonts.mono; font.pixelSize: settings.title; font.letterSpacing: 0
+                lineHeight: 1.35
+                color: settings.inkA(0.62)
+            }
+            Text {          // where it goes in config.toml, and what it says there now
+                y: notes.after
+                readonly property int dot: notes.row ? notes.row.key.lastIndexOf(".") : -1
+                readonly property string where: !notes.row ? ""
+                    : notes.row.pseudo ? "[outputs.*] position"
+                    : dot < 0 ? notes.row.key
+                    : "[" + notes.row.key.slice(0, dot) + "] " + notes.row.key.slice(dot + 1)
+                text: where === "" ? "" : where + " = " + settings.raw(settings.cfgGet(notes.row))
+                font.family: Fonts.mono; font.pixelSize: settings.note
+                color: settings.inkA(0.34)
+            }
+            Text {          // what the row itself works out, where it works something out
+                y: notes.after + settings.note * 2.2
+                // only what the row works out -- the legibility figures, a dragged note's
+                // millimetres, a scale's arithmetic. Where rowNote falls through to the static
+                // note the field above already has it, and saying it twice is ink with no reading.
+                readonly property string said: notes.row ? settings.rowNote(notes.row) : ""
+                visible: said !== "" && said !== (notes.row ? notes.row.note : "")
+                text: said
+                font.family: Fonts.mono; font.pixelSize: settings.note
+                color: notes.row && notes.row.legible && !settings.legibility(settings.cfgGet(notes.row), notes.row.legible).ok
+                    ? settings.shell.theme.alert : settings.inkA(0.34)
+            }
+        }
+
+        // ---- the pages ----
+        // Lettering at an 8 mm pitch, no boxes and no numbers: a drawing's legend is a column of
+        // words, not a box each (docs/interface.md). One channel says which you are on -- full ink
+        // against faint -- because three cues saying one thing is Tufte's 1+1=3.
         Repeater {
             model: settings.pageList
-            Rectangle {
+            Item {
                 id: pg
                 required property var modelData
                 required property int index
                 readonly property bool here: settings.page === modelData[0]
-                x: settings.catX; y: board.inY + settings.gutter + index * 16 * settings.mm
-                width: settings.catW; height: 14 * settings.mm
-                color: "transparent"
-                border.width: here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.2 * settings.mm)
-                border.color: here ? settings.ink : settings.inkA(0.5)
+                x: settings.catX; y: settings.bodyY + index * settings.pitch
+                width: settings.catW; height: settings.pitch
                 Text {
-                    x: 2 * settings.mm; y: 1.4 * settings.mm
-                    text: "SETTINGS · " + (pg.index + 1)
-                    font.family: Fonts.mono; font.pixelSize: settings.font * 0.75; font.letterSpacing: 0.3 * settings.mm
-                    color: settings.inkA(0.6)
-                }
-                Text {
-                    x: 2 * settings.mm; anchors.bottom: parent.bottom; anchors.bottomMargin: 2 * settings.mm
+                    y: (parent.height - height) / 2
                     text: pg.modelData[1]
-                    font.family: Fonts.mono; font.pixelSize: settings.font * 1.1; font.bold: pg.here
-                    color: pg.here ? settings.ink : settings.inkA(0.7)
+                    font.family: Fonts.mono; font.pixelSize: settings.title
+                    color: pg.here ? settings.ink : settings.inkA(0.5)
                 }
                 MouseArea { anchors.fill: parent; onPressed: settings.page = pg.modelData[0] }
             }
@@ -943,12 +1044,11 @@ PanelWindow {
             id: cfgPage
             anchors.fill: parent
             visible: settings.cfgRows.length > 0
-            readonly property real rowH: 12 * settings.mm
-            readonly property real optX: 58 * settings.mm
+            readonly property real optX: 64 * settings.mm
             // the Text page: the faces at the sizes picked, at true size, above the rows
             Row {
                 visible: settings.page === "text"
-                x: settings.x0; y: board.inY + settings.gutter
+                x: settings.x0; y: settings.bodyY
                 width: settings.cw; height: cfgPage.bandH - 6 * settings.mm
                 spacing: 8 * settings.mm
                 Repeater {
@@ -987,7 +1087,7 @@ PanelWindow {
             Item {
                 id: arrangement
                 visible: cfgPage.arranging
-                x: settings.x0; y: board.inY + settings.gutter
+                x: settings.x0; y: settings.bodyY
                 width: settings.cw; height: cfgPage.bandH - 6 * settings.mm
                 readonly property var lay: settings.page === "displays" ? settings.dispLayout() : []
                 readonly property real spanW: Math.max(1, ...lay.map(d => d.x + d.w))
@@ -1048,28 +1148,69 @@ PanelWindow {
                     readonly property bool here: settings.cfgRow === index
                     readonly property var value: settings.cfgGet(modelData)
                     x: settings.x0
-                    y: board.inY + settings.gutter + cfgPage.bandH + index * cfgPage.rowH
-                    width: settings.cw; height: cfgPage.rowH
-                    Rectangle { y: parent.height - height; width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
-                    Column {
-                        y: (cfgPage.rowH - height) / 2
-                        spacing: 0.6 * settings.mm
-                        Text {
-                            text: cr.modelData.name
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.bold: cr.here
-                            color: cr.here ? settings.ink : settings.inkA(0.75)
+                    y: settings.bodyY + cfgPage.bandH + index * settings.pitch
+                    width: settings.cw; height: settings.pitch
+                    // the row the keys are on, marked once, in the one accent on the sheet
+                    Rectangle {
+                        visible: cr.here
+                        x: -4 * settings.mm; y: (parent.height - settings.heavy) / 2
+                        width: 3 * settings.mm; height: settings.heavy
+                        color: settings.accent
+                    }
+                    Text {
+                        y: (parent.height - height) / 2
+                        text: cr.modelData.name
+                        font.family: Fonts.mono; font.pixelSize: settings.title
+                        color: cr.here ? settings.ink : settings.inkA(0.62)
+                    }
+                    // An ordered magnitude whose labels are invented names for numbers is drawn as a
+                    // position along a scale, not as words of equal weight: position is the one
+                    // preattentive channel that reads quantitatively (docs/design-research.md). A row
+                    // whose labels *are* the value ("6 mm") keeps its words -- the label is the data.
+                    Item {
+                        visible: !!cr.modelData.scale
+                        x: cfgPage.optX; width: 66 * settings.mm; height: parent.height
+                        readonly property var vals: settings.cfgOptions(cr.modelData).map(o => o[0])
+                        readonly property int at: Math.max(0, vals.indexOf(cr.value))
+                        readonly property real step: vals.length > 1 ? width / (vals.length - 1) : 0
+                        Rectangle {
+                            y: (parent.height - settings.thin) / 2
+                            width: parent.width; height: settings.thin
+                            color: settings.inkA(0.4)
                         }
-                        Text {     // where it goes in config.toml
-                            readonly property int dot: cr.modelData.key.lastIndexOf(".")
-                            text: cr.modelData.pseudo ? "[outputs.*] position"
-                                : dot < 0 ? cr.modelData.key : "[" + cr.modelData.key.slice(0, dot) + "] " + cr.modelData.key.slice(dot + 1)
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.62
-                            color: settings.inkA(0.55)
+                        Repeater {
+                            model: parent.vals.length
+                            Rectangle {
+                                required property int index
+                                readonly property bool mark: index === parent.at
+                                x: index * parent.step - (mark ? settings.heavy : settings.thin) / 2
+                                y: (parent.height - height) / 2
+                                width: mark ? settings.heavy : settings.thin
+                                height: mark ? 5 * settings.mm : 2.5 * settings.mm
+                                color: mark ? settings.accent : settings.inkA(0.4)
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onPressed: e => {
+                                settings.cfgRow = cr.index
+                                const i = Math.round(e.x / Math.max(1, parent.step))
+                                const v = parent.vals[Math.max(0, Math.min(parent.vals.length - 1, i))]
+                                if (v !== cr.value) settings.cfgSet(cr.modelData, v)
+                            }
                         }
                     }
-                    Row {          // the values, each as wide as its words; the note after them
-                        x: cfgPage.optX; y: (cfgPage.rowH - 7 * settings.mm) / 2
-                        spacing: 3 * settings.mm
+                    Text {          // the name of where the mark stands
+                        visible: !!cr.modelData.scale
+                        x: cfgPage.optX + 70 * settings.mm; y: (parent.height - height) / 2
+                        text: (settings.cfgOptions(cr.modelData).find(o => o[0] === cr.value) || ["", ""])[1]
+                        font.family: Fonts.mono; font.pixelSize: settings.title
+                        color: settings.ink
+                    }
+                    Row {          // the values: alignment holds them, so nothing is drawn to
+                        visible: !cr.modelData.scale
+                        x: cfgPage.optX; y: 0; height: parent.height
+                        spacing: 6 * settings.mm
                         Repeater {
                             model: settings.cfgOptions(cr.modelData)
                             Item {
@@ -1078,36 +1219,21 @@ PanelWindow {
                                 readonly property bool chosen: cr.value === modelData[0]
                                 // a size below the legibility target: lettered in the alert ink, still to be picked
                                 readonly property bool low: !!cr.modelData.legible && !settings.legibility(modelData[0], cr.modelData.legible).ok
-                                width: coLabel.implicitWidth + 5 * settings.mm; height: 7 * settings.mm
+                                width: coLabel.implicitWidth; height: settings.pitch
                                 Text {
                                     id: coLabel
-                                    anchors.centerIn: parent
+                                    y: (parent.height - height) / 2
                                     text: co.modelData[1]
                                     // a face lettered in itself
                                     font.family: cr.modelData.face ? co.modelData[0] : Fonts.mono
-                                    font.pixelSize: settings.font * (cr.modelData.face ? 0.9 : 0.8); font.bold: co.chosen
-                                    color: co.low ? settings.shell.theme.alert : co.chosen ? settings.ink : settings.inkA(0.7)
-                                }
-                                Rectangle {
-                                    visible: co.chosen
-                                    anchors.fill: parent
-                                    color: "transparent"
-                                    border.width: cr.here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.2 * settings.mm)
-                                    border.color: cr.here ? settings.ink : settings.inkA(0.6)
+                                    font.pixelSize: settings.title
+                                    color: co.low ? settings.shell.theme.alert : co.chosen ? settings.ink : settings.inkA(0.34)
                                 }
                                 MouseArea {
                                     anchors.fill: parent
                                     onPressed: { settings.cfgRow = cr.index; if (!co.chosen) settings.cfgSet(cr.modelData, co.modelData[0]) }
                                 }
                             }
-                        }
-                        Text {
-                            height: 7 * settings.mm
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 3 * settings.mm
-                            text: settings.rowNote(cr.modelData)
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.7
-                            color: cr.modelData.legible && !settings.legibility(cr.value, cr.modelData.legible).ok ? settings.shell.theme.alert : settings.inkA(0.6)
                         }
                     }
                     MouseArea {    // the row's name picks the row

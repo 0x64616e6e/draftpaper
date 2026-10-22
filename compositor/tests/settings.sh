@@ -119,6 +119,8 @@ ipc page touchpad
 sleep 0.3
 ipc row 5
 ipc step 1
+sleep 0.8
+if [ -n "${SHOT2:-}" ]; then shot "$t/touchpad.png"; cp "$t/touchpad.png" "$SHOT2"; fi
 ok "touchpad: scrolling at the edge, quoted, in a new [touchpad]" "$(waitfor '^scroll_method = "edge"$')" "1"
 ok "[touchpad] added once" "$(grep -c '^\[touchpad\]' "$cfg")" "1"
 ipc row 0
