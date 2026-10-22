@@ -292,11 +292,24 @@ impl Draftpaper {
         }
     }
 
-    /// Where a finger is: the touchscreen is the laptop's own panel (or, with none, the first output),
-    /// and the panel's corners turn with the output's transform.
+    /// Where a finger is. The touchscreen is the surface of one display: `[touchscreen] output` says
+    /// which, and with none it is the laptop's own panel (or, with no panel, the first output) as it
+    /// always was. The panel's corners turn with the output's transform.
+    ///
+    /// `[touchscreen] enabled = false` is set on the device itself where there is a libinput to set it
+    /// on (tty.rs); this is the same answer for the nested backend, which has none.
     fn touch_location<I: InputBackend, E: AbsolutePositionEvent<I>>(&self, event: &E) -> Option<Point<f64, Logical>> {
+        if !self.config.touchscreen.enabled {
+            return None;
+        }
         let internal = |o: &&smithay::output::Output| ["eDP", "LVDS", "DSI"].iter().any(|p| o.name().starts_with(p));
-        let output = self.space.outputs().find(internal).or_else(|| self.space.outputs().next())?;
+        let named = |o: &&smithay::output::Output| o.name() == self.config.touchscreen.output;
+        let output = self
+            .space
+            .outputs()
+            .find(named)
+            .or_else(|| self.space.outputs().find(internal))
+            .or_else(|| self.space.outputs().next())?;
         let geometry = self.space.output_geometry(output)?;
         let transform = output.current_transform();
         let size = transform.invert().transform_size(geometry.size);

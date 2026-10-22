@@ -112,6 +112,24 @@ ipc row 4
 ipc step 1
 ok "rulers: the horizontal one numbered at the bottom, quoted, in a new [rulers]" "$(waitfor '^numbers_h = "bottom"$')" "1"
 ok "theme.json carries it to the shell" "$(grep -c '"numbers_h": "bottom"' "$t/.cache/draftpaper/theme.json")" "1"
+# the touchpad and the touchscreen, each in a table of its own: a touchpad is not a mouse and a
+# touchscreen is neither, and [input] used to be read into all three (compositor/src/config.rs).
+# These are the first pages to ask for a table config.toml has never had.
+ipc page touchpad
+sleep 0.3
+ipc row 5
+ipc step 1
+ok "touchpad: scrolling at the edge, quoted, in a new [touchpad]" "$(waitfor '^scroll_method = "edge"$')" "1"
+ok "[touchpad] added once" "$(grep -c '^\[touchpad\]' "$cfg")" "1"
+ipc row 0
+ipc step 1
+ok "and tapping off, in the table the first row made" "$(waitfor '^tap = false$')" "1"
+ok "[touchpad] still added once" "$(grep -c '^\[touchpad\]' "$cfg")" "1"
+ipc page touch
+sleep 0.3
+ipc row 0
+ipc step 1
+ok "the touchscreen turned off, in a new [touchscreen]" "$(waitfor '^enabled = false$')" "1"
 ipc page idle
 sleep 0.3
 ipc row 1

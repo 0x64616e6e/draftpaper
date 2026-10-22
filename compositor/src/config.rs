@@ -1,14 +1,33 @@
 //! The compositor's settings in ~/.config/draftpaper/config.toml, next to the theme and the margin:
 //!
-//!     [input]
+//!     [input]                          # the keyboard, and what the pointer does to the focus
 //!     keyboard_layout = "us,ro"        # xkb layout(s), variant, options
 //!     keyboard_variant = ""
 //!     keyboard_options = "grp:alt_shift_toggle,ctrl:nocaps"
 //!     repeat_delay = 200               # ms
 //!     repeat_rate = 25                 # per second
-//!     tap = true                       # touchpad: tap to click
-//!     natural_scroll = true            # touchpad: content follows the fingers
 //!     focus_follows_mouse = true       # the window, and the screen, the pointer enters take the focus
+//!
+//!     [touchpad]                       # the built-in pad. `[input] tap` and `[input] natural_scroll`
+//!     tap = true                       # still set these two where this table does not
+//!     tap_and_drag = true              # tap, then tap and hold: the second tap drags
+//!     natural_scroll = false           # the content follows the fingers
+//!     disable_while_typing = true
+//!     click_method = "button-areas"    # or "clickfinger": one finger or two, anywhere on the pad
+//!     scroll_method = "two-finger"     # or "edge"
+//!     speed = 0.0                      # -1 (slow) to 1 (fast)
+//!     middle_emulation = false         # both buttons at once is the middle one
+//!     left_handed = false
+//!
+//!     [touchscreen]                    # the panel itself
+//!     enabled = true
+//!     output = ""                      # the display it is the surface of; "" the built-in panel
+//!
+//!     [pointer]                        # mice, and the TrackPoint
+//!     natural_scroll = false
+//!     speed = 0.0
+//!     middle_emulation = false
+//!     left_handed = false
 //!
 //!     [animations]                     # parking, unparking, switching workspaces
 //!     enabled = true                   # false: reduced motion, every change at once
@@ -107,6 +126,9 @@ pub struct Binding {
     pub text: String,
 }
 
+/// [input]: the keyboard, and what the pointer does to the focus. What a *device* does is its own
+/// table — a touchpad, a touchscreen and a TrackPoint are three different things, and one
+/// `natural_scroll` for all of them was one setting doing three jobs.
 #[derive(Debug, Clone)]
 pub struct Input {
     pub layout: String,
@@ -114,15 +136,57 @@ pub struct Input {
     pub options: Option<String>,
     pub repeat_delay: i32,
     pub repeat_rate: i32,
-    pub tap: bool,
     /// the window (and screen) the pointer enters takes the focus, as i3's focus_follows_mouse
     pub focus_follows_mouse: bool,
-    pub natural_scroll: bool,
 }
+
+/// [touchpad]: the built-in pad, told apart from a mouse by having fingers to tap with
+/// (`config_tap_finger_count`). `[input] tap` and `[input] natural_scroll` still set `tap` and
+/// `natural_scroll` where this table does not, so a config written before this stays true.
+#[derive(Debug, Clone)]
+pub struct Touchpad {
+    pub tap: bool,
+    /// tap, then tap and hold: the second tap drags
+    pub tap_and_drag: bool,
+    pub natural_scroll: bool,
+    /// the pad goes quiet while the keyboard is being used
+    pub disable_while_typing: bool,
+    /// "button-areas": the foot of the pad is left and right; "clickfinger": one finger or two
+    pub click_method: String,
+    /// "two-finger" or "edge"
+    pub scroll_method: String,
+    /// libinput's pointer acceleration, -1 (slow) to 1 (fast)
+    pub speed: f64,
+    pub middle_emulation: bool,
+    pub left_handed: bool,
+}
+
+/// [touchscreen]: the panel itself. There is little to set on a touch device — it reports where it
+/// was touched and that is all — so this is whether it is listened to, and which display it is the
+/// surface of (input.rs's `touch_location`; "" is the built-in panel, as it always was).
+#[derive(Debug, Clone)]
+pub struct Touchscreen {
+    pub enabled: bool,
+    pub output: String,
+}
+
+/// [pointer]: mice, and the TrackPoint. Scrolling a wheel is not scrolling a pad, which is why this
+/// is not the touchpad's table.
+#[derive(Debug, Clone)]
+pub struct Pointer {
+    pub natural_scroll: bool,
+    pub speed: f64,
+    pub middle_emulation: bool,
+    pub left_handed: bool,
+}
+
 
 #[derive(Debug, Clone)]
 pub struct Config {
     pub input: Input,
+    pub touchpad: Touchpad,
+    pub touchscreen: Touchscreen,
+    pub pointer: Pointer,
     pub bindings: Vec<Binding>,
     /// how long parking, unparking and switching workspaces take; None: no animations
     pub animations: Option<std::time::Duration>,
@@ -325,9 +389,44 @@ impl Config {
             options: s("keyboard_options"),
             repeat_delay: i("repeat_delay", 200),
             repeat_rate: i("repeat_rate", 25),
-            tap: b("tap", true),
-            natural_scroll: b("natural_scroll", false),
             focus_follows_mouse: b("focus_follows_mouse", true),
+        };
+        // [touchpad], [touchscreen], [pointer]: what each kind of device does, rather than one table
+        // read into all of them. `[input] tap` and `[input] natural_scroll` are where the touchpad's
+        // two settings used to live, so they are what this falls back to: a config written before
+        // these tables existed goes on meaning what it meant.
+        let pad = table.get("touchpad").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let pb = |k: &str, d: bool| pad.get(k).and_then(|v| v.as_bool()).unwrap_or(d);
+        let one = |t: &toml::Table, k: &str| -> f64 {
+            t.get(k).and_then(|v| v.as_float().or_else(|| v.as_integer().map(|n| n as f64))).unwrap_or(0.0).clamp(-1.0, 1.0)
+        };
+        let among = |t: &toml::Table, k: &str, ok: &[&str], d: &str| -> String {
+            let said = t.get(k).and_then(|v| v.as_str()).unwrap_or(d);
+            ok.iter().find(|o| **o == said).unwrap_or(&d).to_string()
+        };
+        let touchpad = Touchpad {
+            tap: pb("tap", b("tap", true)),
+            tap_and_drag: pb("tap_and_drag", true),
+            natural_scroll: pb("natural_scroll", b("natural_scroll", false)),
+            disable_while_typing: pb("disable_while_typing", true),
+            click_method: among(&pad, "click_method", &["button-areas", "clickfinger"], "button-areas"),
+            scroll_method: among(&pad, "scroll_method", &["two-finger", "edge"], "two-finger"),
+            speed: one(&pad, "speed"),
+            middle_emulation: pb("middle_emulation", false),
+            left_handed: pb("left_handed", false),
+        };
+        let touch = table.get("touchscreen").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let touchscreen = Touchscreen {
+            enabled: touch.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
+            output: touch.get("output").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+        };
+        let mouse = table.get("pointer").and_then(|v| v.as_table()).cloned().unwrap_or_default();
+        let mb = |k: &str, d: bool| mouse.get(k).and_then(|v| v.as_bool()).unwrap_or(d);
+        let pointer = Pointer {
+            natural_scroll: mb("natural_scroll", false),
+            speed: one(&mouse, "speed"),
+            middle_emulation: mb("middle_emulation", false),
+            left_handed: mb("left_handed", false),
         };
 
         let mut bindings: Vec<Binding> = Vec::new();
@@ -365,7 +464,7 @@ impl Config {
         // looked for, short enough that the sheet is a drawing again before you have finished thinking.
         let word_for = table.get("keys").and_then(|v| v.get("word_for")).and_then(|v| v.as_integer()).unwrap_or(1200).clamp(200, 10_000) as u64;
         let word_for = std::time::Duration::from_millis(word_for);
-        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan, legend_after, word_for })
+        Ok(Config { input, touchpad, touchscreen, pointer, bindings, animations, rules, session, scale_bar, key_plan, legend_after, word_for })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1
@@ -490,8 +589,9 @@ impl crate::state::Draftpaper {
             eprintln!("draftpaper: keyboard layout {:?}: {e:?}", input.layout);
         }
         keyboard.change_repeat_info(input.repeat_rate, input.repeat_delay);
+        let config = self.config.clone();
         if let Some(tty) = self.tty_data.as_mut() {
-            tty.configure_devices(&input);
+            tty.configure_devices(&config);
         }
     }
 }
@@ -499,6 +599,51 @@ impl crate::state::Draftpaper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A config written before the devices had tables of their own goes on meaning what it meant: the
+    /// touchpad's two settings lived in `[input]`, and that is where they are still read from when
+    /// `[touchpad]` does not say.
+    #[test]
+    fn the_touchpads_old_home_in_input_is_still_read() {
+        let old: toml::Table = toml::from_str("[input]\ntap = false\nnatural_scroll = true\n").unwrap();
+        let c = Config::from_table(&old).unwrap();
+        assert!(!c.touchpad.tap, "[input] tap still turns tapping off");
+        assert!(c.touchpad.natural_scroll, "and [input] natural_scroll still turns it on");
+        // the pointer is not the touchpad: one table never meant the other
+        assert!(!c.pointer.natural_scroll, "a mouse is not scrolled by the touchpad's setting");
+
+        // and where both are written the device's own table wins
+        let both: toml::Table = toml::from_str("[input]\ntap = false\n[touchpad]\ntap = true\n").unwrap();
+        assert!(Config::from_table(&both).unwrap().touchpad.tap);
+    }
+
+    /// A value that is not one of the ones offered is not passed to libinput: the sheet's settings
+    /// write these, but config.toml is the user's file and may say anything.
+    #[test]
+    fn a_choice_nothing_offers_falls_back_rather_than_reaching_libinput() {
+        let odd: toml::Table = toml::from_str(
+            "[touchpad]\nclick_method = \"telepathy\"\nscroll_method = \"\"\nspeed = 9.5\n",
+        )
+        .unwrap();
+        let c = Config::from_table(&odd).unwrap();
+        assert_eq!(c.touchpad.click_method, "button-areas");
+        assert_eq!(c.touchpad.scroll_method, "two-finger");
+        assert_eq!(c.touchpad.speed, 1.0, "libinput takes -1 to 1 and nothing else");
+        let slow: toml::Table = toml::from_str("[pointer]\nspeed = -4\n").unwrap();
+        assert_eq!(Config::from_table(&slow).unwrap().pointer.speed, -1.0, "an integer reads as a speed too");
+    }
+
+    /// The touchscreen is the surface of one display, and with none named it is the one it always was.
+    #[test]
+    fn the_touchscreen_is_on_by_default_and_belongs_to_no_display_in_particular() {
+        let c = Config::from_table(&toml::Table::new()).unwrap();
+        assert!(c.touchscreen.enabled);
+        assert_eq!(c.touchscreen.output, "");
+        let off: toml::Table = toml::from_str("[touchscreen]\nenabled = false\noutput = \"DP-3\"\n").unwrap();
+        let c = Config::from_table(&off).unwrap();
+        assert!(!c.touchscreen.enabled);
+        assert_eq!(c.touchscreen.output, "DP-3");
+    }
 
     #[test]
     fn default_bindings_parse() {

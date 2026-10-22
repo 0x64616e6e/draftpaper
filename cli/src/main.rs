@@ -872,5 +872,18 @@ fn config_json(p: &Paths) {
     // the text as it is set, the system's where config.toml sets none
     let shown = text::shown(p, &cfg);
     cfg.insert("text".into(), Value::Object(shown));
+    // the touchpad's two settings used to live in [input], and the compositor still reads them from
+    // there when [touchpad] does not say (compositor/src/config.rs, and the test that pins it). The
+    // settings' rows read this, so they would otherwise show a default where the old key is in force.
+    let old = |k: &str| cfg.get("input").and_then(|i| i.get(k)).cloned();
+    let carried: Vec<(&str, Option<Value>)> = [("tap", old("tap")), ("natural_scroll", old("natural_scroll"))].into();
+    let pad = cfg.entry("touchpad").or_insert_with(|| Value::Object(Default::default()));
+    if let Value::Object(pad) = pad {
+        for (k, was) in carried {
+            if let (false, Some(v)) = (pad.contains_key(k), was) {
+                pad.insert(k.into(), v);
+            }
+        }
+    }
     println!("{}", util::dumps_indent(&Value::Object(cfg), 1));
 }

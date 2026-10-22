@@ -77,7 +77,8 @@ PanelWindow {
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
     readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["text", "TEXT"], ["sheet", "SHEET"], ["rulers", "RULERS"],
-                                     ["session", "SESSION"], ["input", "INPUT"], ["idle", "IDLE · LOCK"]]
+                                     ["session", "SESSION"], ["input", "INPUT"], ["touchpad", "TOUCHPAD"], ["touch", "TOUCH"],
+                                     ["idle", "IDLE · LOCK"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
     // value when config.toml has none, and a note; `draftpaper config set` writes it, comments kept
     readonly property var cfgPages: ({
@@ -136,13 +137,40 @@ PanelWindow {
               options: [[150, "150 ms"], [200, "200 ms"], [300, "300 ms"], [400, "400 ms"]] },
             { key: "input.repeat_rate", name: "REPEAT RATE", def: 25, note: "",
               options: [[20, "20/s"], [25, "25/s"], [30, "30/s"], [40, "40/s"]] },
-            { key: "input.tap", name: "TAP TO CLICK", def: true, note: "the touchpad",
-              options: [[true, "on"], [false, "off"]] },
-            { key: "input.natural_scroll", name: "NATURAL SCROLLING", def: false, note: "the content follows the fingers",
-              options: [[false, "off"], [true, "on"]] },
             { key: "input.focus_follows_mouse", name: "FOCUS FOLLOWS THE MOUSE", def: true, note: "",
-              options: [[true, "on"], [false, "off"]] }
+              options: [[true, "on"], [false, "off"]] },
+            { key: "pointer.natural_scroll", name: "MOUSE · NATURAL SCROLLING", def: false, note: "a wheel, and the TrackPoint",
+              options: [[false, "off"], [true, "on"]] },
+            { key: "pointer.speed", name: "MOUSE · SPEED", def: 0, note: "",
+              options: settings.speeds },
+            { key: "pointer.left_handed", name: "MOUSE · LEFT-HANDED", def: false, note: "the buttons swapped",
+              options: [[false, "off"], [true, "on"]] }
         ],
+        // the built-in pad has a table of its own: a touchpad is not a mouse, and one [input] read
+        // into both was one setting doing two jobs (compositor/src/config.rs)
+        touchpad: [
+            { key: "touchpad.tap", name: "TAP TO CLICK", def: true, note: "a tap is a click, without pressing the pad",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "touchpad.tap_and_drag", name: "TAP AND DRAG", def: true, note: "tap, then tap and hold: the second tap drags",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "touchpad.natural_scroll", name: "NATURAL SCROLLING", def: false, note: "the content follows the fingers",
+              options: [[false, "off"], [true, "on"]] },
+            { key: "touchpad.disable_while_typing", name: "QUIET WHILE TYPING", def: true, note: "the heel of a hand is not a click",
+              options: [[true, "on"], [false, "off"]] },
+            { key: "touchpad.click_method", name: "CLICK", def: "button-areas", note: "where a press of the pad is left, right or middle",
+              options: [["button-areas", "by area"], ["clickfinger", "by fingers"]] },
+            { key: "touchpad.scroll_method", name: "SCROLL", def: "two-finger", note: "",
+              options: [["two-finger", "two fingers"], ["edge", "the edge"]] },
+            { key: "touchpad.speed", name: "SPEED", def: 0, note: "",
+              options: settings.speeds },
+            { key: "touchpad.middle_emulation", name: "MIDDLE BUTTON", def: false, note: "both buttons at once is the middle one",
+              options: [[false, "off"], [true, "on"]] },
+            { key: "touchpad.left_handed", name: "LEFT-HANDED", def: false, note: "the buttons swapped",
+              options: [[false, "off"], [true, "on"]] }
+        ],
+        // a touch device reports where it was touched and nothing else, so there is little to set:
+        // whether it is listened to, and which display it is the surface of
+        touch: settings.touchRows,
         idle: [
             { key: "idle.screens_off", name: "SCREENS OFF AFTER", def: 15, note: "any input wakes them",
               options: [[5, "5 min"], [10, "10 min"], [15, "15 min"], [30, "30 min"], [0, "never"]] },
@@ -152,6 +180,18 @@ PanelWindow {
               options: [[false, "off"], [true, "on"]] }
         ]
     })
+    // the speeds a pointing device is set to: libinput takes -1 (slow) to 1 (fast), and these are the
+    // five of them the sheet offers rather than a slider it has nowhere to draw
+    readonly property var speeds: [[-0.6, "slow"], [-0.3, "steady"], [0, "standard"], [0.4, "quick"], [0.8, "fast"]]
+    // the TOUCH page: whether the touchscreen is listened to, and which display it is the surface of.
+    // The displays are the ones there are now, so this is a property rather than a constant.
+    readonly property var touchRows: [
+        { key: "touchscreen.enabled", name: "TOUCHSCREEN", def: true, note: "a finger moves the pointer and presses",
+          options: [[true, "on"], [false, "off"]] },
+        { key: "touchscreen.output", name: "THE SURFACE OF", def: "", note: "which display a finger is touching",
+          options: [["", "the built-in panel"]].concat(Compositor.outputs.map(o => [o.name, o.name])) }
+    ]
+
     readonly property var cfgRows: cfgPages[page] || []
     property var cfg: null              // `draftpaper config json`
     property var cfgVals: ({})          // the rows changed, key: value

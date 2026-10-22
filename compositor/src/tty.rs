@@ -99,16 +99,64 @@ impl TtyData {
         self.renderer.import_dmabuf(dmabuf, None).is_ok()
     }
 
-    /// Tap to click and natural scrolling on every device that has them.
-    pub fn configure_devices(&mut self, input: &crate::config::Input) {
+    /// Each device set from its own table: a touchpad is not a mouse and neither is a touchscreen,
+    /// and until now one `[input]` was read into all three (config.rs's `Touchpad`, `Pointer`,
+    /// `Touchscreen`). What a device has not got is left alone — libinput says so itself, and asking
+    /// for scrolling on a touchscreen is how a setting comes to mean nothing on half the machines.
+    pub fn configure_devices(&mut self, config: &crate::config::Config) {
+        use smithay::reexports::input::{ClickMethod, DeviceCapability, ScrollMethod, SendEventsMode};
         for d in &mut self.devices {
+            // a touchpad has fingers to tap with; that is what tells it from a mouse
             if d.config_tap_finger_count() > 0 {
-                let _ = d.config_tap_set_enabled(input.tap);
+                let pad = &config.touchpad;
+                let _ = d.config_tap_set_enabled(pad.tap);
+                let _ = d.config_tap_set_drag_enabled(pad.tap_and_drag);
+                if d.config_dwt_is_available() {
+                    let _ = d.config_dwt_set_enabled(pad.disable_while_typing);
+                }
+                if d.config_click_methods().contains(&ClickMethod::Clickfinger) {
+                    let _ = d.config_click_set_method(match pad.click_method.as_str() {
+                        "clickfinger" => ClickMethod::Clickfinger,
+                        _ => ClickMethod::ButtonAreas,
+                    });
+                }
+                if d.config_scroll_methods().contains(&ScrollMethod::Edge) {
+                    let _ = d.config_scroll_set_method(match pad.scroll_method.as_str() {
+                        "edge" => ScrollMethod::Edge,
+                        _ => ScrollMethod::TwoFinger,
+                    });
+                }
+                set_pointer(d, pad.natural_scroll, pad.speed, pad.middle_emulation, pad.left_handed);
+            } else if d.has_capability(DeviceCapability::Pointer) {
+                let m = &config.pointer;
+                set_pointer(d, m.natural_scroll, m.speed, m.middle_emulation, m.left_handed);
             }
-            if d.config_scroll_has_natural_scroll() {
-                let _ = d.config_scroll_set_natural_scroll_enabled(input.natural_scroll);
+            // the touchscreen: listened to or not. Which display it is the surface of is the
+            // compositor's, not libinput's (input.rs's `touch_location`).
+            if d.has_capability(DeviceCapability::Touch) && !d.has_capability(DeviceCapability::Pointer) {
+                let mode = if config.touchscreen.enabled { SendEventsMode::ENABLED } else { SendEventsMode::DISABLED };
+                if d.config_send_events_modes().contains(mode) {
+                    let _ = d.config_send_events_set_mode(mode);
+                }
             }
         }
+    }
+}
+
+/// What any pointing device has in common: which way the content goes, how fast it moves, and the two
+/// buttons it may not have. Each is set only where libinput says the device has it.
+fn set_pointer(d: &mut smithay::reexports::input::Device, natural: bool, speed: f64, middle: bool, left: bool) {
+    if d.config_scroll_has_natural_scroll() {
+        let _ = d.config_scroll_set_natural_scroll_enabled(natural);
+    }
+    if d.config_accel_is_available() {
+        let _ = d.config_accel_set_speed(speed);
+    }
+    if d.config_middle_emulation_is_available() {
+        let _ = d.config_middle_emulation_set_enabled(middle);
+    }
+    if d.config_left_handed_is_available() {
+        let _ = d.config_left_handed_set(left);
     }
 }
 
@@ -183,10 +231,10 @@ pub fn init_tty(event_loop: &mut EventLoop<'static, Draftpaper>, data: &mut Draf
         .insert_source(LibinputInputBackend::new(libinput), |mut event, _, data| {
             data.touched = true;
             if let smithay::backend::input::InputEvent::DeviceAdded { device } = &mut event {
-                let input = data.config.input.clone();
+                let config = data.config.clone();
                 if let Some(tty) = data.tty_data.as_mut() {
                     tty.devices.push(device.clone());
-                    tty.configure_devices(&input);
+                    tty.configure_devices(&config);
                 }
             }
             data.process_input_event(event)

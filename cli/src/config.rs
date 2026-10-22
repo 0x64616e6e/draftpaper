@@ -420,6 +420,19 @@ mod tests {
 
     const FILE: &str = "theme = \"softglow\"\n\n[outputs.eDP-1]\nscale = 1.5                # 0.5 to 4\n# position = [0, 0]        # logical pixels\n\n# ---- keys ----\n[bindings]\n# \"Mod+Return\" = \"spawn alacritty\"\n\n[title]\nrevisions = true            # the revision block\n";
 
+    /// A table config.toml has never had is written, not refused: the settings' TOUCHPAD and TOUCH
+    /// pages are the first things to ask for one (qml/Settings.qml).
+    #[test]
+    fn a_table_that_is_not_there_yet_is_added() {
+        let t = set_in(FILE, "touchpad", "tap", Some("false"));
+        assert!(t.contains("[touchpad]\n"), "{t}");
+        assert!(t.contains("tap = false"), "{t}");
+        // and a second key goes into the table the first one made, not a second [touchpad]
+        let t = set_in(&t, "touchpad", "scroll_method", Some("\"edge\""));
+        assert_eq!(t.matches("[touchpad]").count(), 1, "{t}");
+        assert!(t.contains("scroll_method = \"edge\""), "{t}");
+    }
+
     #[test]
     fn replaces_keeping_the_comment() {
         let t = set_in(FILE, "outputs.eDP-1", "scale", Some("1.25"));
