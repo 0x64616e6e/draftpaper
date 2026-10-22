@@ -144,6 +144,14 @@ drawing letters its title once, in the title block.
    wallpaper grid and the displays diagram each have their own geometry and are not yet measured
    against these ladders.
 
+## Related
+
+docs/design-research.md surveys the prior art — Ulm, Swiss, Constructivist, Japanese, Isotype, Tufte,
+NeXT and Apple, the automotive glance literature — and the perception layer underneath them
+(preattentive channels, Gestalt grouping, optical alignment, colour relativity). It exists because the
+system below turned out to be necessary and not sufficient: the first mockup drawn from it was
+arithmetically right and badly composed.
+
 ## Sources
 
 - [NN/G — Visual Hierarchy in UX](https://www.nngroup.com/articles/visual-hierarchy-ux-definition/)
