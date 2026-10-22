@@ -889,6 +889,36 @@ PanelWindow {
             id: wallPage
             anchors.fill: parent
             visible: settings.page === "wallpaper"
+            // This page previews the picked picture behind the whole panel -- that is what it is for,
+            // since BRIGHTNESS, PAPER WASH and BLUR are only judgeable against the real thing. So its
+            // lettering has no fixed ground, and no one ink can sit on a photograph that is near-white
+            // at the top and dark at the foot: an adaptive colour assumes a ground that does not vary,
+            // and a picture's does (docs/design-research.md, on colour being relative).
+            //
+            // So the lettering takes paper under it and the picture shows around it -- the legend's
+            // rule, which is settled: lettering always has paper. Three blocks, because there are
+            // three places with words on this page.
+            readonly property real pad: 4 * settings.mm
+            readonly property color paper: board.t && board.t.paper ? board.t.paper : settings.shell.theme.paper
+            Rectangle {     // the headings, the rule, and the line naming the folders
+                x: settings.catX - wallPage.pad; y: board.inY + settings.gutter - wallPage.pad
+                width: board.inX + board.inW - settings.gutter - settings.catX + 2 * wallPage.pad
+                height: wallPage.topY + 4 * settings.mm - y
+                color: wallPage.paper
+            }
+            Rectangle {     // the pages
+                x: settings.catX - wallPage.pad; y: settings.bodyY - wallPage.pad
+                width: settings.catW + 2 * wallPage.pad
+                height: settings.pageList.length * settings.pitch + 2 * wallPage.pad
+                color: wallPage.paper
+            }
+            Rectangle {     // the rows
+                readonly property real rowsTop: wallPage.topY + 6 * settings.mm + wallPage.rowsView * wallPage.rowStep + 2 * settings.mm
+                x: settings.x0 - wallPage.pad; y: rowsTop - wallPage.pad
+                width: settings.cw + 2 * wallPage.pad
+                height: settings.wpRows.length * wallPage.rowH + 2 * wallPage.pad
+                color: wallPage.paper
+            }
             // below the shared heading and its rule, as every other page sits
             readonly property real topY: settings.bodyY
             // the pictures, a grid of drawings as wide as the page allows
