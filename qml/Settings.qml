@@ -666,7 +666,9 @@ PanelWindow {
             const k = e.key
             if (k !== Qt.Key_R) settings.reverting = false
             if (k === Qt.Key_Escape) settings.cancel()
-            else if (k === Qt.Key_Return || k === Qt.Key_Enter || k === Qt.Key_Space) settings.keep()
+            // two keys close the settings and no more: Return keeps, Escape goes back. Space kept
+            // them too, which the hint along the top margin never said and nothing else here does.
+            else if (k === Qt.Key_Return || k === Qt.Key_Enter) settings.keep()
             else if (k === Qt.Key_Tab || k === Qt.Key_Backtab) settings.turnPage(k === Qt.Key_Tab && !(e.modifiers & Qt.ShiftModifier) ? 1 : -1)
             else if (settings.page === "wallpaper" && (k === Qt.Key_Up || k === Qt.Key_K)) settings.wpRow = Math.max(0, settings.wpRow - 1)
             else if (settings.page === "wallpaper" && (k === Qt.Key_Down || k === Qt.Key_J)) settings.wpRow = Math.min(settings.wpRows.length, settings.wpRow + 1)
@@ -684,8 +686,14 @@ PanelWindow {
             e.accepted = true
         }
         MouseArea {
+            // nothing here dismisses. The settings are a full-screen layer surface, so a press that
+            // lands on no control lands here — and this used to cancel, which is not "close" but
+            // "put the theme, the wallpaper and config.toml back". A half-built scheme went to a
+            // stray click. Esc goes back and Return keeps, as the hint along the top margin says,
+            // and those two are the whole of it: the title block is under the board while the
+            // settings are up, so nothing on the sheet is a way out either.
+            // It still takes the press, the settings being modal: it simply does nothing with it.
             anchors.fill: parent
-            onPressed: settings.cancel()
             onWheel: w => settings.step(w.angleDelta.y < 0 || w.angleDelta.x < 0 ? 1 : -1)
         }
 
@@ -1117,7 +1125,10 @@ PanelWindow {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onPressed: { settings.row = 0; c.picked ? settings.keep() : settings.pickCard(c.index) }
+                    // a drawing is picked, and only picked: pressing the one already picked used to
+                    // keep it and close, which is a second way out by pointer and the same surprise
+                    // as the catch-all above. Return keeps (docs: the hint along the top margin).
+                    onPressed: { settings.row = 0; settings.pickCard(c.index) }
                 }
             }
         }
