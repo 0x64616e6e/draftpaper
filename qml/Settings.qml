@@ -688,12 +688,15 @@ PanelWindow {
     // further -- the margins stay the sheet's. The board under this shows the wallpaper blurred, and
     // lettering laid straight onto a photograph has no fixed contrast with it: a ground that varies
     // makes every opacity mean something different from place to place (docs/design-research.md, on
-    // colour being relative). It is the same reason the legend's paper is opaque -- settings you can
-    // read the wallpaper through are not settings.
+    // colour being relative). It is the same reason the legend's paper is opaque.
     //
-    // The wallpaper page is the exception, because there the picture is what you are choosing.
+    // Every page, the wallpaper page included. It had an exception so the picked picture could be
+    // previewed full-bleed behind the panel, and the exception cost three opaque blocks of different
+    // sizes laid over the lettering to make it readable again -- which is a box used to solve a
+    // contrast problem, and became the loudest thing on the page. One paper, no exception. The
+    // pictures are the thumbnails; what the treatments do to the sheet is seen when the settings
+    // close.
     Rectangle {
-        visible: settings.page !== "wallpaper"
         x: board.inX; y: board.inY; width: board.inW; height: board.inH
         color: board.t && board.t.paper ? board.t.paper : settings.shell.theme.paper
     }
@@ -781,44 +784,6 @@ PanelWindow {
             // It still takes the press, the settings being modal: it simply does nothing with it.
             anchors.fill: parent
             onWheel: w => settings.step(w.angleDelta.y < 0 || w.angleDelta.x < 0 ? 1 : -1)
-        }
-
-        // ---- the wallpaper page's paper ----
-        // That page previews the picked picture behind the whole panel -- that is what it is for,
-        // since BRIGHTNESS, PAPER WASH and BLUR are only judgeable against the real thing. So its
-        // lettering has no fixed ground, and no one ink can sit on a photograph that is near-white at
-        // the top and dark at the foot: an adaptive colour assumes a ground that does not vary, and a
-        // picture's does (docs/design-research.md, on colour being relative). Paper goes under the
-        // lettering and the picture shows around it -- the legend's rule, and by now a plain one:
-        // lettering always has paper.
-        //
-        // Declared here, before the lettering, so it is behind it. Inside the page it painted over
-        // the very words it is for.
-        Item {
-            id: wpPaper
-            visible: settings.page === "wallpaper"
-            anchors.fill: parent
-            readonly property real pad: 4 * settings.mm
-            readonly property color paper: board.t && board.t.paper ? board.t.paper : settings.shell.theme.paper
-            Rectangle {     // the headings, the rule, and the line naming the folders
-                x: settings.catX - wpPaper.pad; y: board.inY + settings.gutter - wpPaper.pad
-                width: board.inX + board.inW - settings.gutter - settings.catX + 2 * wpPaper.pad
-                height: settings.bodyY + 4 * settings.mm - y
-                color: wpPaper.paper
-            }
-            Rectangle {     // the pages
-                x: settings.catX - wpPaper.pad; y: settings.bodyY - wpPaper.pad
-                width: settings.catW + 2 * wpPaper.pad
-                height: settings.pageList.length * settings.pitch + 2 * wpPaper.pad
-                color: wpPaper.paper
-            }
-            Rectangle {     // the rows
-                readonly property real rowsTop: settings.bodyY + 6 * settings.mm + wallPage.rowsView * wallPage.rowStep + 2 * settings.mm
-                x: settings.x0 - wpPaper.pad; y: rowsTop - wpPaper.pad
-                width: settings.cw + 2 * wpPaper.pad
-                height: settings.wpRows.length * wallPage.rowH + 2 * wpPaper.pad
-                color: wpPaper.paper
-            }
         }
 
         // ---- the headings, and the only rule on the sheet ----
