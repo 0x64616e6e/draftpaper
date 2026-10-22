@@ -677,9 +677,10 @@ PanelWindow {
     // the board takes the theme the sheet shows: the picked drawing's
     // and the picture picked on the wallpaper page, once it has loaded
     Board {
-        // keepBlock: the sheet's own title block shows through the corner the panel used to paint over,
-        // so the quiet field below the rows ends on something real rather than running out
-        id: board; out: settings.out; t: settings.picked; keepBlock: true
+        // keepBlock false: the settings are the sheet while they are up. The board paints the whole
+        // of the frame's interior, title block included, and only the margins stay showing -- the
+        // panel is one surface rather than a thing arranged around the furniture underneath it.
+        id: board; out: settings.out; t: settings.picked; keepBlock: false
         wallpaper: settings.wp ? (settings.wpPicture ? "file://" + settings.wpPicture : "") : settings.wallpaper
     }
 
@@ -800,8 +801,10 @@ PanelWindow {
             readonly property real after: notesBody.y + (notesBody.visible ? notesBody.height + 6 * settings.mm : 0)
             visible: !!row
             x: settings.catX; y: settings.notesY
-            width: Math.min(board.block.x - settings.catX - settings.gutter,
-                            board.inX + board.inW - settings.gutter - settings.catX)
+            // a stated measure, not the width of whatever is beside it: around sixty characters at
+            // 3.5 mm, which is the line length a reader wants. It used to stop at the title block's
+            // left edge, which was the right number for the wrong reason and is now invisible.
+            width: Math.min(126 * settings.mm, board.inX + board.inW - settings.gutter - settings.catX)
             Text {
                 id: notesLabel
                 text: "NOTE"
