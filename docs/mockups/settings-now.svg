@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The settings panel as it stands at 0.7.5, drawn to measure from qml/Settings.qml.
+     One user unit is one millimetre: the sheet on eDP-1 is 300 x 187.5 mm (1280 x 800 logical
+     pixels at 4.267 px/mm), margin 4.9 mm. Theme: softglow.
+     This is the "before" of docs/interface.md. Nothing here is a proposal. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 187.5" width="1280" height="800">
+  <style>
+    text { font-family: "IBM Plex Mono", monospace; }
+    .ink   { fill: #3c3630; }
+    .faint { fill: #3c3630; fill-opacity: 0.55; }
+    .wisp  { fill: #3c3630; fill-opacity: 0.38; }
+  </style>
+
+  <!-- the sheet's paper and its margins -->
+  <rect width="300" height="187.5" fill="#d9d2c7"/>
+  <!-- the board: the frame's interior, which the settings paint over -->
+  <rect x="4.9" y="4.9" width="290.2" height="177.7" fill="#cdc6ba"/>
+  <rect x="4.9" y="4.9" width="290.2" height="177.7" fill="none" stroke="#b4442f" stroke-width="0.47"/>
+
+  <!-- ============ the page list: eleven bordered cards, 14 mm tall at a 16 mm pitch ============ -->
+  <!-- card 1 .. 11; the current one in a 0.6 mm border, the rest in 0.2 mm -->
+  <g>
+    <!-- COLOUR SCHEME (current) -->
+    <rect x="13.4" y="13.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.6"/>
+    <text x="15.4" y="18.3" class="faint" font-size="2.1" letter-spacing="0.3">SETTINGS · 1</text>
+    <text x="15.4" y="25.7" class="ink" font-size="3.08" font-weight="bold">COLOUR SCHEME</text>
+
+    <rect x="13.4" y="29.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="34.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 2</text>
+    <text x="15.4" y="41.7" class="faint" font-size="3.08">WALLPAPER</text>
+
+    <rect x="13.4" y="45.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="50.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 3</text>
+    <text x="15.4" y="57.7" class="faint" font-size="3.08">DISPLAYS</text>
+
+    <rect x="13.4" y="61.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="66.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 4</text>
+    <text x="15.4" y="73.7" class="faint" font-size="3.08">TEXT</text>
+
+    <rect x="13.4" y="77.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="82.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 5</text>
+    <text x="15.4" y="89.7" class="faint" font-size="3.08">SHEET</text>
+
+    <rect x="13.4" y="93.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="98.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 6</text>
+    <text x="15.4" y="105.7" class="faint" font-size="3.08">RULERS</text>
+
+    <rect x="13.4" y="109.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="114.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 7</text>
+    <text x="15.4" y="121.7" class="faint" font-size="3.08">SESSION</text>
+
+    <rect x="13.4" y="125.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="130.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 8</text>
+    <text x="15.4" y="137.7" class="faint" font-size="3.08">INPUT</text>
+
+    <rect x="13.4" y="141.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="146.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 9</text>
+    <text x="15.4" y="153.7" class="faint" font-size="3.08">TOUCHPAD</text>
+
+    <rect x="13.4" y="157.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="162.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 10</text>
+    <text x="15.4" y="169.7" class="faint" font-size="3.08">TOUCH</text>
+
+    <!-- the eleventh: 4.7 mm past the frame, onto the bottom margin -->
+    <rect x="13.4" y="173.8" width="42" height="14" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+    <text x="15.4" y="178.3" class="wisp" font-size="2.1" letter-spacing="0.3">SETTINGS · 11</text>
+    <text x="15.4" y="185.7" class="faint" font-size="3.08">IDLE · LOCK</text>
+  </g>
+
+  <!-- the overflow called out -->
+  <g>
+    <line x1="58" y1="182.6" x2="78" y2="182.6" stroke="#b4442f" stroke-width="0.25"/>
+    <line x1="58" y1="187.5" x2="78" y2="187.5" stroke="#b4442f" stroke-width="0.25"/>
+    <line x1="60" y1="182.6" x2="60" y2="187.5" stroke="#b4442f" stroke-width="0.5"/>
+    <text x="62" y="186.2" fill="#b4442f" font-size="2.5">4.7 mm past the frame</text>
+  </g>
+
+  <!-- ============ the page itself: the TOUCHPAD rows ============ -->
+  <g>
+    <text x="63.4" y="20" class="ink" font-size="3.08" font-weight="bold">TOUCHPAD</text>
+
+    <!-- nine rows at 12 mm, each a name, a note and a row of value cells -->
+    <g font-size="2.38">
+      <!-- row 1, the current one -->
+      <text x="63.4" y="31" class="ink" font-size="2.38">TAP TO CLICK</text>
+      <text x="63.4" y="34.4" class="wisp" font-size="1.74">a tap is a click, without pressing the pad</text>
+      <rect x="150" y="27.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.6"/>
+      <text x="158" y="32.4" class="ink" font-size="2.38">on</text>
+      <rect x="176" y="27.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="183" y="32.4" class="faint" font-size="2.38">off</text>
+
+      <text x="63.4" y="43" class="faint" font-size="2.38">TAP AND DRAG</text>
+      <rect x="150" y="39.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="158" y="44.4" class="ink" font-size="2.38">on</text>
+      <rect x="176" y="39.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="183" y="44.4" class="faint" font-size="2.38">off</text>
+
+      <text x="63.4" y="55" class="faint" font-size="2.38">NATURAL SCROLLING</text>
+      <rect x="150" y="51.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="158" y="56.4" class="faint" font-size="2.38">off</text>
+      <rect x="176" y="51.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="184" y="56.4" class="ink" font-size="2.38">on</text>
+
+      <text x="63.4" y="67" class="faint" font-size="2.38">QUIET WHILE TYPING</text>
+      <rect x="150" y="63.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="158" y="68.4" class="ink" font-size="2.38">on</text>
+      <rect x="176" y="63.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="183" y="68.4" class="faint" font-size="2.38">off</text>
+
+      <text x="63.4" y="79" class="faint" font-size="2.38">CLICK</text>
+      <rect x="150" y="75.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="154" y="80.4" class="ink" font-size="2.38">by area</text>
+      <rect x="176" y="75.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="178" y="80.4" class="faint" font-size="2.38">by fingers</text>
+
+      <text x="63.4" y="91" class="faint" font-size="2.38">SCROLL</text>
+      <rect x="150" y="87.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="152" y="92.4" class="ink" font-size="2.38">two fingers</text>
+      <rect x="176" y="87.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="180" y="92.4" class="faint" font-size="2.38">the edge</text>
+
+      <text x="63.4" y="103" class="faint" font-size="2.38">SPEED</text>
+      <rect x="150" y="99.2" width="11" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="152" y="104.4" class="faint" font-size="2.1">slow</text>
+      <rect x="163" y="99.2" width="11" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="164" y="104.4" class="faint" font-size="2.1">steady</text>
+      <rect x="176" y="99.2" width="11" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="177" y="104.4" class="ink" font-size="2.1">standard</text>
+      <rect x="189" y="99.2" width="11" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="191" y="104.4" class="faint" font-size="2.1">quick</text>
+      <rect x="202" y="99.2" width="11" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="205" y="104.4" class="faint" font-size="2.1">fast</text>
+
+      <text x="63.4" y="115" class="faint" font-size="2.38">MIDDLE BUTTON</text>
+      <rect x="150" y="111.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="158" y="116.4" class="faint" font-size="2.38">off</text>
+      <rect x="176" y="111.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="184" y="116.4" class="ink" font-size="2.38">on</text>
+
+      <text x="63.4" y="127" class="faint" font-size="2.38">LEFT-HANDED</text>
+      <rect x="150" y="123.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="158" y="128.4" class="faint" font-size="2.38">off</text>
+      <rect x="176" y="123.2" width="24" height="8" fill="none" stroke="#3c3630" stroke-width="0.2"/>
+      <text x="184" y="128.4" class="ink" font-size="2.38">on</text>
+    </g>
+  </g>
+
+  <!-- the count, lettered in the corner -->
+  <text x="222" y="172" class="wisp" font-size="2.5">10 LETTERING SIZES · 6 LINE WEIGHTS</text>
+  <text x="222" y="176" class="wisp" font-size="2.5">14 SPACINGS · 34 BORDERED BOXES</text>
+</svg>
