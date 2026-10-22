@@ -1,129 +1,127 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- The settings panel proposed in docs/interface.md, second pass. One user unit is one millimetre;
-     the sheet on eDP-1 is 300 x 187.5 mm, margin 4.9 mm. Theme: softglow.
+<!-- The settings panel, third pass: docs/interface.md's ladders under docs/design-research.md's
+     findings. One user unit is one millimetre; the sheet on eDP-1 is 300 x 187.5 mm, margin 4.9 mm.
 
-     The ladders are unchanged:
-       lettering  5 / 3.5 / 2.5 mm    heading / title / note          (ISO 3098 nominal heights)
-       rules      0.5 / 0.25 mm       heavy / thin, a 2:1 line group  (ISO 128-20)
-       spacing    2 3 4 6 8 12 16 mm
+     What the research changed, point by point:
 
-     What changed is the ink. The first pass ruled every row, which was the border-per-row mistake
-     at lower contrast; stranded each value at the far edge of the sheet; and left the bottom third
-     as residue. Here:
-       - two marks in all: one rule under the headings, one tick on the current page.
-       - name, note and value on one line, in three aligned columns. Alignment separates them;
-         nothing is drawn to do it.
-       - a row is one line, so nine rows take 72 mm instead of 108.
-       - the sheet's own title block shows through the corner the panel used to paint over
-         (Board.qml already does this: keepBlock). The quiet field is then a shape with an anchor,
-         not what was left over.
-       - the page numbers are gone. Nothing reaches a page by number, so they were ink with no
-         reading; if the digits ever become keys they come back as keys. -->
+     THE FOURTH LOOK (Neurath). A screen must say one thing at a glance. Nine permanent notes said
+     nine. The note now belongs to the row you are on and lives in one fixed place: the notes
+     corner, where a drawing has always put them. Nothing moves when you change rows; one field
+     changes what it reads.
+
+     ONE CHANNEL PER MESSAGE (Tufte, 1+1=3). The current row is marked once, with an accent tick. Not a
+     tick and a weight and a fill. The current page is marked once: full ink against faint.
+
+     HUE FOR ATTENTION, NEVER FOR MAGNITUDE (preattentive evidence). One accent mark on the sheet,
+     and it is the answer to "where am I". The frame's red, used once, is a Constructivist economy:
+     a restricted palette makes a single accent enormous.
+
+     MAGNITUDE BY POSITION (preattentive evidence, Isotype). SPEED is an ordered quantity, so it is
+     drawn as a position along a scale, not as five words of equal weight. A different kind of value
+     gets a different kind of mark.
+
+     EMPTINESS MUST HOLD SOMETHING OPEN (ma, Hara). The four corners each have work: the pages, the
+     rows, the note, and the sheet's own title block showing through (Board.qml's keepBlock). The
+     weight sits off-centre, top-left to bottom-right, rather than evenly over a field.
+
+     RHYTHM, NOT A METRONOME (against Swiss coldness). 16 mm of air under the headings and above the
+     notes; 8 mm between rows. Three intervals from the one ladder, not one interval everywhere. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 187.5" width="1280" height="800">
   <style>
     text { font-family: "IBM Plex Mono", monospace; }
-    .ink   { fill: #3c3630; }
-    .mid   { fill: #3c3630; fill-opacity: 0.62; }
-    .wisp  { fill: #3c3630; fill-opacity: 0.34; }
-    .page  { fill: #3c3630; fill-opacity: 0.52; }
-    .rule  { stroke: #3c3630; }
+    .ink    { fill: #3c3630; }
+    .mid    { fill: #3c3630; fill-opacity: 0.62; }
+    .page   { fill: #3c3630; fill-opacity: 0.50; }
+    .wisp   { fill: #3c3630; fill-opacity: 0.34; }
+    .rule   { stroke: #3c3630; }
+    .accent { stroke: #b4442f; }
   </style>
 
   <rect width="300" height="187.5" fill="#d9d2c7"/>
   <rect x="4.9" y="4.9" width="290.2" height="177.7" fill="#cdc6ba"/>
   <rect x="4.9" y="4.9" width="290.2" height="177.7" fill="none" stroke="#b4442f" stroke-width="0.47"/>
 
-  <!-- the hint the sheet already letters along its top margin, where it already letters it -->
+  <!-- the hint, where the sheet already letters it -->
   <text x="150" y="3.4" class="wisp" font-size="2.5" text-anchor="middle">↑↓ rows · ←→ pick · tab next page · enter keep · esc back</text>
 
-  <!-- ===================== the headings, and the one rule =====================
-       The rule runs the whole measure, under both headings: one mark, tying the two columns
-       together, which is the thing the first pass never did. -->
+  <!-- ===== the headings, and the only rule on the sheet ===== -->
   <text x="12.9" y="22" class="mid" font-size="5" letter-spacing="0.6">SETTINGS</text>
   <text x="68.9" y="22" class="ink" font-size="5" letter-spacing="0.6">TOUCHPAD</text>
   <text x="287.1" y="22" class="wisp" font-size="2.5" text-anchor="end">ELAN0676 · 114 × 58 mm</text>
   <line x1="12.9" y1="25" x2="287.1" y2="25" class="rule" stroke-width="0.25"/>
 
-  <!-- ===================== the pages =====================
-       Lettering at an 8 mm pitch, no boxes, no numbers. The current one is in full ink with a
-       short heavy tick in the gutter, and stays in its place in the list. -->
+  <!-- ===== the pages: 8 mm pitch, no boxes, no numbers, one channel ===== -->
   <g font-size="3.5">
-    <text x="12.9" y="35.2" class="page">COLOUR SCHEME</text>
-    <text x="12.9" y="43.2" class="page">WALLPAPER</text>
-    <text x="12.9" y="51.2" class="page">DISPLAYS</text>
-    <text x="12.9" y="59.2" class="page">TEXT</text>
-    <text x="12.9" y="67.2" class="page">SHEET</text>
-    <text x="12.9" y="75.2" class="page">RULERS</text>
-    <text x="12.9" y="83.2" class="page">SESSION</text>
-    <text x="12.9" y="91.2" class="page">INPUT</text>
-
-    <line x1="8.9" y1="98" x2="11.9" y2="98" class="rule" stroke-width="0.5"/>
-    <text x="12.9" y="99.2" class="ink">TOUCHPAD</text>
-
-    <text x="12.9" y="107.2" class="page">TOUCH</text>
-    <text x="12.9" y="115.2" class="page">IDLE · LOCK</text>
+    <text x="12.9" y="41.2" class="page">COLOUR SCHEME</text>
+    <text x="12.9" y="49.2" class="page">WALLPAPER</text>
+    <text x="12.9" y="57.2" class="page">DISPLAYS</text>
+    <text x="12.9" y="65.2" class="page">TEXT</text>
+    <text x="12.9" y="73.2" class="page">SHEET</text>
+    <text x="12.9" y="81.2" class="page">RULERS</text>
+    <text x="12.9" y="89.2" class="page">SESSION</text>
+    <text x="12.9" y="97.2" class="page">INPUT</text>
+    <text x="12.9" y="105.2" class="ink">TOUCHPAD</text>
+    <text x="12.9" y="113.2" class="page">TOUCH</text>
+    <text x="12.9" y="121.2" class="page">IDLE · LOCK</text>
   </g>
 
-  <!-- ===================== the rows =====================
-       One line each: the name, the note it needs, and the values. Three columns held by
-       alignment alone. The chosen value is the only thing in full ink on its line, so the
-       column of answers reads straight down without a single mark to guide it. -->
-  <g>
-    <!-- the row the keys are on, marked as the page is: a tick, and full ink on the name -->
-    <line x1="64.9" y1="34" x2="67.9" y2="34" class="rule" stroke-width="0.5"/>
-    <text x="68.9" y="35.2" class="ink" font-size="3.5">TAP TO CLICK</text>
-    <text x="110.9" y="35.2" class="wisp" font-size="2.5">a tap is a click, without pressing the pad</text>
-    <text x="182.9" y="35.2" class="ink" font-size="3.5">on</text>
-    <text x="196.9" y="35.2" class="wisp" font-size="3.5">off</text>
+  <!-- ===== the rows ===== -->
+  <g font-size="3.5">
+    <text x="68.9" y="41.2" class="mid">TAP TO CLICK</text>
+    <text x="196.9" y="41.2" class="ink">on</text>
+    <text x="232.9" y="41.2" class="wisp">off</text>
 
-    <text x="68.9" y="43.2" class="mid" font-size="3.5">TAP AND DRAG</text>
-    <text x="110.9" y="43.2" class="wisp" font-size="2.5">tap, then tap and hold: the second tap drags</text>
-    <text x="182.9" y="43.2" class="ink" font-size="3.5">on</text>
-    <text x="196.9" y="43.2" class="wisp" font-size="3.5">off</text>
+    <text x="68.9" y="49.2" class="mid">TAP AND DRAG</text>
+    <text x="196.9" y="49.2" class="ink">on</text>
+    <text x="232.9" y="49.2" class="wisp">off</text>
 
-    <text x="68.9" y="51.2" class="mid" font-size="3.5">NATURAL SCROLLING</text>
-    <text x="110.9" y="51.2" class="wisp" font-size="2.5">the content follows the fingers</text>
-    <text x="182.9" y="51.2" class="wisp" font-size="3.5">off</text>
-    <text x="196.9" y="51.2" class="ink" font-size="3.5">on</text>
+    <text x="68.9" y="57.2" class="mid">NATURAL SCROLLING</text>
+    <text x="196.9" y="57.2" class="wisp">off</text>
+    <text x="232.9" y="57.2" class="ink">on</text>
 
-    <text x="68.9" y="59.2" class="mid" font-size="3.5">QUIET WHILE TYPING</text>
-    <text x="110.9" y="59.2" class="wisp" font-size="2.5">the heel of a hand is not a click</text>
-    <text x="182.9" y="59.2" class="ink" font-size="3.5">on</text>
-    <text x="196.9" y="59.2" class="wisp" font-size="3.5">off</text>
+    <text x="68.9" y="65.2" class="mid">QUIET WHILE TYPING</text>
+    <text x="196.9" y="65.2" class="ink">on</text>
+    <text x="232.9" y="65.2" class="wisp">off</text>
 
-    <text x="68.9" y="67.2" class="mid" font-size="3.5">CLICK</text>
-    <text x="110.9" y="67.2" class="wisp" font-size="2.5">where a press of the pad is left or right</text>
-    <text x="182.9" y="67.2" class="ink" font-size="3.5">by area</text>
-    <text x="212.9" y="67.2" class="wisp" font-size="3.5">by fingers</text>
+    <text x="68.9" y="73.2" class="mid">CLICK</text>
+    <text x="196.9" y="73.2" class="ink">by area</text>
+    <text x="232.9" y="73.2" class="wisp">by fingers</text>
 
-    <text x="68.9" y="75.2" class="mid" font-size="3.5">SCROLL</text>
-    <text x="110.9" y="75.2" class="wisp" font-size="2.5">how two fingers move the page</text>
-    <text x="182.9" y="75.2" class="ink" font-size="3.5">two fingers</text>
-    <text x="228.9" y="75.2" class="wisp" font-size="3.5">the edge</text>
+    <text x="68.9" y="81.2" class="mid">SCROLL</text>
+    <text x="196.9" y="81.2" class="ink">two fingers</text>
+    <text x="240.9" y="81.2" class="wisp">the edge</text>
 
-    <text x="68.9" y="83.2" class="mid" font-size="3.5">SPEED</text>
-    <text x="110.9" y="83.2" class="wisp" font-size="2.5">how far a finger carries the pointer</text>
-    <text x="182.9" y="83.2" class="wisp" font-size="3.5">slow</text>
-    <text x="205.9" y="83.2" class="wisp" font-size="3.5">steady</text>
-    <text x="232.9" y="83.2" class="ink" font-size="3.5">standard</text>
-    <text x="255.9" y="83.2" class="wisp" font-size="3.5">quick</text>
-    <text x="272.9" y="83.2" class="wisp" font-size="3.5">fast</text>
+    <!-- the row the keys are on: marked once, in the one accent on the sheet.
+         SPEED is an ordered quantity, so it is a position along a scale. -->
+    <line x1="64.9" y1="88" x2="67.9" y2="88" class="accent" stroke-width="0.7"/>
+    <text x="68.9" y="89.2" class="ink">SPEED</text>
+    <line x1="196.9" y1="88" x2="262.9" y2="88" class="rule" stroke-width="0.25"/>
+    <line x1="196.9" y1="86.8" x2="196.9" y2="89.2" class="rule" stroke-width="0.25"/>
+    <line x1="213.4" y1="86.8" x2="213.4" y2="89.2" class="rule" stroke-width="0.25"/>
+    <line x1="229.9" y1="85.5" x2="229.9" y2="90.5" class="accent" stroke-width="0.7"/>
+    <line x1="246.4" y1="86.8" x2="246.4" y2="89.2" class="rule" stroke-width="0.25"/>
+    <line x1="262.9" y1="86.8" x2="262.9" y2="89.2" class="rule" stroke-width="0.25"/>
+    <text x="266.9" y="89.2" class="ink">standard</text>
 
-    <text x="68.9" y="91.2" class="mid" font-size="3.5">MIDDLE BUTTON</text>
-    <text x="110.9" y="91.2" class="wisp" font-size="2.5">both buttons at once is the middle one</text>
-    <text x="182.9" y="91.2" class="wisp" font-size="3.5">off</text>
-    <text x="196.9" y="91.2" class="ink" font-size="3.5">on</text>
+    <text x="68.9" y="97.2" class="mid">MIDDLE BUTTON</text>
+    <text x="196.9" y="97.2" class="wisp">off</text>
+    <text x="232.9" y="97.2" class="ink">on</text>
 
-    <text x="68.9" y="99.2" class="mid" font-size="3.5">LEFT-HANDED</text>
-    <text x="110.9" y="99.2" class="wisp" font-size="2.5">the buttons swapped</text>
-    <text x="182.9" y="99.2" class="wisp" font-size="3.5">off</text>
-    <text x="196.9" y="99.2" class="ink" font-size="3.5">on</text>
+    <text x="68.9" y="105.2" class="mid">LEFT-HANDED</text>
+    <text x="196.9" y="105.2" class="wisp">off</text>
+    <text x="232.9" y="105.2" class="ink">on</text>
   </g>
 
-  <!-- ===================== the sheet's own title block, showing through =====================
-       130 x 36 mm in the frame's bottom-right corner (TitleBlock.qml). The settings paint over it
-       today (keepBlock: false); letting it stand gives the quiet field below the rows something
-       to end on, and it is the product rather than decoration. Drawn here as it really reads. -->
+  <!-- ===== the notes corner =====
+       One field, in the place a drawing keeps its notes, reading whatever row you are on. The nine
+       permanent captions are gone: at a glance the sheet says one thing, and the detail is here on
+       the next look. Nothing moves; one field changes what it reads. -->
+  <text x="12.9" y="140" class="wisp" font-size="2.5" letter-spacing="0.3">NOTE</text>
+  <text x="12.9" y="148" class="mid" font-size="3.5">how far a finger carries the pointer:</text>
+  <text x="12.9" y="155" class="mid" font-size="3.5">libinput's acceleration, −1 to 1.</text>
+  <text x="12.9" y="165" class="wisp" font-size="2.5">[touchpad] speed = 0.0</text>
+
+  <!-- ===== the sheet's own title block, showing through ===== -->
   <g>
     <line x1="165.1" y1="146.6" x2="295.1" y2="146.6" class="rule" stroke-width="0.5"/>
     <line x1="165.1" y1="146.6" x2="165.1" y2="182.6" class="rule" stroke-width="0.5"/>
@@ -131,16 +129,16 @@
     <line x1="165.1" y1="170.6" x2="295.1" y2="170.6" class="rule" stroke-width="0.25"/>
     <line x1="208.4" y1="146.6" x2="208.4" y2="182.6" class="rule" stroke-width="0.25"/>
     <line x1="251.7" y1="146.6" x2="251.7" y2="182.6" class="rule" stroke-width="0.25"/>
-    <g font-size="2.5">
-      <text x="167.6" y="151" class="wisp">PROJECT</text>
-      <text x="210.9" y="151" class="wisp">POWER</text>
-      <text x="254.2" y="151" class="wisp">NETWORK</text>
-      <text x="167.6" y="163" class="wisp">DRAWN</text>
-      <text x="210.9" y="163" class="wisp">CPU / MEM</text>
-      <text x="254.2" y="163" class="wisp">TEMP</text>
-      <text x="167.6" y="175" class="wisp">SCALE</text>
-      <text x="210.9" y="175" class="wisp">PROFILE</text>
-      <text x="254.2" y="175" class="wisp">SHEET</text>
+    <g font-size="2.5" class="wisp">
+      <text x="167.6" y="151">PROJECT</text>
+      <text x="210.9" y="151">POWER</text>
+      <text x="254.2" y="151">NETWORK</text>
+      <text x="167.6" y="163">DRAWN</text>
+      <text x="210.9" y="163">CPU / MEM</text>
+      <text x="254.2" y="163">TEMP</text>
+      <text x="167.6" y="175">SCALE</text>
+      <text x="210.9" y="175">PROFILE</text>
+      <text x="254.2" y="175">SHEET</text>
     </g>
     <g font-size="3.5" class="mid">
       <text x="167.6" y="156">SIGNAL</text>
