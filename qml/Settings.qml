@@ -823,8 +823,10 @@ PanelWindow {
     readonly property real mainY: padTop
     readonly property real rowPitch: 68        // 16 px of padding above and below a two-line row
     // how deep the page showing is, so the scroller knows how far it goes
-    readonly property real pageDeep: cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64 : 0
-    property real cfgTop: 0
+    readonly property real pageDeep: cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64
+        : page === "scheme" ? builderY + rows.length * rowH + 64 : 0
+    // where a page's content begins: under the head, wherever the head's description leaves it
+    readonly property real cfgTop: pageHead.foot + 24 + (cfgPage.bandH || 0)
 
     // kept for the pages that still set themselves out their own way (the drawings, the wallpaper
     // grid, the displays plan): these are their numbers, not the canvas's
@@ -833,8 +835,8 @@ PanelWindow {
     readonly property real cardGap: 5 * mm
     readonly property real cardW: Math.min(70 * mm, (mainW - (cards.length - 1) * cardGap) / Math.max(1, cards.length))
     readonly property real cardH: cardW * height / Math.max(1, width)
-    readonly property real builderY: mainY + 56 + cardH + 40
-    readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (appY + appH - 40 - builderY) / rows.length))
+    readonly property real builderY: cfgTop + 22 + cardH + 40
+    readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (appH - barH - 64 - (builderY - cfgTop) ) / rows.length))
     readonly property int most: Math.max(8, ...rows.map(k => (options[k] || []).length))
     readonly property real cellW: Math.min(24 * mm, (mainW - 34 * mm) / most)
 
@@ -1364,9 +1366,6 @@ PanelWindow {
             // the Displays page: the displays as arranged at the scales picked, to scale, above the rows
             readonly property bool arranging: settings.page === "displays" && settings.dispOutputs.length > 0
             readonly property real bandH: arranging ? 52 * settings.mm : settings.page === "text" ? 40 * settings.mm : 0
-            onBandHChanged: settings.cfgTop = pageHead.foot + 24 + bandH
-            Component.onCompleted: settings.cfgTop = pageHead.foot + 24 + bandH
-            Connections { target: pageHead; function onFootChanged() { settings.cfgTop = pageHead.foot + 24 + cfgPage.bandH } }
             Item {
                 id: arrangement
                 visible: cfgPage.arranging
@@ -1581,7 +1580,7 @@ PanelWindow {
 
         // the drawings
         Text {
-            x: settings.mainX; y: board.inY + settings.gutter
+            x: settings.mainX; y: pageHead.foot + 24
             text: "THEMES"
             font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.3 * settings.mm; font.bold: settings.row === 0
             color: settings.row === 0 ? settings.ink : settings.inkA(0.6)
@@ -1594,7 +1593,7 @@ PanelWindow {
                 readonly property var modelData: settings.cards[index]
                 readonly property bool picked: index === settings.card
                 x: settings.mainX + index * (settings.cardW + settings.cardGap)
-                y: board.inY + settings.gutter + 6 * settings.mm
+                y: pageHead.foot + 24 + 22
                 width: settings.cardW; height: settings.cardH
                 Desktop { anchors.fill: parent; t: c.modelData }
                 Rectangle {
