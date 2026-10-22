@@ -14,6 +14,17 @@ Singleton {
         if (chosen && all.indexOf(chosen) >= 0) return chosen
         return all.indexOf("IBM Plex Mono") >= 0 ? "IBM Plex Mono" : "DejaVu Sans Mono"
     }
+    // the interface face: [text] interface when it is installed, else IBM Plex Sans, else what the
+    // system has. Only the settings letter in it -- the sheet itself is lettered in one face, which is
+    // the mono above; a drawing is lettered, an application is set.
+    property string chosenIface: ""
+    readonly property string iface: {
+        const all = Qt.fontFamilies()
+        if (chosenIface && all.indexOf(chosenIface) >= 0) return chosenIface
+        for (const f of ["IBM Plex Sans", "Noto Sans", "DejaVu Sans"])
+            if (all.indexOf(f) >= 0) return f
+        return "sans-serif"
+    }
     // glyphs (volume, battery, Wi-Fi...): a Nerd Font's monospaced variant, the symbols-only one or Plex's
     // own (BlexMono) first; "" when none is installed, and the shell letters words instead
     readonly property string glyph: {
@@ -52,7 +63,11 @@ Singleton {
         printErrors: false
         onFileChanged: reload()
         onTextChanged: {
-            try { fonts.chosen = (JSON.parse(text()).text || {}).monospace || "" } catch (e) {}
+            try {
+                const t = JSON.parse(text()).text || {}
+                fonts.chosen = t.monospace || ""
+                fonts.chosenIface = t.interface || ""
+            } catch (e) {}
         }
     }
 }
