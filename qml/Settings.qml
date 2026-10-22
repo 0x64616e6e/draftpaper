@@ -679,7 +679,7 @@ PanelWindow {
                         settings.original = settings.shown = cur ? cur.name : (all[0] ? all[0].name : "")
                     }
                     const at = settings.cards.findIndex(t => t.name === (keepName || settings.original))
-                    settings.card = at >= 0 ? at : 0
+                    settings.sheetWhite = at >= 0 ? at : 0
                 } catch (e) {}
                 if (!settings.custom) settings.requestScheme()
             }
@@ -713,9 +713,9 @@ PanelWindow {
                         t.label = "Custom · " + t.label
                         const wasCustom = settings.isCustom
                         settings.custom = t
-                        if (wasCustom) settings.card = settings.cards.length - 1
+                        if (wasCustom) settings.sheetWhite = settings.cards.length - 1
                         // the current theme is the custom one: pick it
-                        else if (settings.original === "custom" && settings.row === 0) settings.card = settings.cards.length - 1
+                        else if (settings.original === "custom" && settings.row === 0) settings.sheetWhite = settings.cards.length - 1
                     }
                 } catch (e) {}
                 if (settings.asked < settings.wanted) settings.startScheme()
@@ -744,66 +744,47 @@ PanelWindow {
         wallpaper: settings.wp ? (settings.wpPicture ? "file://" + settings.wpPicture : "") : settings.wallpaper
     }
 
-    // The settings' own paper: the theme's, opaque, over the whole of the frame's interior and no
-    // further -- the margins stay the sheet's. The board under this shows the wallpaper blurred, and
-    // lettering laid straight onto a photograph has no fixed contrast with it: a ground that varies
-    // makes every opacity mean something different from place to place (docs/design-research.md, on
-    // colour being relative). It is the same reason the legend's paper is opaque.
-    //
-    // Every page, the wallpaper page included. It had an exception so the picked picture could be
-    // previewed full-bleed behind the panel, and the exception cost three opaque blocks of different
-    // sizes laid over the lettering to make it readable again -- which is a box used to solve a
-    // contrast problem, and became the loudest thing on the page. One paper, no exception. The
-    // pictures are the thumbnails; what the treatments do to the sheet is seen when the settings
-    // close.
+    // The application's body, over the whole of the frame's interior and no further -- the margins
+    // stay the sheet's. It is the canvas's own #F3F3F0 on every theme: a settings application looks
+    // like itself, and the sheet behind it is what changes when a drawing is picked.
     Rectangle {
         x: board.inX; y: board.inY; width: board.inW; height: board.inH
-        color: board.t && board.t.paper ? board.t.paper : settings.shell.theme.paper
+        color: settings.bodyBg
     }
 
     // ---- the layout ----
-    // Built to the Window Manager Settings canvas. Its sizes are CSS pixels at a 1440-wide artboard
-    // and are used here as logical pixels, which is the one place on the sheet that is not measured
-    // in whole millimetres (docs/interface.md): the settings are the shell's alone, and the canvas
-    // is a pixel drawing.
-    //
-    // Its colours are roles, not hexes. Page one of this panel picks the theme, so a panel fixed at
-    // the canvas's light greys would stay light while you chose a dark drawing. #F3F3F0 is the
-    // paper, #EAEBE7 the chrome's shade, #FBFBF9 a field, #16171A the ink and #2B45B5 whatever the
-    // theme lights things with.
+    // Built to the Window Manager Settings canvas, to its own numbers. Its sizes are CSS pixels at a
+    // 1440-wide artboard and are used here as logical pixels; its colours are its own, literally, on
+    // every theme. A settings application looks like itself -- the sheet behind it is what changes
+    // when a drawing is picked.
     readonly property real dpr: board.dpr
-    readonly property color ink: board.ink
-    function inkA(a) { return Qt.rgba(ink.r, ink.g, ink.b, a) }
-    readonly property color accent: board.t && board.t.strong ? board.t.strong : shell.theme.accent
-    readonly property color paper: board.t && board.t.paper ? board.t.paper : shell.theme.paper
-    readonly property color chrome: board.t && board.t.paper_shade ? board.t.paper_shade : inkA(0.06)
-    readonly property color field: board.t && board.t.paper_light ? board.t.paper_light : inkA(0.03)
-    readonly property color line: inkA(0.18)            // #D3D5CF, the ordinary rule
-    readonly property color edge: inkA(0.3)             // #C9CCC5, a field's border
-    readonly property color firm: inkA(0.62)            // #B9BCB5, a button's border
-    function hover(a) { return Qt.rgba(ink.r, ink.g, ink.b, a) }
-
-    // The canvas letters its accent on its page: #2B45B5 on #F3F3F0, which is a long way apart. A
-    // theme's `strong` is what it lights things with and carries no such promise -- on softglow it is
-    // a pale amber that disappears on the paper. So the accent is used where it reads and the ink
-    // stands in where it does not. Colour is relative; a token is not a contrast
-    // (docs/design-research.md).
-    function lum(c) {
-        const f = v => { const s = v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); return s }
-        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b)
-    }
-    function apart(a, b) {
-        const x = lum(a), y = lum(b)
-        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05)
-    }
-    // the accent where it is legible on the panel's paper, the ink where it is not
-    readonly property color mark: apart(accent, paper) >= 3 ? accent : inkA(0.8)
+    // the canvas names its two faces; the sheet's own [text] choices do not reach this application
+    readonly property string sans: Qt.fontFamilies().indexOf("IBM Plex Sans") >= 0 ? "IBM Plex Sans" : "Noto Sans"
+    readonly property string code: Qt.fontFamilies().indexOf("IBM Plex Mono") >= 0 ? "IBM Plex Mono" : "DejaVu Sans Mono"
+    readonly property color bodyBg: "#F3F3F0"      // the body
+    readonly property color chrome: "#EAEBE7"      // the header and the sidebar
+    readonly property color sheetWhite: "#FBFBF9"  // a field, a nav item in use, a knob
+    readonly property color fieldBg: "#F6F6F3"     // the search
+    readonly property color line: "#D3D5CF"        // the ordinary rule
+    readonly property color edge: "#C9CCC5"        // a field's border
+    readonly property color firm: "#B9BCB5"        // a ghost button's border
+    readonly property color ink: "#16171A"         // the text, and every strong line
+    readonly property color ink2: "#2A2C30"        // a nav item not in use
+    readonly property color ink3: "#575B60"        // a hint, a value
+    readonly property color ink4: "#63676C"        // a label, a placeholder, a number
+    readonly property color accent: "#2B45B5"
+    readonly property color accentDark: "#1E3290"
+    readonly property color hatch: "#C6C9C2"
+    readonly property color plan: "#E9EAE6"
+    readonly property color navHover: "#E1E2DD"
+    readonly property color ghostHover: "#E6E7E2"
+    function inkA(a) { return Qt.rgba(0.086, 0.09, 0.102, a) }
 
     // type, as the canvas sets it
     readonly property real fTitle: 40          // the page's name
     readonly property real fLead: 15           // its description
     readonly property real fRow: 14            // a row's label, a nav item, a button
-    readonly property real fSmall: 13          // the search field
+    readonly property real fSmall: 13          // the search field, a link
     readonly property real fHint: 12           // a hint, a mono value, the status
     readonly property real fTag: 11            // an uppercase mono label, a nav number
 
@@ -812,31 +793,28 @@ PanelWindow {
     readonly property real appY: board.inY
     readonly property real appW: board.inW
     readonly property real appH: board.inH
-    readonly property real barH: 64            // the header
-    readonly property real sideW: Math.min(240, Math.round(appW * 0.22))
-    readonly property real navH: 44            // a nav item, a button: the canvas's touch target
-    readonly property real padX: 56            // the content's padding
+    readonly property real barH: 64            // min-height, padding 10px 32px
+    readonly property real sideW: 240          // flex 1 1 240px
+    readonly property real navH: 44
+    readonly property real padX: 56            // main's padding: 48px 56px 64px
     readonly property real padTop: 48
-    // inside the scroller: the column is placed, the content is laid out from its own corner
     readonly property real mainX: padX
     readonly property real mainW: appW - sideW - 2 * padX
     readonly property real mainY: padTop
-    readonly property real rowPitch: 68        // 16 px of padding above and below a two-line row
     // how deep the page showing is, so the scroller knows how far it goes
     readonly property real pageDeep: cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64
         : page === "scheme" ? builderY + rows.length * rowH + 64 : 0
-    // where a page's content begins: under the head, wherever the head's description leaves it
+    readonly property real rowPitch: 69        // 16px padding, a 14px label over a 12px hint
     readonly property real cfgTop: pageHead.foot + 24 + (cfgPage.bandH || 0)
 
-    // kept for the pages that still set themselves out their own way (the drawings, the wallpaper
-    // grid, the displays plan): these are their numbers, not the canvas's
+    // kept for the pages that still set themselves out their own way
     readonly property real gutter: 8 * mm
     readonly property real font: 2.8 * mm
     readonly property real cardGap: 5 * mm
     readonly property real cardW: Math.min(70 * mm, (mainW - (cards.length - 1) * cardGap) / Math.max(1, cards.length))
     readonly property real cardH: cardW * height / Math.max(1, width)
     readonly property real builderY: cfgTop + 22 + cardH + 40
-    readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (appH - barH - 64 - (builderY - cfgTop) ) / rows.length))
+    readonly property real rowH: Math.max(8 * mm, Math.min(12 * mm, (appH - barH - 64 - (builderY - cfgTop)) / rows.length))
     readonly property int most: Math.max(8, ...rows.map(k => (options[k] || []).length))
     readonly property real cellW: Math.min(24 * mm, (mainW - 34 * mm) / most)
 
@@ -914,15 +892,15 @@ PanelWindow {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Draftpaper"
-                    font.family: Fonts.iface; font.pixelSize: 15; font.weight: Font.DemiBold
+                    font.family: settings.sans; font.pixelSize: 15; font.weight: Font.DemiBold
                     font.letterSpacing: -0.15
                     color: settings.ink
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Settings"
-                    font.family: Fonts.mono; font.pixelSize: settings.fHint
-                    color: settings.inkA(0.55)
+                    font.family: settings.code; font.pixelSize: settings.fHint
+                    color: settings.ink4
                 }
             }
 
@@ -933,18 +911,18 @@ PanelWindow {
                     anchors.verticalCenter: parent.verticalCenter
                     rightPadding: 8
                     text: settings.dirty ? "Unapplied changes" : "Up to date"
-                    font.family: Fonts.mono; font.pixelSize: settings.fHint
-                    color: settings.dirty ? settings.mark : settings.inkA(0.55)
+                    font.family: settings.code; font.pixelSize: settings.fHint
+                    color: settings.dirty ? settings.accent : settings.ink4
                 }
                 Rectangle {     // Revert
                     width: revertLabel.implicitWidth + 40; height: settings.navH
-                    color: revertArea.containsMouse && settings.dirty ? settings.hover(0.06) : "transparent"
+                    color: revertArea.containsMouse && settings.dirty ? settings.ghostHover : "transparent"
                     border.width: 1; border.color: settings.firm
                     opacity: settings.dirty ? 1 : 0.45
                     Text {
                         id: revertLabel
                         anchors.centerIn: parent; text: "Revert"
-                        font.family: Fonts.iface; font.pixelSize: settings.fRow; font.weight: Font.Medium
+                        font.family: settings.sans; font.pixelSize: settings.fRow; font.weight: Font.Medium
                         color: settings.ink
                     }
                     MouseArea {
@@ -962,8 +940,8 @@ PanelWindow {
                     Text {
                         id: applyLabel
                         anchors.centerIn: parent; text: "Apply"
-                        font.family: Fonts.iface; font.pixelSize: settings.fRow; font.weight: Font.Medium
-                        color: settings.dirty ? settings.paper : settings.ink
+                        font.family: settings.sans; font.pixelSize: settings.fRow; font.weight: Font.Medium
+                        color: settings.dirty ? settings.sheetWhite : settings.ink
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -985,14 +963,14 @@ PanelWindow {
             Rectangle {     // the search field
                 x: 20; y: 28
                 width: parent.width - 40; height: 40
-                color: settings.field
+                color: settings.fieldBg
                 border.width: 1; border.color: settings.edge
                 Canvas {
                     id: lens
                     width: 14; height: 14; x: 12; anchors.verticalCenter: parent.verticalCenter
                     onPaint: {
                         const c = getContext("2d")
-                        c.reset(); c.strokeStyle = settings.inkA(0.6); c.lineWidth = 1.4
+                        c.reset(); c.strokeStyle = settings.ink3; c.lineWidth = 1.4
                         c.beginPath(); c.arc(6, 6, 4.5, 0, 2 * Math.PI); c.stroke()
                         c.beginPath(); c.moveTo(9.4, 9.4); c.lineTo(13, 13); c.stroke()
                     }
@@ -1002,7 +980,7 @@ PanelWindow {
                     id: search
                     anchors { left: parent.left; leftMargin: 34; right: parent.right; rightMargin: 10
                               verticalCenter: parent.verticalCenter }
-                    font.family: Fonts.iface; font.pixelSize: settings.fSmall
+                    font.family: settings.sans; font.pixelSize: settings.fSmall
                     color: settings.ink
                     selectByMouse: true
                     onTextChanged: settings.find = text
@@ -1010,7 +988,7 @@ PanelWindow {
                         anchors.fill: parent; verticalAlignment: Text.AlignVCenter
                         visible: search.text === ""
                         text: "Search settings"
-                        font: search.font; color: settings.inkA(0.5)
+                        font: search.font; color: settings.ink4
                     }
                     Keys.onEscapePressed: { text = ""; keys.forceActiveFocus() }
                 }
@@ -1039,21 +1017,21 @@ PanelWindow {
                         required property var modelData
                         readonly property bool here: settings.page === modelData[0]
                         width: parent.width; height: settings.navH
-                        color: pg.here ? settings.field : navArea.containsMouse ? settings.hover(0.05) : "transparent"
+                        color: pg.here ? settings.sheetWhite : navArea.containsMouse ? settings.navHover : "transparent"
                         border.width: 1; border.color: pg.here ? settings.line : "transparent"
                         Text {
                             x: 12; anchors.verticalCenter: parent.verticalCenter
                             text: pg.modelData[2]
-                            font.family: Fonts.mono; font.pixelSize: settings.fTag
-                            color: pg.here ? settings.mark : settings.inkA(0.55)
+                            font.family: settings.code; font.pixelSize: settings.fTag
+                            color: pg.here ? settings.accent : settings.ink4
                         }
                         Text {
                             x: 12 + 16 + 16; anchors.verticalCenter: parent.verticalCenter
                             width: parent.width - x - 8; elide: Text.ElideRight
                             text: settings.sentence(pg.modelData[1])
-                            font.family: Fonts.iface; font.pixelSize: settings.fRow
+                            font.family: settings.sans; font.pixelSize: settings.fRow
                             font.weight: pg.here ? Font.Medium : Font.Normal
-                            color: pg.here ? settings.ink : settings.inkA(0.82)
+                            color: pg.here ? settings.ink : settings.ink2
                         }
                         MouseArea {
                             id: navArea
@@ -1074,14 +1052,26 @@ PanelWindow {
                 Item { width: 1; height: 14 }
                 Text {
                     text: "CONFIG FILE"
-                    font.family: Fonts.mono; font.pixelSize: settings.fTag; font.letterSpacing: 0.9
-                    color: settings.inkA(0.55)
+                    font.family: settings.code; font.pixelSize: settings.fTag; font.letterSpacing: 0.9
+                    color: settings.ink4
                 }
                 Text {
                     width: parent.width; wrapMode: Text.WrapAnywhere
                     text: "~/.config/draftpaper/config.toml"
-                    font.family: Fonts.mono; font.pixelSize: settings.fHint
+                    font.family: settings.code; font.pixelSize: settings.fHint
                     color: settings.ink
+                }
+                Item { width: 1; height: 4 }
+                Text {
+                    text: "Open in editor"
+                    font.family: settings.sans; font.pixelSize: settings.fSmall
+                    color: openArea.containsMouse ? settings.accentDark : settings.accent
+                    MouseArea {
+                        id: openArea
+                        anchors.fill: parent; anchors.margins: -4
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onPressed: settings.queue(["config", "edit"], "")
+                    }
                 }
             }
         }
@@ -1114,15 +1104,15 @@ PanelWindow {
             Text {
                 id: pageCount
                 text: pageHead.row[2] + " / " + settings.twoDigits(settings.pageList.length)
-                font.family: Fonts.mono; font.pixelSize: settings.fHint; font.weight: Font.Medium
+                font.family: settings.code; font.pixelSize: settings.fHint; font.weight: Font.Medium
                 font.letterSpacing: 0.9
-                color: settings.mark
+                color: settings.accent
             }
             Text {
                 id: pageName
                 y: pageCount.height + 12
                 text: settings.sentence(pageHead.row[1])
-                font.family: Fonts.iface; font.pixelSize: settings.fTitle; font.weight: Font.Medium
+                font.family: settings.sans; font.pixelSize: settings.fTitle; font.weight: Font.Medium
                 font.letterSpacing: -1
                 color: settings.ink
             }
@@ -1133,8 +1123,8 @@ PanelWindow {
                 wrapMode: Text.WordWrap
                 lineHeight: 1.55
                 text: settings.pageSaid(settings.page)
-                font.family: Fonts.iface; font.pixelSize: settings.fLead
-                color: settings.inkA(0.75)
+                font.family: settings.sans; font.pixelSize: settings.fLead
+                color: settings.ink3
             }
             Rectangle {
                 y: pageLead.y + pageLead.height + 32
@@ -1195,8 +1185,8 @@ PanelWindow {
                          + " OF " + settings.wpPictures.length
                        : "")
                     + (settings.wp && settings.wp.current && !settings.wp.exists ? " · yours is gone: " + settings.wp.current : "")
-                font.family: Fonts.mono; font.pixelSize: settings.fHint; font.letterSpacing: 0.2 * settings.mm
-                color: settings.wpRow === 0 ? settings.ink : settings.inkA(0.6)
+                font.family: settings.code; font.pixelSize: settings.fHint; font.letterSpacing: 0.2 * settings.mm
+                color: settings.wpRow === 0 ? settings.ink : settings.ink3
             }
             Flickable {
                 id: picFlick
@@ -1242,7 +1232,7 @@ PanelWindow {
                             Text {
                                 anchors.centerIn: parent
                                 text: "NO PICTURE · PAPER"
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.letterSpacing: 0.2 * settings.mm
+                                font.family: settings.code; font.pixelSize: settings.font * 0.8; font.letterSpacing: 0.2 * settings.mm
                                 color: settings.ink
                             }
                         }
@@ -1259,13 +1249,13 @@ PanelWindow {
                             readonly property real w: pic.chosen ? Math.max(2, 0.7 * settings.mm) : Math.max(1, 0.2 * settings.mm)
                             anchors.fill: parent; anchors.margins: -w
                             color: "transparent"; border.width: w
-                            border.color: pic.chosen ? settings.ink : settings.inkA(0.5)
+                            border.color: pic.chosen ? settings.ink : settings.ink4
                         }
                         Text {
                             anchors { left: parent.left; top: parent.bottom; topMargin: 1.2 * settings.mm }
                             width: parent.width; elide: Text.ElideMiddle
                             text: pic.path ? pic.path.split("/").pop() : "none"
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.7; font.bold: pic.chosen
+                            font.family: settings.code; font.pixelSize: settings.font * 0.7; font.bold: pic.chosen
                             color: pic.chosen ? settings.ink : settings.inkA(0.7)
                         }
                         MouseArea { anchors.fill: parent; onPressed: { settings.wpRow = 0; settings.wpPick(pic.path) } }
@@ -1288,13 +1278,13 @@ PanelWindow {
                         visible: wr.here
                         x: -16; y: (parent.height - 18) / 2
                         width: 2; height: 18
-                        color: settings.mark
+                        color: settings.accent
                     }
                     Text {
                         y: (wallPage.rowH - height) / 2
                         text: wr.modelData.name
-                        font.family: Fonts.mono; font.pixelSize: settings.fRow
-                        color: wr.here ? settings.ink : settings.inkA(0.62)
+                        font.family: settings.code; font.pixelSize: settings.fRow
+                        color: wr.here ? settings.ink : settings.ink3
                     }
                     Row {          // the values: alignment holds them, so nothing is drawn to
                         x: 44 * settings.mm; y: 0; height: parent.height
@@ -1311,8 +1301,8 @@ PanelWindow {
                                 id: optLabel
                                 y: (parent.height - height) / 2
                                 text: wo.modelData[1]
-                                font.family: Fonts.mono; font.pixelSize: settings.fRow
-                                color: wo.chosen ? settings.ink : settings.inkA(0.34)
+                                font.family: settings.code; font.pixelSize: settings.fRow
+                                color: wo.chosen ? settings.ink : settings.ink4
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -1351,7 +1341,7 @@ PanelWindow {
                         spacing: 2 * settings.mm
                         Text {
                             text: sample.modelData.title + ", " + sample.pt + " PT"
-                            font.family: Fonts.mono; font.pixelSize: settings.font * 0.75; font.bold: true; font.letterSpacing: 0.2 * settings.mm
+                            font.family: settings.code; font.pixelSize: settings.font * 0.75; font.bold: true; font.letterSpacing: 0.2 * settings.mm
                             color: settings.ink
                         }
                         Text {
@@ -1403,22 +1393,22 @@ PanelWindow {
                             Text {
                                 width: parent.width; elide: Text.ElideRight
                                 text: box.modelData.name + (box.o.model && box.o.model !== "Unknown" ? " · " + box.o.model : "")
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: true
+                                font.family: settings.code; font.pixelSize: settings.font * 0.8; font.bold: true
                                 color: settings.ink
                             }
                             Text {
                                 readonly property real inches: Math.hypot(box.o.physical[0], box.o.physical[1]) / 25.4
                                 width: parent.width; elide: Text.ElideRight
                                 text: (inches > 0 ? inches.toFixed(1) + "″ · " : "") + box.o.mode[0] + " × " + box.o.mode[1]
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.68
-                                color: settings.inkA(0.75)
+                                font.family: settings.code; font.pixelSize: settings.font * 0.68
+                                color: settings.ink3
                             }
                             Text {
                                 width: parent.width; elide: Text.ElideRight
                                 text: (box.o.px_per_mm * box.o.scale).toFixed(1) + " px/mm · at " + settings.dispScale(box.modelData.name)
                                       + " · " + box.modelData.w + " × " + box.modelData.h
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.68
-                                color: settings.inkA(0.75)
+                                font.family: settings.code; font.pixelSize: settings.font * 0.68
+                                color: settings.ink3
                             }
                         }
                     }
@@ -1449,13 +1439,13 @@ PanelWindow {
                         visible: cr.here
                         x: -16; y: (parent.height - 18) / 2
                         width: 2; height: 18
-                        color: settings.mark
+                        color: settings.accent
                     }
                     Text {
                         id: rowName
                         x: 0; y: (parent.height - rowName.height - rowHint.height - 3) / 2
                         text: settings.sentence(cr.modelData.name)
-                        font.family: Fonts.iface; font.pixelSize: settings.fRow; font.weight: Font.Medium
+                        font.family: settings.sans; font.pixelSize: settings.fRow; font.weight: Font.Medium
                         color: settings.ink
                     }
                     Text {
@@ -1463,8 +1453,8 @@ PanelWindow {
                         y: rowName.y + rowName.height + 3
                         width: Math.min(parent.width * 0.55, 460); elide: Text.ElideRight
                         text: cr.modelData.note || ""
-                        font.family: Fonts.iface; font.pixelSize: settings.fHint
-                        color: settings.inkA(0.75)
+                        font.family: settings.sans; font.pixelSize: settings.fHint
+                        color: settings.ink3
                     }
 
                     // ---- the value, and the control for it ----
@@ -1475,8 +1465,8 @@ PanelWindow {
                             visible: cr.isSwitch || cr.isSlider
                             anchors.verticalCenter: parent.verticalCenter
                             text: cr.said
-                            font.family: Fonts.mono; font.pixelSize: settings.fHint
-                            color: settings.inkA(0.75)
+                            font.family: settings.code; font.pixelSize: settings.fHint
+                            color: settings.ink3
                         }
                         // a slider, for an ordered magnitude: a 1 px track and a 12 px square thumb
                         Item {
@@ -1493,7 +1483,7 @@ PanelWindow {
                             Rectangle {
                                 x: parent.at * parent.step; y: (parent.height - 12) / 2
                                 width: 12; height: 12
-                                color: settings.field
+                                color: settings.fieldBg
                                 border.width: 1.5; border.color: settings.ink
                             }
                             MouseArea {
@@ -1517,7 +1507,7 @@ PanelWindow {
                             Rectangle {
                                 y: 3; x: cr.value === true ? parent.width - 3 - width : 3
                                 width: 16; height: 16
-                                color: cr.value === true ? settings.paper : settings.ink
+                                color: cr.value === true ? settings.sheetWhite : settings.ink
                                 Behavior on x { enabled: settings.shell.theme.animations; NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
                             }
                             MouseArea {
@@ -1544,7 +1534,7 @@ PanelWindow {
                                     // a size below the legibility target: lettered in the alert ink, still to be picked
                                     readonly property bool low: !!cr.modelData.legible && !settings.legibility(modelData[0], cr.modelData.legible).ok
                                     width: segLabel.implicitWidth + 32; height: 38
-                                    color: seg.chosen ? settings.ink : segArea.containsMouse ? settings.hover(0.06) : "transparent"
+                                    color: seg.chosen ? settings.ink : segArea.containsMouse ? settings.ghostHover : "transparent"
                                     Rectangle { width: 1; height: parent.height; visible: seg.index > 0; color: settings.ink }
                                     Rectangle { y: 0; width: parent.width; height: 1; color: settings.ink }
                                     Rectangle { y: parent.height - 1; width: parent.width; height: 1; color: settings.ink }
@@ -1557,7 +1547,7 @@ PanelWindow {
                                         text: seg.modelData[1]
                                         font.family: cr.modelData.face ? seg.modelData[0] : Fonts.mono
                                         font.pixelSize: settings.fHint; font.weight: Font.Medium
-                                        color: seg.low ? settings.shell.theme.alert : seg.chosen ? settings.paper : settings.inkA(0.75)
+                                        color: seg.low ? "#C4501F" : seg.chosen ? settings.sheetWhite : settings.ink3
                                     }
                                     MouseArea {
                                         id: segArea
@@ -1585,8 +1575,8 @@ PanelWindow {
         Text {
             x: settings.mainX; y: pageHead.foot + 24
             text: "THEMES"
-            font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.3 * settings.mm; font.bold: settings.row === 0
-            color: settings.row === 0 ? settings.ink : settings.inkA(0.6)
+            font.family: settings.code; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.3 * settings.mm; font.bold: settings.row === 0
+            color: settings.row === 0 ? settings.ink : settings.ink3
         }
         Repeater {
             model: settings.cards.length           // a count, so delegates stay and only a changed drawing repaints
@@ -1594,7 +1584,7 @@ PanelWindow {
                 id: c
                 required property int index
                 readonly property var modelData: settings.cards[index]
-                readonly property bool picked: index === settings.card
+                readonly property bool picked: index === settings.sheetWhite
                 x: settings.mainX + index * (settings.cardW + settings.cardGap)
                 y: pageHead.foot + 24 + 22
                 width: settings.cardW; height: settings.cardH
@@ -1603,23 +1593,23 @@ PanelWindow {
                     readonly property real w: c.picked ? Math.max(2, 0.7 * settings.mm) : Math.max(1, 0.2 * settings.mm)
                     anchors.fill: parent; anchors.margins: -w
                     color: "transparent"; border.width: w
-                    border.color: c.picked ? settings.ink : settings.inkA(0.6)
+                    border.color: c.picked ? settings.ink : settings.ink3
                 }
                 Text {
                     id: name
                     anchors { left: parent.left; top: parent.bottom; topMargin: 2 * settings.mm }
                     width: parent.width; elide: Text.ElideRight
                     text: c.modelData.label.toUpperCase()
-                    font.family: Fonts.mono; font.pixelSize: settings.font * 0.9; font.letterSpacing: 0.2 * settings.mm; font.bold: c.picked
-                    color: c.picked ? settings.ink : settings.inkA(0.75)
+                    font.family: settings.code; font.pixelSize: settings.font * 0.9; font.letterSpacing: 0.2 * settings.mm; font.bold: c.picked
+                    color: c.picked ? settings.ink : settings.ink3
                 }
                 Text {          // its contrasts, or how many words it leaves unreadable
                     anchors { left: parent.left; top: name.bottom; topMargin: 0.8 * settings.mm }
                     readonly property var f: c.modelData.figures || {}
                     text: f.below > 0 ? "⚠ " + f.below + " below 4.5:1"
                         : "ink " + f.ink + " · text " + f.text + " · term " + f.terminal
-                    font.family: Fonts.mono; font.pixelSize: settings.font * 0.75
-                    color: f.below > 0 ? board.t ? board.t.alert : "red" : settings.inkA(0.6)
+                    font.family: settings.code; font.pixelSize: settings.font * 0.75
+                    color: f.below > 0 ? board.t ? board.t.alert : "red" : settings.ink3
                 }
                 MouseArea {
                     anchors.fill: parent
@@ -1639,9 +1629,9 @@ PanelWindow {
             width: settings.mainW
             Text {
                 text: "BUILD A SCHEME · the last drawing, every word readable"
-                font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.3 * settings.mm
+                font.family: settings.code; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.3 * settings.mm
                 font.bold: settings.row > 0
-                color: settings.row > 0 ? settings.ink : settings.inkA(0.6)
+                color: settings.row > 0 ? settings.ink : settings.ink3
             }
             Repeater {
                 model: settings.rows
@@ -1659,8 +1649,8 @@ PanelWindow {
                     Text {
                         y: 2.5 * settings.mm
                         text: settings.rowNames[r.modelData]
-                        font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.bold: r.here
-                        color: r.here ? settings.ink : settings.inkA(0.75)
+                        font.family: settings.code; font.pixelSize: settings.font * 0.85; font.bold: r.here
+                        color: r.here ? settings.ink : settings.ink3
                     }
                     Repeater {
                         model: settings.options[r.modelData] || []
@@ -1681,28 +1671,28 @@ PanelWindow {
                                     anchors.centerIn: parent
                                     visible: o.modelData.on !== null && o.modelData.on !== undefined
                                     text: "Aa"
-                                    font.family: Fonts.mono; font.pixelSize: parent.height * 0.6
+                                    font.family: settings.code; font.pixelSize: parent.height * 0.6
                                     color: o.modelData.colour
                                 }
                             }
                             Text {
                                 anchors { left: parent.left; top: sw.bottom; topMargin: 0.6 * settings.mm }
                                 text: o.modelData.label || o.modelData.value
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.75; font.bold: o.chosen
+                                font.family: settings.code; font.pixelSize: settings.font * 0.75; font.bold: o.chosen
                                 color: o.chosen ? settings.ink : settings.inkA(0.7)
                             }
                             Text {
                                 anchors { right: parent.right; top: sw.bottom; topMargin: 0.6 * settings.mm }
                                 text: o.modelData.ratio + ":1"
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.65
-                                color: settings.inkA(0.55)
+                                font.family: settings.code; font.pixelSize: settings.font * 0.65
+                                color: settings.ink4
                             }
                             Rectangle {     // the chosen value, outlined in heavier ink when the row is the one moving
                                 visible: o.chosen
                                 anchors.fill: parent; anchors.margins: -0.8 * settings.mm
                                 color: "transparent"
                                 border.width: r.here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.2 * settings.mm)
-                                border.color: r.here ? settings.ink : settings.inkA(0.6)
+                                border.color: r.here ? settings.ink : settings.ink3
                             }
                             MouseArea {
                                 anchors.fill: parent; anchors.margins: -0.8 * settings.mm

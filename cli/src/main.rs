@@ -59,6 +59,7 @@ const USAGE: &str = "draftpaper — the desktop as a drafting sheet.
                               position=centre|top|bottom|left|right, brightness, wash, blur (mm):
                               any of them in one write (the settings' wallpaper page)
   draftpaper config json      config.toml as read, the defaults filled in
+  draftpaper config edit      open it in $VISUAL, $EDITOR or whatever the desktop uses
   draftpaper config set KEY=VALUE ...
                               keys in config.toml, dotted for tables (title.scale=false,
                               outputs.eDP-1.scale=1.25), comments kept; KEY= removes one (its default)
@@ -247,6 +248,29 @@ fn main() {
                 text::apply(&p, &config::load(&p));
             }
         }
+        // the settings' sidebar names the file everything here is written to, and offers to open it:
+        // $VISUAL or $EDITOR in a terminal where one is set, else whatever the desktop opens .toml
+        // with. Detached, so the settings are not waiting on an editor.
+        ["config", "edit", ..] => {
+            let file = p.config.clone();
+            let term = std::env::var("TERMINAL").ok();
+            let editor = std::env::var("VISUAL").or_else(|_| std::env::var("EDITOR")).ok();
+            let mut run = match (&term, &editor) {
+                (Some(t), Some(e)) if !t.is_empty() && !e.is_empty() => {
+                    let mut c = Command::new(t);
+                    c.arg("-e").arg(e).arg(&file);
+                    c
+                }
+                _ => {
+                    let mut c = Command::new("xdg-open");
+                    c.arg(&file);
+                    c
+                }
+            };
+            if run.stdout(Stdio::null()).stderr(Stdio::null()).spawn().is_err() {
+                eprintln!("draftpaper: nothing to open {} with", file.display());
+            }
+        }
         ["config", "mark", ..] => config::mark(&p),
         ["config", "back", ..] => {
             if config::back(&p) {
@@ -256,7 +280,7 @@ fn main() {
             }
         }
         ["config", "keep", ..] => config::keep(&p),
-        ["config", ..] => util::die("draftpaper config json | set KEY=VALUE ... | mark | back | keep"),
+        ["config", ..] => util::die("draftpaper config json | set KEY=VALUE ... | edit | mark | back | keep"),
         ["version", ..] => println!("{}", env!("CARGO_PKG_VERSION")),
         _ => util::die(USAGE),
     }
