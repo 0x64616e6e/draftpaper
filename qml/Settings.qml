@@ -684,6 +684,20 @@ PanelWindow {
         wallpaper: settings.wp ? (settings.wpPicture ? "file://" + settings.wpPicture : "") : settings.wallpaper
     }
 
+    // The settings' own paper: the theme's, opaque, over the whole of the frame's interior and no
+    // further -- the margins stay the sheet's. The board under this shows the wallpaper blurred, and
+    // lettering laid straight onto a photograph has no fixed contrast with it: a ground that varies
+    // makes every opacity mean something different from place to place (docs/design-research.md, on
+    // colour being relative). It is the same reason the legend's paper is opaque -- settings you can
+    // read the wallpaper through are not settings.
+    //
+    // The wallpaper page is the exception, because there the picture is what you are choosing.
+    Rectangle {
+        visible: settings.page !== "wallpaper"
+        x: board.inX; y: board.inY; width: board.inW; height: board.inH
+        color: board.t && board.t.paper ? board.t.paper : settings.shell.theme.paper
+    }
+
     // ---- the layout ----
     // The ladders (docs/interface.md): one ratio, root 2, every value a whole millimetre so the
     // sheet's pixel snapping is unchanged. Three lettering sizes assigned by role, two rule weights
@@ -875,10 +889,11 @@ PanelWindow {
             id: wallPage
             anchors.fill: parent
             visible: settings.page === "wallpaper"
-            readonly property real topY: board.inY + settings.gutter
+            // below the shared heading and its rule, as every other page sits
+            readonly property real topY: settings.bodyY
             // the pictures, a grid of drawings as wide as the page allows
             readonly property real gap: 4 * settings.mm
-            readonly property real rowH: 10 * settings.mm     // a settings row
+            readonly property real rowH: settings.pitch       // a settings row, on the one ladder
             readonly property int cols: Math.max(1, Math.floor((settings.cw + gap) / (36 * settings.mm + gap)))
             readonly property real picW: (settings.cw - (cols - 1) * gap) / cols
             readonly property real picH: picW * settings.height / Math.max(1, settings.width)
@@ -911,7 +926,7 @@ PanelWindow {
                          + " OF " + settings.wpPictures.length
                        : "")
                     + (settings.wp && settings.wp.current && !settings.wp.exists ? " · yours is gone: " + settings.wp.current : "")
-                font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.letterSpacing: 0.2 * settings.mm; font.bold: settings.wpRow === 0
+                font.family: Fonts.mono; font.pixelSize: settings.note; font.letterSpacing: 0.2 * settings.mm
                 color: settings.wpRow === 0 ? settings.ink : settings.inkA(0.6)
             }
             Flickable {
@@ -999,16 +1014,22 @@ PanelWindow {
                     x: settings.x0
                     y: wallPage.topY + 6 * settings.mm + wallPage.rowsView * wallPage.rowStep + 2 * settings.mm + index * wallPage.rowH
                     width: settings.cw; height: wallPage.rowH
-                    Rectangle { width: parent.width; height: Math.max(1, 0.15 * settings.mm); color: settings.inkA(0.35) }
+                    // the row the keys are on, marked once, in the one accent on the sheet
+                    Rectangle {
+                        visible: wr.here
+                        x: -4 * settings.mm; y: (parent.height - settings.heavy) / 2
+                        width: 3 * settings.mm; height: settings.heavy
+                        color: settings.accent
+                    }
                     Text {
                         y: (wallPage.rowH - height) / 2
                         text: wr.modelData.name
-                        font.family: Fonts.mono; font.pixelSize: settings.font * 0.85; font.bold: wr.here
-                        color: wr.here ? settings.ink : settings.inkA(0.75)
+                        font.family: Fonts.mono; font.pixelSize: settings.title
+                        color: wr.here ? settings.ink : settings.inkA(0.62)
                     }
-                    Row {          // the options, each as wide as its words
-                        x: 40 * settings.mm; y: (wallPage.rowH - 7 * settings.mm) / 2
-                        spacing: 3 * settings.mm
+                    Row {          // the values: alignment holds them, so nothing is drawn to
+                        x: 44 * settings.mm; y: 0; height: parent.height
+                        spacing: 6 * settings.mm
                     Repeater {
                         model: wr.modelData.options
                         Item {
@@ -1016,20 +1037,13 @@ PanelWindow {
                             required property var modelData
                             required property int index
                             readonly property bool chosen: settings.wpVals[wr.modelData.key] === modelData[0]
-                            width: optLabel.implicitWidth + 5 * settings.mm; height: 7 * settings.mm
+                            width: optLabel.implicitWidth; height: wallPage.rowH
                             Text {
                                 id: optLabel
-                                anchors.centerIn: parent
+                                y: (parent.height - height) / 2
                                 text: wo.modelData[1]
-                                font.family: Fonts.mono; font.pixelSize: settings.font * 0.8; font.bold: wo.chosen
-                                color: wo.chosen ? settings.ink : settings.inkA(0.7)
-                            }
-                            Rectangle {
-                                visible: wo.chosen
-                                anchors.fill: parent
-                                color: "transparent"
-                                border.width: wr.here ? Math.max(2, 0.6 * settings.mm) : Math.max(1, 0.2 * settings.mm)
-                                border.color: wr.here ? settings.ink : settings.inkA(0.6)
+                                font.family: Fonts.mono; font.pixelSize: settings.title
+                                color: wo.chosen ? settings.ink : settings.inkA(0.34)
                             }
                             MouseArea {
                                 anchors.fill: parent
