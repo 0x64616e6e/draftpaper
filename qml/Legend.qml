@@ -26,6 +26,9 @@ Item {
     readonly property string heldWord: mmFrom && mmFrom.held ? mmFrom.held : "MOD HELD"
     readonly property string leaderWord: mmFrom && mmFrom.leader ? mmFrom.leader : "LEADER"
     readonly property string moreWord: mmFrom && mmFrom.more ? mmFrom.more : "MORE"
+    readonly property string unboundWord: mmFrom && mmFrom.unbound ? mmFrom.unbound : "NOTHING ON"
+    // the passing word being said, where one is: { say, about } as the compositor names it
+    property var word: null
 
     readonly property var theme: shell.theme
     readonly property var out: edge.output
@@ -116,6 +119,18 @@ Item {
     readonly property int over: Math.max(0, keys.length - laid.length)
     readonly property bool shown: wanted && !!out && laid.length > 0 && wMm >= 60
 
+    // the heading's right-hand side. A passing word said takes it over for its moment — it is the
+    // answer to the key you just pressed, and the state of the keyboard and the count of what did not
+    // fit are reference, which can wait. The client reads the same way (sheet/src/legend.rs's meta).
+    readonly property string metaWord: {
+        if (word && word.say) {
+            const phrase = word.say === "unbound" ? unboundWord : word.say.toUpperCase()
+            return (phrase + " " + (word.about || "")).replace(/\s+$/, "")
+        }
+        const how = leader ? leaderWord : heldWord
+        return over > 0 ? how + " · " + over + " " + moreWord : how
+    }
+
     // the drawn height: the heading and the rows that fit
     // the columns and the rows the table actually uses, which is not what it has room for: a column is
     // filled to the bottom before the next is begun (`laid`), so a table of 67 in 4 columns of 44 is two
@@ -191,8 +206,7 @@ Item {
                         x: legend.ix(legend.gap + legend.tableW) - width
                         y: legend.iy(headRule.vMm - 7); height: legend.iy(headRule.vMm) - y
                         verticalAlignment: Text.AlignVCenter
-                        readonly property string how: legend.leader ? legend.leaderWord : legend.heldWord
-                        text: legend.over > 0 ? how + " · " + legend.over + " " + legend.moreWord : how
+                        text: legend.metaWord
                         font.family: Fonts.mono; font.pixelSize: 2.0 * legend.mm; font.letterSpacing: 0.3 * legend.mm
                         color: legend.faint
                     }

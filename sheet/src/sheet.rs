@@ -45,6 +45,8 @@ pub struct Screen {
     pub legend: bool,
     /// and whether Mod was tapped rather than held, so the next key composes: the heading says which
     pub leader: bool,
+    /// the passing word being said on the legend, where one is (legend.rs, docs/keyboard.md)
+    pub word: Option<crate::legend::Said>,
 }
 
 /// The scale bar the compositor draws: each rule's place and what millimetre it stands for, and the band
@@ -117,6 +119,10 @@ pub fn parse(outputs: &Value) -> Vec<Screen> {
                 graph: o.get("graph").and_then(Value::as_str).unwrap_or("").to_string(),
                 legend: o.get("legend").and_then(Value::as_bool).unwrap_or(false),
                 leader: o.get("leader").and_then(Value::as_bool).unwrap_or(false),
+                word: o.get("word").filter(|w| !w.is_null()).map(|w| crate::legend::Said {
+                    say: w.get("say").and_then(Value::as_str).unwrap_or("").to_string(),
+                    about: w.get("about").and_then(Value::as_str).unwrap_or("").to_string(),
+                }),
             })
         })
         .collect()
@@ -387,7 +393,7 @@ mod tests {
     }
 
     fn screen(scale: f64, mm: f64, frame_x: f64) -> Screen {
-        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new(), legend: false, leader: false }
+        Screen { name: "test".into(), width: 1920.0, height: 1200.0, scale, mm, margin: 38.0, frame: (frame_x, frame_x, 1000.0, 800.0), title: None, workspace: 1, across: 6, down: 4, parking: Vec::new(), bar: None, schedule: String::new(), graph: String::new(), legend: false, leader: false, word: None }
     }
 
     #[test]

@@ -131,6 +131,15 @@ pub struct Draftpaper {
     /// no silent leader. Esc leaves, a key that is bound runs, a key that is not disarms, and the keys
     /// it takes do not reach whatever has the focus.
     pub leader: bool,
+    /// the passing word (docs/keyboard.md): the one line the sheet says in answer to a key and then
+    /// takes back — for now, that the key had nothing on it. The compositor says *what happened*
+    /// (`say`) and *what about* (`about`); how it reads is the document's, as every other word on the
+    /// legend is, so neither renderer carries a phrasing of its own. It stands on the legend's paper,
+    /// so saying one holds the legend up for its moment — and `legend_by_word` is how it knows to put
+    /// the legend away again afterwards, when it was the word that raised it and not a held Mod.
+    pub word: Option<crate::input::Word>,
+    pub word_timer: Option<smithay::reexports::calloop::RegistrationToken>,
+    pub legend_by_word: bool,
     /// screencopy frames waiting for the backend's next frame (screencopy.rs)
     pub screencopies: Vec<crate::screencopy::PendingCopy>,
     /// the output-management clients and what they were last told (output_management.rs)
@@ -261,6 +270,9 @@ impl Draftpaper {
             legend: false,
             legend_timer: None,
             leader: false,
+            word: None,
+            word_timer: None,
+            legend_by_word: false,
             pointer_over: (None, None),
             screencopies: Vec::new(),
             output_management: Default::default(),

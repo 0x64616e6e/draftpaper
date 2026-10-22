@@ -49,12 +49,12 @@ i=0
 until [ "$(outputs | grep -o draftpaper-title-block | wc -l)" = 2 ] || [ $i -gt 300 ]; do sleep 0.1; i=$((i + 1)); done
 sleep 2
 ok "two screens, each with a key plan" "$(outputs | grep -o '"key_plan":{"mark"' | wc -l)" "2"
-# the layout as the compositor has it: x,y,width,height of each screen, in its order
-layout=$(outputs | grep -o '"width":[0-9]*,"workspace":[0-9]*,"x":[0-9-]*,"y":[0-9-]*' | sed 's/"width":\([0-9]*\),"workspace":[0-9]*,"x":\([0-9-]*\),"y":\([0-9-]*\)/\2,\3,\1/')
-heights=$(outputs | grep -o '"height":[0-9]*,"key_plan"' | grep -o '[0-9]*')
-set -- $heights
-l1="$(echo "$layout" | sed -n 1p),$1"
-l2="$(echo "$layout" | sed -n 2p),$2"
+# the layout as the compositor has it: x,y,width,height of each screen, in its order. Read by name,
+# not by where the fields fall in the JSON: the outputs carry whatever the compositor has to say, and
+# a field added to them (`word`, say) is not a change to the layout this is measuring.
+layout=$(run "$comp" msg outputs | jq -r '.[] | "\(.x),\(.y),\(.width),\(.height)"')
+l1=$(echo "$layout" | sed -n 1p)
+l2=$(echo "$layout" | sed -n 2p)
 ok "side by side" "$l1 $l2" "0,0,1280,800 1280,0,1707,960"
 # the north marks: each the arm toward the other screen thickened (the monitor's centre is a little lower,
 # 3°: the nearest quarter is level)

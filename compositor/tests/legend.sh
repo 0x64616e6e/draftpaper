@@ -39,6 +39,10 @@ margin = 6
 [title]
 project = "signal"
 drawn = "drafter"
+[keys]
+# the passing word stands long enough to be in the screenshot: a word takes itself back after
+# [keys] word_for, and these two runs are a good few seconds apart (docs/keyboard.md)
+word_for = 10000
 TOML
 pids=
 trap 'kill $pids 2>/dev/null; [ -n "${KEEP:-}" ] && echo "  kept: $t" || rm -rf "$t"' EXIT INT TERM
@@ -89,7 +93,11 @@ render() {
     # Mod cannot be held in a headless compositor, so the legend is asked for the way a binding of one's
     # own would ask (docs/keyboard.md)
     msg legend > /dev/null 2>&1
-    sleep 2
+    sleep 1
+    # and a passing word said on it, so the heading is compared with one standing: the phrasing is the
+    # document's, and this is what would catch a renderer going back to one of its own
+    msg word unbound q > /dev/null 2>&1
+    sleep 1
     if [ "$1" = shell ]; then
         msg outputs > "$t/outputs.json"
         msg windows > "$t/windows.json"
@@ -134,6 +142,16 @@ compare() {
 # the compositor found a window each way, or there is nothing here to compare
 ok "a window the focus keys act from" "$(jq -r '.[0].focus_to.focused // "none"' < "$t/outputs.json" | sed 's/[0-9][0-9]*/one/')" "one"
 ok "and one to the left of it" "$(jq -r '.[0].focus_to.left // "none"' < "$t/outputs.json" | sed 's/[0-9][0-9]*/one/')" "one"
+
+# the legend's heading, with a passing word standing on its right: "LEGEND" at one end and
+# "NOTHING ON q" at the other. Both come from the document (content::legend()), so what this catches
+# is a renderer phrasing one of them itself — which is how the two came to disagree before
+# (docs/keyboard.md). The strip stops short of the rule under the heading, so it is about the words.
+mmpx() { awk -v a="$1" -v m="$(o .px_per_mm)" -v b="$2" 'BEGIN { print a + b * m }'; }
+compare "the legend's heading, a word on it" \
+    "$(px "$(mmpx "$(o .frame.x)" 4)")" "$(px "$(mmpx "$(o .frame.y)" 4)")" \
+    "$(px "$(mmpx "$(o .frame.x)" "$(awk -v w="$(o .frame.width)" -v m="$(o .px_per_mm)" 'BEGIN { print w / m / 2 }')")")" \
+    "$(px "$(mmpx "$(o .frame.y)" 13)")"
 
 # a box around each window's middle: the mark, and the paper it lays down first
 wn() { jq -r ".[$1] | .geometry.$2" < "$t/windows.json"; }

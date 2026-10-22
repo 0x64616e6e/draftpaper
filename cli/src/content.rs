@@ -961,6 +961,10 @@ pub fn legend() -> Value {
         "held": "MOD HELD",     // the heading's right, with Mod held down
         "leader": "LEADER",     // and with Mod tapped: the next key composes
         "more": "MORE",         // "... · 12 MORE": the bindings the sheet had no room for
+        // the passing word (docs/keyboard.md): the heading's right says this instead, for a moment,
+        // when a key is answered rather than run. The compositor names the case ("unbound") and the
+        // key; the words are here, with the rest of the legend's lettering.
+        "unbound": "NOTHING ON",
         "gap": 6,       // in from the frame's corner, and clear of the title block
         "pad": 4,       // the paper under the table, out past it on every side
         "head": 10,     // the heading and its rule

@@ -14,6 +14,7 @@
 //!   {"request": "pointer"}                                 where the pointer is
 //!   {"request": "legend", "on": true}                      the keymap lettered over the sheet
 //!   {"request": "leader", "on": true}                      the legend, and the next key read as a chord
+//!   {"request": "word", "say": "unbound", "about": "q"}   a passing word on the legend; no "say" takes it back
 //!   {"request": "schedule", "which": "equipment"}          which schedule is out ("hide": none)
 //!   {"request": "schedule", "which": "equipment", "toggle": true}   away again if it is the one already out here
 //!   {"request": "graph", "which": "load"}                  a reading's year plotted (the same again: away)
@@ -210,8 +211,23 @@ impl Draftpaper {
                 }
                 if !on {
                     self.drop_leader();
+                    self.drop_word();
                 }
                 Ok(json!(self.legend))
+            }
+            // the passing word (docs/keyboard.md), said and taken back without a key, which a headless
+            // compositor has no way to press: `msg word unbound q`, `msg word off`. The case is named
+            // here and lettered by whoever letters the sheet — the compositor says what happened, never
+            // the words it is said in.
+            "word" => {
+                match request.get("say").and_then(Value::as_str).filter(|s| !s.is_empty()) {
+                    Some(say) => {
+                        let about = request.get("about").and_then(Value::as_str).unwrap_or("").to_string();
+                        self.say_word(say, about);
+                    }
+                    None => self.drop_word(),
+                }
+                Ok(json!(self.word.as_ref().map(|w| w.say.clone())))
             }
             // the keymap, for the legend to letter and for anything else that would rather read the
             // bindings than guess them (docs/keyboard.md). The compositor is the only thing that knows
@@ -484,6 +500,10 @@ impl Draftpaper {
                         // the "keys" request's answer, which is asked for once and does not change.
                         "legend": self.legend,
                         "leader": self.leader,
+                        // the passing word, where one is being said: what happened and what about.
+                        // How it reads is the document's (content::legend()), as the heading's other
+                        // words are — this names the case, never the phrasing (docs/keyboard.md).
+                        "word": self.word.as_ref().map(|w| json!({ "say": w.say, "about": w.about })),
                         // where a focus key would land, by the window it would land on: the legend marks
                         // each of them with the key bound to it, so the mark on a window is the key that
                         // really takes you there. Worked out here because only the compositor knows the
@@ -719,7 +739,7 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|legend|leader|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|legend|leader|word|subscribe KIND...|ACTION");
             return 2;
         }
         Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames" | "keys")) => {
@@ -731,6 +751,11 @@ pub fn msg(args: &[String]) -> i32 {
         Some("legend") => json!({ "request": "legend", "on": args.get(1).map(|a| a != "off").unwrap_or(true) }),
         // and the leader armed without tapping Mod, which a headless compositor cannot be made to do
         Some("leader") => json!({ "request": "leader", "on": args.get(1).map(|a| a != "off").unwrap_or(true) }),
+        // and a passing word said without a key: `msg word unbound q`, `msg word off` (docs/keyboard.md)
+        Some("word") => match args.get(1).filter(|a| **a != "off") {
+            Some(say) => json!({ "request": "word", "say": say, "about": args.get(2).map(String::as_str).unwrap_or("") }),
+            None => json!({ "request": "word" }),
+        },
         Some("subscribe") => json!({ "request": "subscribe", "events": args[1..] }),
         Some(_) => json!({ "request": "action", "action": args.join(" ") }),
     };

@@ -118,8 +118,10 @@ impl Draftpaper {
             }
             InputEvent::PointerButton { event, .. } => {
                 // the leader is spent by reaching for the pointer: you have gone somewhere else, and a
-                // mode left armed behind a click is the kind you forget you are in (docs/keyboard.md)
+                // mode left armed behind a click is the kind you forget you are in (docs/keyboard.md).
+                // A word said is taken back with it: it was an answer to the keyboard.
                 self.drop_leader();
+                self.drop_word();
                 let pointer = self.seat.get_pointer().unwrap();
                 let keyboard = self.seat.get_keyboard().unwrap();
 
@@ -323,6 +325,11 @@ impl Draftpaper {
             self.arm_leader();
             return;
         }
+        // a word just said stands its moment out: the key that raised it is still on its way up, and a
+        // key coming up is not a new key. Anything pressed supersedes it, as it supersedes the legend.
+        if holds_word(pressed, self.word.is_some()) {
+            return;
+        }
         self.drop_legend();
     }
 
@@ -345,7 +352,8 @@ impl Draftpaper {
 
     /// The key typed after the leader. It always disarms: one key, then the leader is spent, whether it
     /// was bound or not. `Esc` leaves without running anything, as it must for a mode to be admissible.
-    /// A key with no binding does nothing — and, for now, does not say so (docs/keyboard.md).
+    /// A key with nothing on it says so — the passing word (docs/keyboard.md) — rather than letting the
+    /// legend go and leaving you to work out whether anything happened.
     fn leader_key(
         &mut self,
         mods: &smithay::input::keyboard::ModifiersState,
@@ -353,17 +361,78 @@ impl Draftpaper {
         raw: Option<smithay::input::keyboard::Keysym>,
         tty: bool,
     ) -> Option<Action> {
-        self.drop_leader();
         if sym == smithay::input::keyboard::Keysym::Escape {
+            self.drop_leader();
             return None;
         }
-        self.config.led(mods, sym, raw, tty)
+        match self.config.led(mods, sym, raw, tty) {
+            Some(action) => {
+                self.drop_leader();
+                Some(action)
+            }
+            // nothing is bound here. The leader is spent either way, but the legend stays for a moment
+            // with the word on it, so the answer to the key is an answer and not an absence.
+            None => {
+                self.say_word(UNBOUND, key_name(sym));
+                None
+            }
+        }
+    }
+
+    /// What the sheet says when a key has nothing on it: the only passing word there is so far. The
+    /// phrasing is the document's — this is the name of what happened, not the words it is said in.
+    pub fn say_word(&mut self, say: &str, about: String) {
+        use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
+        if let Some(token) = self.word_timer.take() {
+            self.loop_handle.remove(token);
+        }
+        self.leader = false;
+        self.word = Some(Word { say: say.to_string(), about });
+        // it stands on the legend's paper, so the legend stands while it is said. Where Mod raised the
+        // legend the hold still owns it, and letting Mod go takes it away as it always did.
+        if !self.legend {
+            self.legend = true;
+            self.legend_by_word = true;
+        }
+        self.word_timer = self
+            .loop_handle
+            .insert_source(Timer::from_duration(self.config.word_for), move |_, _, data: &mut Self| {
+                data.word_timer = None;
+                data.take_word();
+                TimeoutAction::Drop
+            })
+            .ok();
+        self.touched = true;
+    }
+
+    /// The word taken back: it goes, and the legend with it where the word was what raised it.
+    fn take_word(&mut self) {
+        if self.word.is_none() {
+            return;
+        }
+        self.word = None;
+        if std::mem::take(&mut self.legend_by_word) {
+            self.legend = false;
+        }
+        self.touched = true;
+    }
+
+    /// The word cut short — the legend put away, the pointer reached for, another word said. Whatever
+    /// ends the legend ends what is lettered on it.
+    pub fn drop_word(&mut self) {
+        if let Some(token) = self.word_timer.take() {
+            self.loop_handle.remove(token);
+        }
+        self.take_word();
     }
 
     fn arm_legend(&mut self) {
         use smithay::reexports::calloop::timer::{TimeoutAction, Timer};
         let Some(after) = self.config.legend_after else { return };
         if self.legend || self.legend_timer.is_some() {
+            // the legend standing for a word: Mod going down takes it over, so the word's time
+            // being up does not pull the paper out from under a hold that is still going on
+            self.legend_by_word = false;
             return;
         }
         self.legend_timer = self
@@ -371,6 +440,8 @@ impl Draftpaper {
             .insert_source(Timer::from_duration(after), move |_, _, data: &mut Self| {
                 data.legend = true;
                 data.legend_timer = None;
+                // the hold owns the legend from here: a word standing under it no longer puts it away
+                data.legend_by_word = false;
                 data.touched = true;        // whoever letters the sheet hears of it in the next outputs
                 TimeoutAction::Drop
             })
@@ -381,6 +452,8 @@ impl Draftpaper {
         if let Some(token) = self.legend_timer.take() {
             self.loop_handle.remove(token);
         }
+        // the word stands on the legend's paper: the paper going takes the word with it
+        self.drop_word();
         if self.legend {
             self.legend = false;
             self.touched = true;
@@ -593,9 +666,34 @@ fn spends_leader(sym: smithay::input::keyboard::Keysym) -> bool {
     )
 }
 
+/// Whether a word already said outlives the key going by (docs/keyboard.md). Its own key coming up must
+/// not take it back — that release is the tail of the keystroke the word is answering — but anything
+/// *pressed* supersedes it, as it supersedes the legend under it. One line, so the rule is one line.
+fn holds_word(pressed: bool, said: bool) -> bool {
+    said && !pressed
+}
+
+/// The passing word as the compositor says it: what happened, and what it was about. The words it is
+/// *lettered* in are the document's (`content::legend()`), as `MOD HELD` and `LEADER` already are, so
+/// the compositor names the case and never a phrasing (docs/keyboard.md).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Word {
+    pub say: String,
+    pub about: String,
+}
+
+/// The one case there is so far: the key had nothing on it.
+pub const UNBOUND: &str = "unbound";
+
+/// A key named as the keymap writes it: `h`, `F5`, `Escape` — the same spelling the legend's own table
+/// is lettered with, since that is what the word is telling you to look for in it.
+fn key_name(sym: smithay::input::keyboard::Keysym) -> String {
+    smithay::input::keyboard::xkb::keysym_get_name(sym)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{arms_legend, spends_leader, taps_leader};
+    use super::{arms_legend, holds_word, key_name, spends_leader, taps_leader};
     use smithay::input::keyboard::Keysym;
 
     #[test]
@@ -626,5 +724,21 @@ mod tests {
         assert!(!arms_legend(true, Keysym::h, true), "another key cancels: a chord is on its way");
         assert!(!arms_legend(true, Keysym::Shift_L, true), "the second modifier of a chord cancels too");
         assert!(!arms_legend(true, Keysym::Super_L, false), "not on the lock or login screen");
+    }
+
+    #[test]
+    fn a_word_outlives_the_key_that_raised_it_but_not_the_next_one() {
+        assert!(holds_word(false, true), "the unbound key coming up must not take its own answer back");
+        assert!(!holds_word(true, true), "but the next key pressed supersedes it");
+        assert!(!holds_word(false, false), "with nothing said there is nothing to hold");
+    }
+
+    #[test]
+    fn a_key_is_named_as_the_keymap_writes_it() {
+        // the word says which key had nothing on it, and it must be the spelling the legend's own
+        // table uses, or it is telling you to look for something that is not in there
+        assert_eq!(key_name(Keysym::h), "h");
+        assert_eq!(key_name(Keysym::F5), "F5");
+        assert_eq!(key_name(Keysym::Escape), "Escape");
     }
 }

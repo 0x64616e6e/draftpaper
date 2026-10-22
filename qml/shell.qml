@@ -425,6 +425,7 @@ ShellRoot {
             // Mod held alone long enough: the keymap lettered on the sheet's free side, gone the moment
             // it is let go. The compositor says when; the keys are its own (docs/keyboard.md).
             Legend { shell: root; edge: edge; wanted: Compositor.legend; leader: Compositor.leader
+                     word: Compositor.word
                      keys: Compositor.keys; avoid: sched
                      mmFrom: root.legendMm; windows: Compositor.windows }
 

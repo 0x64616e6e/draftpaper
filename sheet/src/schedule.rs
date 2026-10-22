@@ -295,6 +295,7 @@ pub mod tests {
             graph: String::new(),
             legend: false,
             leader: false,
+            word: None,
         }
     }
 

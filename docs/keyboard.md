@@ -1,7 +1,7 @@
 # The keyboard: the legend, the leader, and binding by pointing
 
-Status: steps 1 and 3 built — the hold overlay and the leader, in both renderers (2026-10-21); the rest
-designed. Against 0.7.5.
+Status: steps 1, 3 and the passing word built — the hold overlay, the leader and the line the sheet
+says in answer to a key, in both renderers (2026-10-22); the rest designed. Against 0.7.5.
 Where this disagrees with the code, the code has not been written yet — except where it is marked built,
 and there the code wins.
 
@@ -205,9 +205,34 @@ in a block or a file Draftpaper owns, and the config always wins over it.
    had a copy of the words each until now. `msg leader [on|off]` arms it without the gesture, which is
    what the tests drive it with, a key being untappable in a headless compositor.
 
-   Still not done: **a key with no binding does nothing and does not say so.** It disarms, and the
-   legend going is all the answer you get. Saying so wants a passing word on the sheet, and that is
-   the same channel the binding prompt of step 4 needs, so it is designed once, there, rather than
-   bolted on twice.
-4. **Binding by pointing**, which wants the tree to place things in.
+   A key with no binding **says so**: the passing word, below.
+3a. **The passing word.** ✅ Built 2026-10-22, in the compositor and both renderers.
+
+   One line the sheet says in answer to a key and then takes back. It stands on the **legend's
+   heading**, on its right, where `MOD HELD` and `LEADER` already say what state the keyboard is in —
+   a word about a key belongs in the keyboard's own register, and that register already has a place on
+   the sheet. It is not a notification: those belong to whoever took the name on the session bus
+   (docs/sheet-content.md), and mixing the two would be a second voice saying the same kind of thing.
+
+   The compositor keeps it, as it keeps the legend and the leader, and publishes it in the outputs as
+   `word`: `{"say": "unbound", "about": "q"}` — **what happened, and what about**. It never carries a
+   phrasing. How `unbound` reads is `content::legend()`'s `unbound` ("NOTHING ON"), so the word is
+   lettered out of the document like every other word on the legend and neither renderer keeps one of
+   its own. A case the document has no words for is lettered by its name rather than dropped, so a
+   word added to one and not the other is visible rather than silent.
+
+   Saying a word holds the legend up under it, because that is the paper it stands on; when the word's
+   time is up (`[keys] word_for`, 1200 ms) both go — unless Mod is being held, which takes the legend
+   over. Anything **pressed** supersedes it; the release of the key it is answering does not, that
+   release being the tail of the same keystroke. A click takes it back: it was an answer to the
+   keyboard. `msg word unbound q` and `msg word off` say one without a key, which is what the tests
+   drive it with.
+
+   The first and only thing it says is that a key had nothing on it — the gap step 3 left. The second
+   will be step 4's prompt, which is why this is one channel and not two.
+
+   Still not done: a word says what happened, not what to do about it. "NOTHING ON q" is the whole of
+   it; *binding* q to something is step 4.
+4. **Binding by pointing**, which wants the tree to place things in — and the passing word, which it
+   now has.
 5. **Extending the tree** past what a chord can express — if by then it is still wanted.

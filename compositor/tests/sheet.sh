@@ -372,6 +372,23 @@ env DRAFTPAPER_SOCKET="$sock" "$comp" msg leader > /dev/null 2>&1; sleep 1
 env DRAFTPAPER_SOCKET="$sock" "$comp" msg legend off > /dev/null 2>&1; sleep 1
 ok "the legend put away takes the leader with it" "$(leader_state)" "false/false"
 
+# the passing word (docs/keyboard.md): the one line the sheet says in answer to a key and then takes
+# back. It stands on the legend's paper, so saying one holds the legend up for its moment, and the
+# legend going takes it with it. A key cannot be pressed in a headless compositor, so it is said the
+# way the compositor itself says it.
+word_state() { env DRAFTPAPER_SOCKET="$sock" "$comp" msg outputs | jq -r '.[0] | "\(.word.say // "-")/\(.word.about // "-")/\(.legend)"'; }
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg word unbound q > /dev/null 2>&1; sleep 0.4
+ok "a word said stands, and brings the legend under it" "$(word_state)" "unbound/q/true"
+# and takes itself back when [keys] word_for is up, the legend with it, since the word raised it
+sleep 1.6
+ok "and is taken back when its time is up, the legend with it" "$(word_state)" "-/-/false"
+# the legend put away takes a word with it: a word has no paper of its own
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg word unbound F5 > /dev/null 2>&1; sleep 0.3
+env DRAFTPAPER_SOCKET="$sock" "$comp" msg legend off > /dev/null 2>&1; sleep 0.3
+ok "the legend put away takes the word with it" "$(word_state)" "-/-/false"
+# how it reads is the document's, as the heading's other words are: neither renderer phrases it
+ok "the word's phrasing is in the document" "$(run "$repo/cli/target/release/draftpaper" sheet | jq -r '.legend.unbound')" "NOTHING ON"
+
 # the graph: a reading's year, called up by name and by its cell in the title block
 run "$repo/cli/target/release/draftpaper" graph load > /dev/null 2>&1
 sleep 2

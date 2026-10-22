@@ -17,6 +17,9 @@ Singleton {
     readonly property bool legend: outputs.some(o => o.legend === true)
     // and whether it was tapped rather than held: the next key composes, and the heading says so
     readonly property bool leader: outputs.some(o => o.leader === true)
+    // the passing word being said on the legend, where one is (docs/keyboard.md): the compositor names
+    // what happened ({ say, about }) and the document says what that reads as. Nothing is phrased here.
+    readonly property var word: (outputs.find(o => o.word) || {}).word || null
     // its keymap, asked for once and kept: the bindings as its own table and the config write them.
     // Nothing here keeps a second copy, so the legend cannot letter a key the compositor would not act on.
     property var keys: []

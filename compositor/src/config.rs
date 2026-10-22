@@ -33,6 +33,7 @@
 //!
 //!     [keys]                           # the legend (docs/keyboard.md): Mod held alone this long
 //!     legend_after = 500               # letters the keymap over the sheet; 0 turns it off
+//!     word_for = 1200                  # how long a passing word stands on it
 //!
 //! Actions: focus|move|resize left|right|up|down, workspace N, send N, fullscreen, close, quit,
 //! spawn COMMAND (run by sh -c). The file is read again when it changes (see main.rs); a file that does
@@ -136,6 +137,10 @@ pub struct Config {
     /// sheet — the keymap shown on the things it acts on (docs/keyboard.md). None where it is turned
     /// off with 0. Any other key cancels it, so a slow chord never raises it.
     pub legend_after: Option<std::time::Duration>,
+    /// [keys] word_for: how long a passing word stands on the sheet — the line the legend says in
+    /// answer to a key and then takes back (docs/keyboard.md). It is the keyboard's own register, so
+    /// it is timed here with the hold rather than by whoever letters it.
+    pub word_for: std::time::Duration,
 }
 
 /// [session] (session.rs): the windows put back at login, but those of the applications in `skip`.
@@ -356,7 +361,11 @@ impl Config {
         // [keys] legend_after: milliseconds, 0 to turn the legend off
         let after = table.get("keys").and_then(|v| v.get("legend_after")).and_then(|v| v.as_integer()).unwrap_or(500).clamp(0, 5000) as u64;
         let legend_after = (after > 0).then(|| std::time::Duration::from_millis(after));
-        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan, legend_after })
+        // [keys] word_for: milliseconds a passing word stands. Long enough to be read without being
+        // looked for, short enough that the sheet is a drawing again before you have finished thinking.
+        let word_for = table.get("keys").and_then(|v| v.get("word_for")).and_then(|v| v.as_integer()).unwrap_or(1200).clamp(200, 10_000) as u64;
+        let word_for = std::time::Duration::from_millis(word_for);
+        Ok(Config { input, bindings, animations, rules, session, scale_bar, key_plan, legend_after, word_for })
     }
 
     /// The action for a key press. `sym` is the key as typed, `raw` the unshifted key (so Shift+1

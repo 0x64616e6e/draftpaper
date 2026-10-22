@@ -55,14 +55,50 @@ pub struct Words {
     pub held: String,
     pub leader: String,
     pub more: String,
+    /// the passing word for a key with nothing on it: "NOTHING ON" + the key (docs/keyboard.md)
+    pub unbound: String,
 }
 
 impl Words {
     pub fn read() -> Words {
         let v = draftpaper::content::legend();
         let w = |k: &str, d: &str| v.get(k).and_then(Value::as_str).unwrap_or(d).to_string();
-        Words { title: w("title", "LEGEND"), held: w("held", "MOD HELD"), leader: w("leader", "LEADER"), more: w("more", "MORE") }
+        Words {
+            title: w("title", "LEGEND"),
+            held: w("held", "MOD HELD"),
+            leader: w("leader", "LEADER"),
+            more: w("more", "MORE"),
+            unbound: w("unbound", "NOTHING ON"),
+        }
     }
+
+    /// The heading's right-hand side. A passing word said takes it over for its moment — it is the
+    /// answer to the key you just pressed, and the state of the keyboard and the count of what did not
+    /// fit are reference, which can wait. With nothing said it reads as it always did.
+    pub fn meta(&self, leader: bool, over: usize, word: Option<&Said>) -> String {
+        if let Some(said) = word {
+            let phrase = match said.say.as_str() {
+                "unbound" => &self.unbound,
+                // a case this sheet has no words for: the compositor names it, so say the name rather
+                // than nothing at all
+                other => return format!("{} {}", other.to_uppercase(), said.about).trim_end().to_string(),
+            };
+            return format!("{phrase} {}", said.about).trim_end().to_string();
+        }
+        let how = if leader { &self.leader } else { &self.held };
+        if over > 0 {
+            format!("{how} · {over} {}", self.more)
+        } else {
+            how.clone()
+        }
+    }
+}
+
+/// A passing word as the compositor says it: the case, and what it is about (`word` in the outputs).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Said {
+    pub say: String,
+    pub about: String,
 }
 
 impl Mm {
@@ -197,8 +233,7 @@ pub fn draw(canvas: &mut Canvas, face: &mut Face, keys: &[Key], marks: &[Mark], 
     canvas.fill(px(p0) as i32, px(q0) as i32, (px(p1) - px(p0)) as i32, (px(q1) - px(q0)) as i32, paper.premultiplied());
 
     face.draw(canvas, px(g), px(g + 1.0) + face.ascent(2.8 * mm), &words.title, 2.8 * mm, 0.25 * mm, ink.premultiplied());
-    let how = if s.leader { &words.leader } else { &words.held };
-    let meta = if at.over > 0 { format!("{how} · {} {}", at.over, words.more) } else { how.clone() };
+    let meta = words.meta(s.leader, at.over, s.word.as_ref());
     let w = face.width(&meta, 2.0 * mm, 0.3 * mm);
     face.draw(canvas, px(g) + wide - w, px(g + 1.6) + face.ascent(2.0 * mm), &meta, 2.0 * mm, 0.3 * mm, faint.premultiplied());
     canvas.fill(px(g) as i32, px(g + at.mm.head - 2.0) as i32, wide as i32, heavy as i32, ink.premultiplied());
@@ -331,6 +366,26 @@ mod tests {
     /// first column — not as deep as the keys divided by the columns there was room for. The bug this
     /// holds off showed only on a sheet with room to spare: where the table is exactly full the two
     /// ways of measuring it agree, which is why every smaller display looked right.
+
+    /// The heading's right says one thing at a time, and a word said is the thing it says. The shell
+    /// reads the same way (qml/Legend.qml's metaWord); lettering.sh compares the two sheets.
+    #[test]
+    fn a_word_said_takes_the_heading_over_and_the_count_waits() {
+        let w = Words { title: "LEGEND".into(), held: "MOD HELD".into(), leader: "LEADER".into(), more: "MORE".into(), unbound: "NOTHING ON".into() };
+        assert_eq!(w.meta(false, 0, None), "MOD HELD");
+        assert_eq!(w.meta(true, 0, None), "LEADER");
+        assert_eq!(w.meta(true, 31, None), "LEADER · 31 MORE");
+        let said = Said { say: "unbound".into(), about: "q".into() };
+        assert_eq!(w.meta(true, 31, Some(&said)), "NOTHING ON q", "the word is the answer; the count is reference");
+        // the phrasing is the document's, never the compositor's: a case with no words is named, not
+        // dropped, so a word added to one and not the other is visible rather than silent
+        let odd = Said { say: "bind".into(), about: "schedule.trains".into() };
+        assert_eq!(w.meta(false, 0, Some(&odd)), "BIND schedule.trains");
+        // and a word about nothing in particular does not trail a space
+        let bare = Said { say: "unbound".into(), about: String::new() };
+        assert_eq!(w.meta(false, 0, Some(&bare)), "NOTHING ON");
+    }
+
     #[test]
     fn the_paper_is_cut_to_the_rows_and_columns_the_table_uses() {
         let s = roomy();
