@@ -313,7 +313,16 @@ ShellRoot {
     property bool brightnessLit: false
     Timer { id: volumeOff; interval: 4000; onTriggered: root.volumeLit = false }
     Timer { id: brightnessOff; interval: 4000; onTriggered: root.brightnessLit = false }
-    onBrightnessChanged: if (root.settled) { root.brightnessLit = true; brightnessOff.restart() }
+    // the brightness as it was last read: the first reading is not a change. The backlight is only
+    // known once its two files have been read, and on a loaded machine that lands after `settled`,
+    // which lit the indicator at login for no reason at all -- and made the two renderers disagree
+    // on the top margin, which is what compositor/tests/lettering.sh caught.
+    property real wasBrightness: -1
+    onBrightnessChanged: {
+        const had = root.wasBrightness >= 0
+        root.wasBrightness = root.brightness
+        if (root.settled && had && root.brightness >= 0) { root.brightnessLit = true; brightnessOff.restart() }
+    }
     Connections {
         target: root.audio
         function onVolumeChanged() { if (root.settled) { root.volumeLit = true; volumeOff.restart() } }

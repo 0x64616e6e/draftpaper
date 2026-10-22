@@ -75,10 +75,16 @@ render() {
             DRAFTPAPER_BIN="$repo/cli/target/release/draftpaper" "$@"
     }
     letter "$repo/cli/target/release/draftpaper" apply > /dev/null 2>&1
+    # each renderer on a session bus of its own (dbus-run-session). The shell letters the tray along
+    # the top margin and the client draws none of it (docs/sheet-content.md), so a tray icon on the
+    # logged-in user's bus -- a chat app, a VPN, anything -- puts a glyph in one renderer's margin and
+    # not the other's, and the comparison fails for a reason that has nothing to do with the sheet.
+    # It keeps the client's notification server off the live bus too, where it was asking for
+    # org.freedesktop.Notifications against whatever already holds it.
     if [ "$1" = client ]; then
-        letter "$client" > "$t/$1.log" 2>&1 &
+        letter dbus-run-session -- "$client" > "$t/$1.log" 2>&1 &
     else
-        letter qs -p "$repo/qml" > "$t/$1.log" 2>&1 &
+        letter dbus-run-session -- qs -p "$repo/qml" > "$t/$1.log" 2>&1 &
     fi
     drawn=$!
     pids="$nest $drawn"
