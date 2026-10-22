@@ -76,7 +76,7 @@ PanelWindow {
     readonly property bool wpTouched: wpWas !== null && (wpPicture !== wpWas.picture || wpRows.some(r => wpVals[r.key] !== wpWas.vals[r.key]))
     property bool wpApplied: false      // the sheet shows a picked wallpaper (Escape puts the old back)
     // the pages, in Tab's order: the two above, then the ones made of config.toml's rows (cfgPages)
-    readonly property var pageList: [["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["text", "TEXT"], ["sheet", "SHEET"], ["rulers", "RULERS"],
+    readonly property var pageList: [["layout", "LAYOUT"], ["scheme", "COLOUR SCHEME"], ["wallpaper", "WALLPAPER"], ["displays", "DISPLAYS"], ["text", "TEXT"], ["sheet", "SHEET"], ["rulers", "RULERS"],
                                      ["session", "SESSION"], ["input", "INPUT"], ["touchpad", "TOUCHPAD"], ["touch", "TOUCH"],
                                      ["idle", "IDLE · LOCK"]]
     // each row: config.toml's key (dotted: table.key), its name, the values offered ([value, label]), the
@@ -198,6 +198,7 @@ PanelWindow {
 
     // the pages, numbered as the canvas numbers them, each with the line that says what it is for
     readonly property var pageSays: ({
+        layout: "How windows divide a display. The sheet is a grid of zones -- columns numbered across it, rows lettered down it -- and the plan shows what is built on them.",
         scheme: "The drawing the sheet is made in: its paper, its ink and what it lights things with. Pick one, or build your own from the rows below it.",
         wallpaper: "The picture behind the frame, and how much of the paper is left in it. The sheet redraws as you pick; nothing is kept until you apply.",
         displays: "Every display this machine has, where it sits beside the others, and how large the sheet is drawn on each.",
@@ -802,7 +803,8 @@ PanelWindow {
     readonly property real mainW: appW - sideW - 2 * padX
     readonly property real mainY: padTop
     // how deep the page showing is, so the scroller knows how far it goes
-    readonly property real pageDeep: cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64
+    readonly property real pageDeep: page === "layout" ? cfgTop + layoutPage.deep + 64
+        : cfgRows.length ? cfgTop + cfgRows.length * rowPitch + 64
         : page === "scheme" ? builderY + rows.length * rowH + 64 : 0
     readonly property real rowPitch: 69        // 16px padding, a 14px label over a 12px hint
     readonly property real cfgTop: pageHead.foot + 24 + (cfgPage.bandH || 0)
@@ -1133,6 +1135,150 @@ PanelWindow {
             readonly property real foot: y + pageLead.y + pageLead.height + 32 + 1
         }
 
+
+        // ---- 01 Layout: the plan ----
+        // The canvas draws a plan of the display with the windows on it, hatched where nothing is
+        // built, dimensioned along the top. Draftpaper's layout is a zone grid rather than a tree of
+        // gaps, so what is dimensioned is the zones: the columns numbered across the sheet and the
+        // rows lettered down it, which the sheet already prints and the compositor already measures
+        // in millimetres. The drawing is the canvas's; the thing drawn is ours.
+        Item {
+            id: layoutPage
+            visible: settings.page === "layout"
+            x: settings.mainX; y: settings.cfgTop
+            width: settings.mainW
+            readonly property var o: settings.out
+            readonly property var zn: o && o.zones ? o.zones : { across: 6, down: 4, width: 1, height: 1 }
+            readonly property real mmPer: o ? o.px_per_mm : 4
+            // the plan is the frame's own proportion, so what is drawn is the sheet and not a box
+            readonly property real planW: Math.min(width - 72, 620)
+            readonly property real planH: o && o.frame ? planW * o.frame.height / Math.max(1, o.frame.width) : planW * 0.625
+
+            // the columns dimensioned across the top, each in whole millimetres as the sheet is
+            Chain {
+                id: acrossChain
+                width: layoutPage.planW; height: 40
+                face: settings.code
+                marks: {
+                    const n = layoutPage.zn.across, out = []
+                    for (let i = 0; i <= n; i++) out.push(i / n)
+                    return out
+                }
+                labels: {
+                    const n = layoutPage.zn.across, out = []
+                    const each = Math.round(layoutPage.zn.width / layoutPage.mmPer)
+                    for (let i = 0; i < n; i++) out.push({ text: each + " mm", strong: i === 0 })
+                    return out
+                }
+            }
+
+            Item {          // the plan itself
+                id: plan
+                y: acrossChain.height
+                width: layoutPage.planW; height: layoutPage.planH
+                Rectangle {
+                    anchors.fill: parent
+                    color: settings.plan
+                    border.width: 1; border.color: settings.ink
+                    Hatching { anchors.fill: parent; anchors.margins: 1; stroke: settings.hatch; pitch: 8 }
+                }
+                // the zones, ruled as a plan rules its grid: thin, and not over the windows
+                Repeater {
+                    model: layoutPage.zn.across - 1
+                    Rectangle {
+                        required property int index
+                        x: Math.round((index + 1) * plan.width / layoutPage.zn.across)
+                        width: 1; height: plan.height
+                        color: settings.hatch
+                    }
+                }
+                Repeater {
+                    model: layoutPage.zn.down - 1
+                    Rectangle {
+                        required property int index
+                        y: Math.round((index + 1) * plan.height / layoutPage.zn.down)
+                        width: plan.width; height: 1
+                        color: settings.hatch
+                    }
+                }
+                // the windows, built on it: the canvas's own tile, with the name and the size in it
+                Repeater {
+                    model: layoutPage.o ? Compositor.windows.filter(w => w.geometry && w.output === layoutPage.o.name) : []
+                    Rectangle {
+                        id: tile
+                        required property var modelData
+                        readonly property var g: modelData.geometry
+                        readonly property var f: layoutPage.o.frame
+                        x: Math.round((g.x - layoutPage.o.x - f.x) / f.width * plan.width)
+                        y: Math.round((g.y - layoutPage.o.y - f.y) / f.height * plan.height)
+                        width: Math.round(g.width / f.width * plan.width)
+                        height: Math.round(g.height / f.height * plan.height)
+                        color: settings.sheetWhite
+                        border.width: modelData.focused ? 2 : 1
+                        border.color: settings.ink
+                        clip: true
+                        Column {
+                            x: 12; y: 10; spacing: 3
+                            width: parent.width - 24
+                            Row {
+                                spacing: 7
+                                Rectangle {
+                                    visible: tile.modelData.focused
+                                    width: 6; height: 6; color: settings.accent
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                Text {
+                                    text: tile.modelData.title || tile.modelData.app_id || "window"
+                                    font.family: settings.sans; font.pixelSize: 12; font.weight: Font.Medium
+                                    color: settings.ink
+                                    elide: Text.ElideRight
+                                    width: Math.max(0, tile.width - 24 - (tile.modelData.focused ? 13 : 0))
+                                }
+                            }
+                            Text {
+                                visible: tile.height > 46
+                                text: Math.round(tile.g.width / layoutPage.mmPer) + " × " + Math.round(tile.g.height / layoutPage.mmPer) + " mm"
+                                font.family: settings.code; font.pixelSize: 11
+                                color: settings.ink4
+                            }
+                        }
+                    }
+                }
+            }
+
+            // and the rows dimensioned down the side, lettered as the sheet letters them
+            Column {
+                x: layoutPage.planW + 16; y: acrossChain.height
+                Repeater {
+                    model: layoutPage.zn.down
+                    Item {
+                        required property int index
+                        width: 60; height: plan.height / layoutPage.zn.down
+                        Rectangle { width: 1; height: parent.height; color: settings.line }
+                        Text {
+                            x: 10; anchors.verticalCenter: parent.verticalCenter
+                            text: "ABCDEFGHJKLMNPQRSTUVWXYZ".charAt(index) + "   "
+                                  + Math.round(layoutPage.zn.height / layoutPage.mmPer) + " mm"
+                            font.family: settings.code; font.pixelSize: 11
+                            color: settings.ink4
+                        }
+                    }
+                }
+            }
+
+            Text {          // what the plan is, lettered under it as a drawing titles its figure
+                y: acrossChain.height + layoutPage.planH + 14
+                text: layoutPage.o
+                      ? layoutPage.o.name + " · " + layoutPage.zn.across + " × " + layoutPage.zn.down + " zones · "
+                        + Math.round((layoutPage.o.frame ? layoutPage.o.frame.width : 0) / layoutPage.mmPer) + " × "
+                        + Math.round((layoutPage.o.frame ? layoutPage.o.frame.height : 0) / layoutPage.mmPer) + " mm within the frame"
+                      : ""
+                font.family: settings.code; font.pixelSize: 11
+                font.letterSpacing: 0.9
+                color: settings.ink4
+            }
+            readonly property real deep: acrossChain.height + planH + 14 + 20
+        }
 
         // ---- the wallpaper page ----
         Item {
