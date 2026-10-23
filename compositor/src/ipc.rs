@@ -3,6 +3,7 @@
 //! reply per line, in order:
 //!
 //!   {"request": "version" | "outputs" | "workspaces" | "windows" | "keys"}   "keys": the keymap, for the legend
+//!   {"request": "keyboard"}                 which keyboard it is, its layouts, and every key's legend| "outputs" | "workspaces" | "windows" | "keys"}   "keys": the keymap, for the legend
 //!   {"request": "action", "action": "workspace 3"}        any binding action (config.rs)
 //!   {"request": "frames"}                                frames drawn with a change, per output
 //!   {"request": "subscribe", "events": ["workspaces", "outputs", "windows"]}
@@ -228,6 +229,40 @@ impl Draftpaper {
                     None => self.drop_word(),
                 }
                 Ok(json!(self.word.as_ref().map(|w| w.say.clone())))
+            }
+            // the keyboard itself: which one it is, what layouts it is set to, and what every key says
+            // in the layout in use. The settings draw a board from this -- the positions are a
+            // standard board's, keyed by evdev code, and the legends are these, so a Romanian or a
+            // Dvorak layout is drawn in its own letters rather than in QWERTY's (docs/keyboard.md).
+            "keyboard" => {
+                let keyboard = self.seat.get_keyboard().ok_or("no keyboard")?;
+                let device = self.tty_data.as_ref().and_then(|tty| tty.keyboard_name());
+                let (layout, named, keys) = keyboard.with_xkb_state(self, |ctx| {
+                    let xkb = ctx.xkb().lock().unwrap();
+                    let active = xkb.active_layout();
+                    let named: Vec<String> = xkb.layouts().map(|l| xkb.layout_name(l).to_string()).collect();
+                    let mut keys = Vec::new();
+                    // evdev codes: the main board and the function row above it. xkb counts from eight
+                    // higher, which is the one piece of arithmetic in all of this.
+                    for code in 1u32..=126 {
+                        let syms = xkb.raw_syms_for_key_in_layout((code + 8).into(), active);
+                        if syms.is_empty() {
+                            continue;
+                        }
+                        let say = |s: &smithay::input::keyboard::Keysym| match s.key_char() {
+                            Some(c) if !c.is_control() && c != ' ' => c.to_string(),
+                            _ => smithay::input::keyboard::xkb::keysym_get_name(*s),
+                        };
+                        keys.push(json!({
+                            "code": code,
+                            "label": say(&syms[0]),
+                            "shift": syms.get(1).map(say),
+                            "name": smithay::input::keyboard::xkb::keysym_get_name(syms[0]),
+                        }));
+                    }
+                    (xkb.layout_name(active).to_string(), named, keys)
+                });
+                Ok(json!({ "device": device, "layout": layout, "layouts": named, "keys": keys }))
             }
             // the keymap, for the legend to letter and for anything else that would rather read the
             // bindings than guess them (docs/keyboard.md). The compositor is the only thing that knows
@@ -739,10 +774,10 @@ pub fn msg(args: &[String]) -> i32 {
     };
     let request = match args.first().map(String::as_str) {
         None => {
-            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|legend|leader|word|subscribe KIND...|ACTION");
+            eprintln!("usage: draftpaper-compositor msg version|outputs|focused-output|workspaces|windows|keys|frames|pointer|legend|leader|word|keyboard|subscribe KIND...|ACTION");
             return 2;
         }
-        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames" | "keys")) => {
+        Some(r @ ("version" | "outputs" | "workspaces" | "windows" | "focused-output" | "gamma" | "frames" | "keys" | "keyboard")) => {
             json!({ "request": if r == "focused-output" { "outputs" } else { r } })
         }
         // where the pointer is; with X Y, the action that puts it there

@@ -99,6 +99,16 @@ impl TtyData {
         self.renderer.import_dmabuf(dmabuf, None).is_ok()
     }
 
+    /// Which keyboard this is, for the settings to name: the first device libinput says has keys and
+    /// no fingers to tap with, so a touchpad's own key capability is not mistaken for one.
+    pub fn keyboard_name(&self) -> Option<String> {
+        use smithay::reexports::input::DeviceCapability;
+        self.devices
+            .iter()
+            .find(|d| d.has_capability(DeviceCapability::Keyboard) && d.config_tap_finger_count() == 0)
+            .map(|d| d.name().to_string())
+    }
+
     /// Each device set from its own table: a touchpad is not a mouse and neither is a touchscreen,
     /// and until now one `[input]` was read into all three (config.rs's `Touchpad`, `Pointer`,
     /// `Touchscreen`). What a device has not got is left alone — libinput says so itself, and asking
