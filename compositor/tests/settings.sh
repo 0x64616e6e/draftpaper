@@ -138,6 +138,19 @@ sleep 0.3
 row touchscreen.enabled
 ipc step 1
 ok "the touchscreen turned off, in a new [touchscreen]" "$(waitfor '^enabled = false$')" "1"
+# the Bindings board (docs/keyboard.md): a key is picked by its evdev code -- 44 is Z on every
+# board, whatever is printed on it -- and set to an action from the compositor's own vocabulary.
+# A key cannot be pressed in a headless compositor, so the board is driven the way a hand would
+# drive it and the file is read to see what the hand did.
+ipc page bindings
+sleep 0.5
+ok "a key picked by its position" "$(ipc pickKey 44)" "44"
+ok "and the chord it stands for" "$(ipc bindTo 'focus left')" "Mod+z"
+ok "written into [bindings], quoted because of the plus" "$(waitfor '^"Mod+z" = "focus left"$')" "1"
+ok "[bindings] added once" "$(grep -c '^\[bindings\]' "$cfg")" "1"
+ipc bindTo "none" > /dev/null
+ok "and taken off again" "$(waitfor '^"Mod+z" = "none"$')" "1"
+
 ipc page startup
 sleep 0.3
 row idle.lock_after

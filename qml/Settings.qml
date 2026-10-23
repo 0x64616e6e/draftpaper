@@ -24,6 +24,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
+import "Board.js" as Board
 
 PanelWindow {
     id: settings
@@ -612,6 +613,9 @@ PanelWindow {
     }
     // a value as TOML writes it: a list in brackets, the rest as it is.
     function raw(v) { return Array.isArray(v) ? "[" + v.join(", ") + "]" : String(v) }
+    // the Bindings board, reached from the IPC so a test can bind without a keyboard to press
+    function bindKey(code) { bindPage.picked = code }
+    function bindSet(action) { bindPage.setTo(action); return bindPage.chord }
     function cfgApply() {
         const keys = Object.keys(cfgVals)
         if (keys.length) queue(["config", "set"].concat(keys.map(k => k + "=" + raw(cfgVals[k]))), "config")
@@ -1649,31 +1653,44 @@ PanelWindow {
             readonly property real deep: padChain.height + padH + 14 + 30
         }
 
-        // ---- 07 Bindings: the schedule of the layer ----
-        // "Choose a modifier layer, then a key; the schedule lists the whole layer." The compositor
-        // is the only thing that knows the keymap and is asked for it once (docs/keyboard.md), so
-        // this is that table, sorted into the layers the chords fall into.
+        // ---- 07 Bindings: the board, and what is set on it ----
+        // "Every combination, drawn on the keyboard it lives on. Choose a modifier layer, then a key."
+        //
+        // The positions are a standard board's, by evdev code (qml/Board.js): xkb's geometry is
+        // vestigial and no layout in use says where its keys sit. The legends are the live keymap's,
+        // so the board is drawn in the letters actually on it. The bindings are the compositor's own
+        // table, which is the only honest account of what a key does (docs/keyboard.md).
         Item {
             id: bindPage
             visible: settings.page === "bindings"
             x: settings.mainX; y: settings.cfgTop
             width: settings.mainW
             property string tier: "Mod"
-            readonly property var layers: {
-                const seen = {}
-                for (const k of Compositor.keys) {
-                    const parts = k.keys.split("+")
-                    seen[parts.slice(0, -1).join("+") || "plain"] = 1
-                }
-                return Object.keys(seen).sort((a, b) => a.length - b.length || (a < b ? -1 : 1))
-            }
-            readonly property var shown: Compositor.keys.filter(k => {
-                const parts = k.keys.split("+")
-                return (parts.slice(0, -1).join("+") || "plain") === bindPage.tier
-            })
+            property int picked: -1                 // the evdev code of the key chosen, or none
 
-            Row {               // the layers, as the canvas picks one
-                id: layerRow
+            readonly property var kb: Compositor.keyboard
+            readonly property var tiers: ["Mod", "Mod+Shift", "Mod+Ctrl", "Mod+Shift+Ctrl", "plain"]
+            // every binding of the layer showing, by the key it ends on
+            readonly property var onKey: {
+                const out = {}
+                for (const b of Compositor.keys) {
+                    const parts = b.keys.split("+")
+                    const held = parts.slice(0, -1).join("+") || "plain"
+                    if (held !== bindPage.tier) continue
+                    const last = parts[parts.length - 1]
+                    ;(out[last] = out[last] || []).push(b)
+                }
+                return out
+            }
+            function boundTo(sym) { return sym && onKey[sym] ? onKey[sym] : [] }
+
+            readonly property real boardW: Math.min(width, 760)
+            readonly property real unit: boardW / (Board.UNITS + Board.GAP + Board.ARROW_UNITS)
+            readonly property real keyH: unit
+
+            // ---- the layer, picked as the canvas picks one ----
+            Row {
+                id: tierRow
                 spacing: 0
                 Repeater {
                     model: bindPage.tiers
@@ -1681,7 +1698,7 @@ PanelWindow {
                         required property var modelData
                         required property int index
                         readonly property bool here: bindPage.tier === modelData
-                        width: layerLabel.implicitWidth + 32; height: 38
+                        width: tierLabel.implicitWidth + 28; height: 38
                         color: here ? settings.ink : "transparent"
                         Rectangle { width: 1; height: parent.height; visible: index > 0; color: settings.ink }
                         Rectangle { y: 0; width: parent.width; height: 1; color: settings.ink }
@@ -1690,49 +1707,311 @@ PanelWindow {
                         Rectangle { x: parent.width - 1; width: 1; height: parent.height
                                     visible: index === bindPage.tiers.length - 1; color: settings.ink }
                         Text {
-                            id: layerLabel
+                            id: tierLabel
                             anchors.centerIn: parent
                             text: modelData
                             font.family: settings.code; font.pixelSize: 12; font.weight: Font.Medium
                             color: parent.here ? settings.sheetWhite : settings.ink3
                         }
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onPressed: bindPage.tier = modelData }
+                        MouseArea {
+                            anchors.fill: parent; cursorShape: Qt.PointingHandCursor
+                            onPressed: { bindPage.tier = modelData; bindPage.picked = -1 }
+                        }
                     }
                 }
             }
-            Column {            // the schedule itself
-                y: layerRow.height + 24
-                width: parent.width
+
+            // ---- the board ----
+            Item {
+                id: plank
+                y: tierRow.height + 28
+                width: bindPage.boardW; height: 5 * bindPage.keyH + 4
                 Repeater {
-                    model: bindPage.shown
+                    model: Board.rows()
                     Item {
+                        id: boardRow
                         required property var modelData
-                        width: bindPage.width; height: 32
-                        Rectangle { width: parent.width; height: 1; color: settings.line }
-                        Text {
-                            x: 0; anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.keys
-                            font.family: settings.code; font.pixelSize: 12
-                            color: settings.ink
+                        required property int index
+                        y: index * bindPage.keyH
+                        width: plank.width; height: bindPage.keyH
+                        Repeater {
+                            model: boardRow.modelData
+                            Rectangle {
+                                id: cap
+                                required property var modelData
+                                required property int index
+                                readonly property real before: {
+                                    let u = 0
+                                    for (let i = 0; i < index; i++) u += boardRow.modelData[i].w
+                                    return u
+                                }
+                                readonly property string sym: Board.symbol(bindPage.kb, modelData)
+                                readonly property var bound: modelData.mod ? [] : bindPage.boundTo(sym)
+                                readonly property bool held: modelData.mod === "Mod"
+                                    || (modelData.mod !== "" && bindPage.tier.indexOf(modelData.mod) >= 0)
+                                readonly property bool chosen: bindPage.picked === modelData.code
+                                x: before * bindPage.unit + 1
+                                y: 1
+                                width: modelData.w * bindPage.unit - 2
+                                height: bindPage.keyH - 2
+                                color: cap.chosen ? "#FFFFFF" : cap.held ? settings.ink
+                                     : cap.bound.length ? settings.sheetWhite : "#EEEFEB"
+                                border.width: cap.chosen ? 2 : 1
+                                border.color: cap.chosen ? settings.accent : cap.held ? settings.ink
+                                            : cap.bound.length ? "#8F938C" : settings.edge
+                                Text {
+                                    x: 5; y: 4
+                                    text: Board.legend(bindPage.kb, cap.modelData)
+                                    font.family: settings.code
+                                    font.pixelSize: cap.modelData.w > 1.4 ? 10 : 12
+                                    color: cap.held ? settings.bodyBg : cap.bound.length ? settings.ink : settings.ink4
+                                }
+                                Text {      // what it does, where there is room to say it
+                                    visible: cap.bound.length > 0 && cap.modelData.w >= 1
+                                    anchors { left: parent.left; right: parent.right; bottom: parent.bottom
+                                              leftMargin: 5; rightMargin: 4; bottomMargin: 3 }
+                                    elide: Text.ElideRight
+                                    text: cap.bound.length > 1 ? cap.bound.length + "×"
+                                        : cap.bound.length ? cap.bound[0].action : ""
+                                    font.family: settings.sans; font.pixelSize: 9
+                                    color: cap.bound.length > 1 ? "#B0441A" : settings.ink3
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    enabled: !cap.modelData.mod
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: bindPage.picked = bindPage.picked === cap.modelData.code ? -1 : cap.modelData.code
+                                }
+                            }
                         }
-                        Text {
-                            x: 220; anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.action
-                            font.family: settings.sans; font.pixelSize: 13
-                            color: settings.ink3
+                    }
+                }
+                // the arrows, in the inverted T they are made in
+                Repeater {
+                    model: Board.arrows()
+                    Item {
+                        id: arrowRow
+                        required property var modelData
+                        required property int index
+                        x: (Board.UNITS + Board.GAP) * bindPage.unit
+                        y: (3 + index) * bindPage.keyH
+                        width: Board.ARROW_UNITS * bindPage.unit; height: bindPage.keyH
+                        Repeater {
+                            model: arrowRow.modelData
+                            Rectangle {
+                                id: arrowCap
+                                required property var modelData
+                                required property int index
+                                visible: !!modelData
+                                readonly property string sym: modelData ? Board.symbol(bindPage.kb, modelData) : ""
+                                readonly property var bound: modelData ? bindPage.boundTo(sym) : []
+                                readonly property bool chosen: modelData && bindPage.picked === modelData.code
+                                x: index * bindPage.unit + 1; y: 1
+                                width: bindPage.unit - 2; height: bindPage.keyH - 2
+                                color: chosen ? "#FFFFFF" : bound.length ? settings.sheetWhite : "#EEEFEB"
+                                border.width: chosen ? 2 : 1
+                                border.color: chosen ? settings.accent : bound.length ? "#8F938C" : settings.edge
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: arrowCap.modelData ? arrowCap.modelData.cap : ""
+                                    font.family: settings.code; font.pixelSize: 12
+                                    color: arrowCap.bound.length ? settings.ink : settings.ink4
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onPressed: bindPage.picked = bindPage.picked === arrowCap.modelData.code
+                                                                 ? -1 : arrowCap.modelData.code
+                                }
+                            }
                         }
                     }
                 }
             }
-            Text {
-                y: layerRow.height + 24 + bindPage.shown.length * 32 + 14
-                text: bindPage.shown.length + " of " + Compositor.keys.length
-                      + " bindings · the compositor's own table, asked for once"
+
+            // ---- what a key is set to ----
+            // Picked on the board, set here. The catalogue is the compositor's own vocabulary
+            // (compositor/src/config.rs parses exactly these), and the applications are the ones
+            // installed, spawned by the command their .desktop file gives.
+            readonly property var catalogue: [
+                ["Focus", ["focus left", "focus right", "focus up", "focus down"]],
+                ["Window", ["move left", "move right", "move up", "move down",
+                            "resize left", "resize right", "resize up", "resize down",
+                            "close", "fullscreen", "park", "park_prev", "park_next", "zoom"]],
+                ["Workspace", ["workspace 1", "workspace 2", "workspace 3", "workspace 4", "workspace 5",
+                               "send 1", "send 2", "send 3", "send 4", "send 5"]],
+                ["System", ["screenshot", "session_save", "reload", "quit"]]
+            ]
+            readonly property var apps: DesktopEntries.applications.values
+                .filter(e => !e.noDisplay)
+                .sort((a, b) => a.name.localeCompare(b.name))
+            readonly property var pickedKey: {
+                if (bindPage.picked < 0) return null
+                for (const row of Board.rows())
+                    for (const k of row) if (k.code === bindPage.picked) return k
+                for (const row of Board.arrows())
+                    for (const k of row) if (k && k.code === bindPage.picked) return k
+                return null
+            }
+            readonly property string chord: {
+                if (!pickedKey) return ""
+                const sym = Board.symbol(kb, pickedKey)
+                return tier === "plain" ? sym : tier + "+" + sym
+            }
+            function setTo(action) {
+                if (chord === "") return
+                // config.toml is marked before the first write, as every other row does: Escape puts
+                // the whole file back byte for byte (cli/src/config.rs)
+                if (!settings.cfgMarked) { settings.queue(["config", "mark"], ""); settings.cfgMarked = true }
+                settings.queue(["config", "set", 'bindings."' + chord + '"=' + action], "")
+            }
+
+            Item {
+                id: chooser
+                y: plank.y + plank.height + 40
+                width: bindPage.width
+                visible: bindPage.picked >= 0
+                height: visible ? 420 : 0
+
+                Rectangle { width: parent.width; height: 1; color: settings.line }
+                Text {
+                    id: chordName
+                    y: 20
+                    text: bindPage.chord
+                    font.family: settings.code; font.pixelSize: 20; font.weight: Font.Medium
+                    color: settings.ink
+                }
+                Text {
+                    id: chordNow
+                    y: 50
+                    readonly property var has: bindPage.boundTo(bindPage.pickedKey ? Board.symbol(bindPage.kb, bindPage.pickedKey) : "")
+                    text: has.length ? "set to " + has.map(b => b.action).join(" and ") : "not set"
+                    font.family: settings.sans; font.pixelSize: 13
+                    color: settings.ink3
+                }
+                Rectangle {     // take it off the key again
+                    x: bindPage.width - width; y: 20
+                    width: clearLabel.implicitWidth + 40; height: 38
+                    visible: chordNow.has.length > 0
+                    color: clearArea.containsMouse ? settings.ghostHover : "transparent"
+                    border.width: 1; border.color: settings.firm
+                    Text {
+                        id: clearLabel
+                        anchors.centerIn: parent; text: "Take it off"
+                        font.family: settings.sans; font.pixelSize: settings.fRow
+                        color: settings.ink
+                    }
+                    MouseArea {
+                        id: clearArea
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onPressed: bindPage.setTo("none")
+                    }
+                }
+
+                // the actions, by what they act on
+                Row {
+                    y: 86
+                    spacing: 32
+                    Repeater {
+                        model: bindPage.catalogue
+                        Column {
+                            required property var modelData
+                            width: 150
+                            spacing: 2
+                            Text {
+                                text: modelData[0].toUpperCase()
+                                font.family: settings.code; font.pixelSize: settings.fTag
+                                font.letterSpacing: 0.9
+                                color: settings.ink4
+                                bottomPadding: 8
+                            }
+                            Repeater {
+                                model: modelData[1]
+                                Rectangle {
+                                    required property var modelData
+                                    readonly property bool now: chordNow.has.some(b => b.action === modelData)
+                                    width: 150; height: 24
+                                    color: now ? settings.ink : actArea.containsMouse ? settings.ghostHover : "transparent"
+                                    Text {
+                                        x: 6; anchors.verticalCenter: parent.verticalCenter
+                                        text: parent.modelData
+                                        font.family: settings.code; font.pixelSize: settings.fHint
+                                        color: parent.now ? settings.sheetWhite : settings.ink
+                                    }
+                                    MouseArea {
+                                        id: actArea
+                                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onPressed: bindPage.setTo(parent.modelData)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // and an application, which is a spawn of whatever its .desktop file runs
+                    Column {
+                        width: 220
+                        spacing: 2
+                        Text {
+                            text: "APPLICATION"
+                            font.family: settings.code; font.pixelSize: settings.fTag
+                            font.letterSpacing: 0.9
+                            color: settings.ink4
+                            bottomPadding: 8
+                        }
+                        Flickable {
+                            width: 220; height: 280
+                            clip: true
+                            contentWidth: width
+                            contentHeight: appList.height
+                            boundsBehavior: Flickable.StopAtBounds
+                            Column {
+                                id: appList
+                                width: 220
+                                spacing: 2
+                                Repeater {
+                                    model: bindPage.apps
+                                    Rectangle {
+                                        required property var modelData
+                                        readonly property string cmd: "spawn " + (modelData.command || [])
+                                            .filter(a => !/^%[a-zA-Z]$/.test(a)).join(" ")
+                                        readonly property bool now: chordNow.has.some(b => b.action === cmd)
+                                        width: 220; height: 24
+                                        color: now ? settings.ink : appArea.containsMouse ? settings.ghostHover : "transparent"
+                                        Text {
+                                            x: 6; anchors.verticalCenter: parent.verticalCenter
+                                            width: 208; elide: Text.ElideRight
+                                            text: parent.modelData.name
+                                            font.family: settings.sans; font.pixelSize: settings.fHint
+                                            color: parent.now ? settings.sheetWhite : settings.ink
+                                        }
+                                        MouseArea {
+                                            id: appArea
+                                            anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                            onPressed: bindPage.setTo(parent.cmd)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text {      // which keyboard this is a board of
+                y: plank.y + plank.height + 14
+                text: {
+                    const kb = bindPage.kb
+                    if (!kb) return "no keymap from the compositor: a US board, until it can say"
+                    const who = kb.device || "no keyboard device"
+                    const lay = kb.layout ? " · " + kb.layout : ""
+                    return who + lay + " · positions a standard board's, legends this keymap's"
+                }
                 font.family: settings.code; font.pixelSize: 11; font.letterSpacing: 0.9
                 color: settings.ink4
             }
-            readonly property real deep: layerRow.height + 24 + shown.length * 32 + 14 + 30
+            readonly property real deep: plank.y + plank.height + 14 + 30 + chooser.height
         }
+
 
         // ---- 09 Motion: progress against time ----
         // "The profile plots progress against time for one event; the programme sets every event on

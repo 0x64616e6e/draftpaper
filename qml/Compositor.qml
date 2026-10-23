@@ -23,6 +23,11 @@ Singleton {
     // its keymap, asked for once and kept: the bindings as its own table and the config write them.
     // Nothing here keeps a second copy, so the legend cannot letter a key the compositor would not act on.
     property var keys: []
+    // the keyboard itself: which device it is, the layouts it carries and every key by its evdev code
+    // with the legend it has in the layout in use. The settings draw a board from it (docs/keyboard.md):
+    // the positions are a standard board's, because xkb geometry is vestigial, and only the legends
+    // are the keymap's -- so a board is drawn in the letters actually on it.
+    property var keyboard: null
     readonly property string path: Quickshell.env("DRAFTPAPER_SOCKET") || ""
 
     function output(name) { return outputs.find(o => o.name === name) || null }
@@ -57,6 +62,7 @@ Singleton {
             if (connected) {
                 compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
                 compositor.send({ request: "keys" })
+                compositor.send({ request: "keyboard" })
                 for (const name in compositor.merged) compositor.send({ request: "sheet", output: name, merged: compositor.merged[name] })
                 for (const name in compositor.clear) compositor.send({ request: "sheet", output: name, clear: compositor.clear[name] })
             }
@@ -71,6 +77,7 @@ Singleton {
                 else if (m.event === "workspaces") compositor.workspaces = m.workspaces
                 else if (m.event === "windows") compositor.windows = m.windows
                 else if (m.ok === true && m.for === "keys") compositor.keys = m.reply
+                else if (m.ok === true && m.for === "keyboard") compositor.keyboard = m.reply
                 else if (m.ok === false) console.warn("draftpaper:", m.error)
             }
         }

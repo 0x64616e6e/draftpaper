@@ -254,6 +254,10 @@ ShellRoot {
             return key
         }
         function step(n: int): void { if (settings.visible) settings.step(n) }
+        // the Bindings board: a key picked by its evdev code, and what it is set to. A key cannot be
+        // pressed in a headless compositor, so this is what the test binds with.
+        function pickKey(code: int): int { settings.bindKey(code); return code }
+        function bindTo(action: string): string { return settings.bindSet(action) }
         function keep(): void { if (settings.visible) settings.keep() }
         function cancel(): void { if (settings.visible) settings.cancel() }
         // how many displays the Displays page was built from. The page is a snapshot of the outputs as
