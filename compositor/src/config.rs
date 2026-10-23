@@ -567,6 +567,8 @@ impl crate::state::Draftpaper {
                 }
             }
         }
+        // a display that grew can now be lying under its neighbour: put the automatic ones clear
+        self.space_out_outputs();
         for output in self.space.outputs().cloned().collect::<Vec<_>>() {
             self.update_screen(&output);
         }
@@ -576,6 +578,49 @@ impl crate::state::Draftpaper {
     }
 
     /// Keyboard layout and repeat, and touchpad settings on the devices the TTY backend knows.
+    /// No two displays may stand on the same logical ground.
+    ///
+    /// An output plugged in without a `position` of its own is placed to the right of everything
+    /// there was *at that moment* (tty.rs). Change another display's scale afterwards and it is a
+    /// different size, so the one placed against it can end up lying underneath — and in the overlap
+    /// the pointer is inside both outputs at once, which is why the cursor was drawn on two displays.
+    ///
+    /// So the automatic ones are put clear again whenever anything is applied. A display that
+    /// config.toml gives a `position` to is the user's arrangement and is never moved: if two of
+    /// those overlap, that is what was asked for.
+    pub fn space_out_outputs(&mut self) {
+        use smithay::utils::{Point, Rectangle};
+        let mut fixed: Vec<Rectangle<i32, smithay::utils::Logical>> = Vec::new();
+        let mut loose: Vec<smithay::output::Output> = Vec::new();
+        for output in self.space.outputs().cloned().collect::<Vec<_>>() {
+            let settings = crate::theme::output_settings(&output.name(), &output.physical_properties().model);
+            let Some(geometry) = self.space.output_geometry(&output) else { continue };
+            if settings.position.is_some() {
+                fixed.push(geometry);
+            } else {
+                loose.push(output);
+            }
+        }
+        // left to right as they stand, so the arrangement keeps the order it had
+        loose.sort_by_key(|o| self.space.output_geometry(o).map(|g| g.loc.x).unwrap_or(0));
+        let held: Vec<(i32, i32, i32, i32)> = fixed.iter().map(|r| (r.loc.x, r.loc.y, r.size.w, r.size.h)).collect();
+        let moving: Vec<(i32, i32, i32, i32)> = loose
+            .iter()
+            .filter_map(|o| self.space.output_geometry(o))
+            .map(|g| (g.loc.x, g.loc.y, g.size.w, g.size.h))
+            .collect();
+        for (output, (x, y)) in loose.iter().zip(spaced_out(&held, &moving)) {
+            let Some(geometry) = self.space.output_geometry(output) else { continue };
+            if (geometry.loc.x, geometry.loc.y) == (x, y) {
+                continue;
+            }
+            eprintln!("draftpaper: output {} was under another display, moved to {:?}", output.name(), (x, y));
+            let at = Point::from((x, y));
+            output.change_current_state(None, None, None, Some(at));
+            self.space.map_output(output, at);
+        }
+    }
+
     pub fn apply_input(&mut self) {
         let input = self.config.input.clone();
         let keyboard = self.seat.get_keyboard().unwrap();
@@ -596,9 +641,69 @@ impl crate::state::Draftpaper {
     }
 }
 
+/// Where the automatically placed displays go so that none of them lies under another.
+///
+/// `fixed` is every display config.toml gives a `position` to, as (x, y, w, h): that is the user's
+/// arrangement and it never moves, even if two of them overlap — that was what was asked for.
+/// `loose` is the rest, left to right as they stand. Each is left alone where it is clear, and put
+/// to the right of everything standing where it is not, keeping the height it was placed at.
+fn spaced_out(fixed: &[(i32, i32, i32, i32)], loose: &[(i32, i32, i32, i32)]) -> Vec<(i32, i32)> {
+    let hits = |a: &(i32, i32, i32, i32), b: &(i32, i32, i32, i32)| {
+        a.0 < b.0 + b.2 && b.0 < a.0 + a.2 && a.1 < b.1 + b.3 && b.1 < a.1 + a.3
+    };
+    let mut taken: Vec<(i32, i32, i32, i32)> = fixed.to_vec();
+    let mut out = Vec::with_capacity(loose.len());
+    for d in loose {
+        if !taken.iter().any(|r| hits(r, d)) {
+            taken.push(*d);
+            out.push((d.0, d.1));
+            continue;
+        }
+        let x = taken.iter().map(|r| r.0 + r.2).max().unwrap_or(0);
+        taken.push((x, d.1, d.2, d.3));
+        out.push((x, d.1));
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The defect this holds off, exactly as it happened: the 4K was plugged in while the laptop's
+    /// panel was at scale 1.5, so it was placed to the right of 1280 logical pixels. The panel was
+    /// then set to scale 1 and became 1920 wide, and the 4K was left lying under its right-hand 640 —
+    /// where the pointer is inside two displays at once and the cursor is drawn on both.
+    #[test]
+    fn a_display_that_grew_does_not_leave_its_neighbour_underneath() {
+        let panel = [(0, 0, 1920, 1200)];                       // eDP-1, now scale 1
+        let four_k = [(1280, 0, 1920, 1080)];                   // DP-3, placed when the panel was 1280
+        assert_eq!(spaced_out(&panel, &four_k), vec![(1920, 0)], "the 4K goes clear of the panel");
+        // and once it is clear, nothing moves again: applying the settings twice is not two moves
+        let settled = [(1920, 0, 1920, 1080)];
+        assert_eq!(spaced_out(&panel, &settled), vec![(1920, 0)]);
+    }
+
+    /// An arrangement written in config.toml is the user's and is never moved, even where it overlaps:
+    /// two displays mirrored onto the same ground is a thing somebody may have asked for.
+    #[test]
+    fn the_displays_config_toml_places_are_left_exactly_where_they_are_asked_for() {
+        let both_at_origin = [(0, 0, 1920, 1200), (0, 0, 1920, 1080)];
+        assert_eq!(spaced_out(&both_at_origin, &[]), Vec::<(i32, i32)>::new());
+        // and a loose one goes to the right of the whole of it, not into the gap
+        assert_eq!(spaced_out(&both_at_origin, &[(0, 0, 800, 600)]), vec![(1920, 0)]);
+    }
+
+    /// Displays that do not touch are left alone: this runs whenever anything is applied, and it must
+    /// not shuffle an arrangement that is already good.
+    #[test]
+    fn displays_standing_clear_are_not_moved() {
+        let loose = [(0, 0, 1280, 800), (1280, 0, 1920, 1080), (3200, 0, 1024, 768)];
+        assert_eq!(spaced_out(&[], &loose), vec![(0, 0), (1280, 0), (3200, 0)]);
+        // one above another is clear too: a display stacked over the laptop is a real arrangement
+        let stacked = [(0, 0, 1920, 1200), (0, -1080, 1920, 1080)];
+        assert_eq!(spaced_out(&[], &stacked), vec![(0, 0), (0, -1080)]);
+    }
 
     /// A config written before the devices had tables of their own goes on meaning what it meant: the
     /// touchpad's two settings lived in `[input]`, and that is where they are still read from when
