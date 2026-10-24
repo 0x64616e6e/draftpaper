@@ -5,7 +5,8 @@
 # Runs the compositor as the login screen (--greeter) on the sheet of the user whose copy of it
 # (`draftpaper apply`: /var/lib/draftpaper/greeter/<user>/) was written last, or of USER given as the
 # argument, with their name filled in; without a copy, the default sheet. The session it starts is
-# draftpaper-session, on the same VT, and the sheet stays on screen between the two.
+# draftpaper-session (or another installed one, chosen with Tab: wayland-sessions), on the same VT, and
+# the sheet stays on screen between the two.
 dir=/var/lib/draftpaper/greeter
 user=${1:-}
 if [ -z "$user" ]; then
@@ -31,6 +32,8 @@ export DRAFTPAPER_CACHE="$look/.cache/draftpaper"
 export XDG_CACHE_HOME="$run/cache"
 export XDG_DATA_HOME="$run/data"
 export XDG_STATE_HOME="$run/state"
+# where the login screen keeps the session each name chose last (until the machine restarts)
+mkdir -p "$XDG_STATE_HOME"
 export DRAFTPAPER_GREETER_USER="$user"
 export DRAFTPAPER_GREETER_SESSION="${DRAFTPAPER_GREETER_SESSION:-draftpaper-session}"
 # its log (and the card's, and the holder's) to the journal: greetd keeps none (journalctl -t draftpaper-greeter)

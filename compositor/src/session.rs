@@ -549,12 +549,57 @@ pub fn desktop_command(app_id: &str, files: &[String]) -> Option<Vec<String>> {
     (!command.is_empty()).then_some(command)
 }
 
+/// The sessions a display manager would offer, for the login screen to choose from (qml/greeter.qml):
+/// the entries in wayland-sessions under each data directory, the first of a name winning, as
+/// {"id", "name", "command"}. Left out: Hidden and NoDisplay entries, and those whose TryExec is not
+/// installed (a session whose program was removed with its package).
+pub fn wayland_sessions() -> Vec<Value> {
+    let data_dirs = std::env::var("XDG_DATA_DIRS").ok().filter(|d| !d.is_empty()).unwrap_or_else(|| "/usr/local/share:/usr/share".into());
+    let mut seen: Vec<String> = Vec::new();
+    let mut sessions = Vec::new();
+    for dir in data_dirs.split(':').filter(|d| !d.is_empty()) {
+        let Ok(read) = std::fs::read_dir(PathBuf::from(dir).join("wayland-sessions")) else { continue };
+        let mut files: Vec<PathBuf> = read.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "desktop")).collect();
+        files.sort();
+        for file in files {
+            let id = file.file_stem().unwrap_or_default().to_string_lossy().into_owned();
+            if seen.contains(&id) {
+                continue;
+            }
+            seen.push(id.clone());
+            let Some(e) = std::fs::read_to_string(&file).ok().and_then(|t| Entry::parse(&t)) else { continue };
+            if e.hidden || e.no_display || e.try_exec.as_deref().is_some_and(|p| !installed(p)) {
+                continue;
+            }
+            let command = e.command();
+            if command.is_empty() {
+                continue;
+            }
+            sessions.push(json!({ "id": id, "name": e.name.clone().unwrap_or_else(|| id.clone()), "command": command }));
+        }
+    }
+    sessions
+}
+
+/// A program as TryExec names it: a path that is an executable file, or a name found on PATH.
+fn installed(program: &str) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    let executable = |p: &std::path::Path| p.metadata().is_ok_and(|m| m.is_file() && m.permissions().mode() & 0o111 != 0);
+    if program.contains('/') {
+        return executable(std::path::Path::new(program));
+    }
+    std::env::var_os("PATH").is_some_and(|path| std::env::split_paths(&path).any(|d| executable(&d.join(program))))
+}
+
 #[derive(Debug, Default)]
 struct Entry {
     exec: String,
+    name: Option<String>,
+    try_exec: Option<String>,
     wm_class: Option<String>,
     application: bool,
     hidden: bool,
+    no_display: bool,
     terminal: bool,
 }
 
@@ -573,6 +618,10 @@ impl Entry {
             let v = v.trim();
             match k.trim() {
                 "Exec" => e.exec = v.to_string(),
+                // the untranslated name (Name[fr] and the like are other keys)
+                "Name" => e.name = Some(v.to_string()),
+                "TryExec" => e.try_exec = Some(v.to_string()),
+                "NoDisplay" => e.no_display = v == "true",
                 "StartupWMClass" => e.wm_class = Some(v.to_string()),
                 "Type" => e.application = v == "Application",
                 "Hidden" => e.hidden = v == "true",
@@ -685,5 +734,16 @@ mod tests {
         assert!(e.usable());
         assert!(!Entry::parse("[Desktop Entry]\nType=Application\nExec=htop\nTerminal=true\n").unwrap().usable());
         assert!(Entry::parse("[Desktop Entry]\nType=Application\n").is_none());
+    }
+
+    #[test]
+    fn session_entries() {
+        let e = Entry::parse("[Desktop Entry]\nName=Tom's WM (Wayland)\nName[fr]=Le WM de Tom\nExec=twm-session\nTryExec=twm\nType=Application\n").unwrap();
+        assert_eq!(e.name.as_deref(), Some("Tom's WM (Wayland)"));
+        assert_eq!(e.try_exec.as_deref(), Some("twm"));
+        assert_eq!(e.command(), ["twm-session"]);
+        assert!(Entry::parse("[Desktop Entry]\nExec=x\nNoDisplay=true\n").unwrap().no_display);
+        assert!(installed("sh") && installed("/bin/sh"));
+        assert!(!installed("no-such-program-anywhere") && !installed("/no/such/program"));
     }
 }

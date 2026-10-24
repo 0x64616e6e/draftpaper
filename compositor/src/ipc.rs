@@ -275,6 +275,8 @@ impl Draftpaper {
                     .map(|b| json!({ "keys": b.keys, "action": b.text }))
                     .collect(),
             )),
+            // the sessions a display manager would offer, for the login screen's choice (session.rs)
+            "sessions" => Ok(Value::Array(crate::session::wayland_sessions())),
             // frames drawn with a change, per output, since the start (an idle desktop draws none)
             "frames" => Ok(json!(self.frames)),
             // the login screen runs nothing and keeps its sheet as the session will first draw it

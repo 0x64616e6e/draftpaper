@@ -359,6 +359,11 @@ the session takes the displays over as they are, in the same mode, shows that ve
 shell is up, then fades it into the desktop as the blur goes (Linux 6.8 or later). After any display
 manager the session opens the same way, from whatever was on screen.
 
+When another desktop is installed beside Draftpaper (an entry in `/usr/share/wayland-sessions` or
+`/usr/local/share/wayland-sessions`), the session that will start is lettered under the field: Tab
+(Shift+Tab, or a click on it) goes to the next. The choice is kept for your name until the machine
+restarts. With Draftpaper's session alone, nothing more is shown.
+
 ![The login screen: the sheet blurred inside its frame, one field in the middle, the fingerprint reader listening](docs/screenshots/greeter.jpg)
 
 *The login screen: your name remembered, the fingerprint reader listening; type the password and Enter

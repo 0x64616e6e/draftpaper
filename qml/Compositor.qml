@@ -28,6 +28,11 @@ Singleton {
     // the positions are a standard board's, because xkb geometry is vestigial, and only the legends
     // are the keymap's -- so a board is drawn in the letters actually on it.
     property var keyboard: null
+    // the sessions a display manager would offer ([{id, name, command}], session.rs), for the login
+    // screen: asked for only by it (wantSessions), once connected
+    property var sessions: null
+    property bool wantSessions: false
+    onWantSessionsChanged: if (wantSessions) send({ request: "sessions" })
     readonly property string path: Quickshell.env("DRAFTPAPER_SOCKET") || ""
 
     function output(name) { return outputs.find(o => o.name === name) || null }
@@ -63,6 +68,7 @@ Singleton {
                 compositor.send({ request: "subscribe", events: ["outputs", "workspaces", "windows"] })
                 compositor.send({ request: "keys" })
                 compositor.send({ request: "keyboard" })
+                if (compositor.wantSessions) compositor.send({ request: "sessions" })
                 for (const name in compositor.merged) compositor.send({ request: "sheet", output: name, merged: compositor.merged[name] })
                 for (const name in compositor.clear) compositor.send({ request: "sheet", output: name, clear: compositor.clear[name] })
             }
@@ -78,6 +84,7 @@ Singleton {
                 else if (m.event === "windows") compositor.windows = m.windows
                 else if (m.ok === true && m.for === "keys") compositor.keys = m.reply
                 else if (m.ok === true && m.for === "keyboard") compositor.keyboard = m.reply
+                else if (m.ok === true && m.for === "sessions") compositor.sessions = m.reply
                 else if (m.ok === false) console.warn("draftpaper:", m.error)
             }
         }

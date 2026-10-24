@@ -16,9 +16,15 @@
 // session takes it over as its opening picture, revealing the desktop under it as the blur goes
 // (compositor/src/handoff.rs, opening.rs).
 //
+// When more than one session is installed (wayland-sessions: Draftpaper, and another desktop beside it),
+// the one that will start is lettered under the field, and Tab (Shift+Tab, a click) goes to the next;
+// with Draftpaper's alone, nothing more shows. The choice is kept per user until the machine restarts
+// (the greeter writes nothing that outlives it).
+//
 // Started by the compositor (--greeter) with DRAFTPAPER_GREETER_USER (the name to fill in) and
-// DRAFTPAPER_GREETER_SESSION (the command; draftpaper-session). With DRAFTPAPER_GREETER_TEST=1 the
-// IPC handler "greeter" types and presses Enter, for the headless test (compositor/tests/greeter.sh).
+// DRAFTPAPER_GREETER_SESSION (the command; draftpaper-session, the default and the first). With
+// DRAFTPAPER_GREETER_TEST=1 the IPC handler "greeter" types, presses Enter and goes to the next session,
+// for the headless test (compositor/tests/greeter.sh).
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -32,7 +38,11 @@ ShellRoot {
     // the copy's user: their sheet, their name in the title block
     readonly property string owner: Quickshell.env("DRAFTPAPER_GREETER_USER") || ""
     property string user: owner
-    readonly property var session: (Quickshell.env("DRAFTPAPER_GREETER_SESSION") || "draftpaper-session").split(" ")
+    // the session to start: the one chosen of those installed (the default first), or the default alone
+    readonly property var defaultSession: (Quickshell.env("DRAFTPAPER_GREETER_SESSION") || "draftpaper-session").split(" ")
+    property var sessions: []           // [{id, name, command}], the default first
+    property int sessionIndex: 0
+    readonly property var session: sessions.length ? sessions[sessionIndex].command : defaultSession
     // as blurred as the session's opening starts (compositor/src/opening.rs, BLUR_MM)
     readonly property real blurMm: 6
     // what is being typed: the name, the password, or the answer to a further question greetd asks
@@ -67,6 +77,47 @@ ShellRoot {
     onTextChanged: if (asked && text === "") listenAgain()
 
     function blur(on) { Compositor.send({ request: "blur", mm: on ? blurMm : 0 }) }
+    // the installed sessions, from the compositor: the default first (named as its entry names it, or
+    // after its program when it has none), then the others in the order found
+    function takeSessions(list) {
+        const all = (list || []).slice()
+        const same = s => s.command.join(" ") === defaultSession.join(" ")
+        const i = all.findIndex(same)
+        const first = i >= 0 ? all.splice(i, 1)[0] : { id: "", name: defaultSession[0] === "draftpaper-session" ? "Draftpaper" : defaultSession[0], command: defaultSession }
+        sessions = [first].concat(all)
+        recallSession()
+    }
+    // the one this user chose last, if it is still installed
+    function recallSession() {
+        let chosen = {}
+        try { chosen = JSON.parse(chosenFile.text()) || {} } catch (e) {}
+        const i = sessions.findIndex(s => s.id && s.id === chosen[user])
+        sessionIndex = i >= 0 ? i : 0
+    }
+    function nextSession(step) {
+        if (sessions.length < 2 || leaving) return
+        sessionIndex = (sessionIndex + step + sessions.length) % sessions.length
+    }
+    // kept once it is used: the session about to start, for this name
+    function keepSession() {
+        if (!user || sessions.length < 2) return
+        let chosen = {}
+        try { chosen = JSON.parse(chosenFile.text()) || {} } catch (e) {}
+        chosen[user] = sessions[sessionIndex].id
+        chosenFile.setText(JSON.stringify(chosen))
+    }
+    onUserChanged: if (sessions.length) recallSession()
+    FileView {
+        id: chosenFile
+        // the greeter's own state (draftpaper-greeter: under its runtime directory, gone at a restart)
+        path: (Quickshell.env("XDG_STATE_HOME") || "/tmp") + "/draftpaper-greeter-sessions.json"
+        blockLoading: true
+        printErrors: false
+    }
+    Connections {
+        target: Compositor
+        function onSessionsChanged() { root.takeSessions(Compositor.sessions) }
+    }
     // a session for the name: PAM starts (the reader listens)
     function begin() {
         if (!user || leaving || Greetd.state !== GreetdState.Inactive) return
@@ -122,7 +173,10 @@ ShellRoot {
         blur(false)
     }
 
-    Component.onCompleted: if (user) { blur(true); begin() }
+    Component.onCompleted: {
+        Compositor.wantSessions = true
+        if (user) { blur(true); begin() }
+    }
     // the card placed (the outputs known) and drawn: the compositor's opening may reveal it (opening.rs)
     readonly property bool placed: Compositor.outputs.length > 0
     onPlacedChanged: if (placed) readyTimer.start()
@@ -222,6 +276,11 @@ ShellRoot {
         function type(text: string): void { root.text += text }
         function enter(): void { root.submit() }
         function back(): void { root.clear() }
+        function nextSession(): void { root.nextSession(1) }
+        // the sessions offered, the one that would start in brackets: "[Draftpaper] Tom's WM"
+        function sessions(): string {
+            return root.sessions.map((s, i) => i === root.sessionIndex ? "[" + s.name + "]" : s.name).join(" ")
+        }
         function state(): string {
             return root.field + (root.busy ? " busy" : "") + (root.finger ? " finger" : "") + (root.note ? ": " + root.note : "")
         }
@@ -251,6 +310,8 @@ ShellRoot {
                 if (k === Qt.Key_Escape) root.clear()
                 else if (k === Qt.Key_Return || k === Qt.Key_Enter) root.submit()
                 else if (ctrl && k === Qt.Key_U) root.text = ""
+                else if (k === Qt.Key_Tab) root.nextSession(1)
+                else if (k === Qt.Key_Backtab) root.nextSession(-1)
                 else if (k === Qt.Key_Backspace) root.text = root.text.slice(0, -1)
                 else if (!ctrl && e.text && e.text >= " " && !root.busy && !root.leaving) root.text += e.text
                 else return
@@ -268,6 +329,30 @@ ShellRoot {
                 finger: root.finger
                 busy: root.busy
                 caret: !root.busy && !root.leaving && (root.field !== "password" || root.text !== "" || !root.finger)
+            }
+
+            // the session that will start, under the field, when there is a choice: lettered small and
+            // faint, as the sheet letters its notes, with the way to the next on either side. It fades with
+            // the card, so the frame the session takes over does not carry it
+            Text {
+                id: sessionLine
+                visible: root.sessions.length > 1
+                x: card.fieldX; width: card.fieldW
+                y: card.fieldY + card.fieldH + 2.4 * card.mm
+                horizontalAlignment: Text.AlignHCenter
+                textFormat: Text.PlainText
+                elide: Text.ElideMiddle
+                text: visible ? "\u2039  " + root.sessions[root.sessionIndex].name.toUpperCase() + "  \u203a" : ""
+                font.family: Fonts.mono
+                font.pixelSize: 2.2 * card.mm
+                font.letterSpacing: 0.25 * card.mm
+                color: card.inkA(0.6)
+                opacity: card.box.opacity
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: e => root.nextSession(e.button === Qt.RightButton ? -1 : 1)
+                }
             }
 
             // the name, sliding from the card into the title block's DRAWN cell, lettered there at the
@@ -331,6 +416,7 @@ ShellRoot {
         PauseAnimation { duration: 120 }
         onFinished: {
             if (Greetd.state !== GreetdState.ReadyToLaunch) { root.recover(); return }
+            root.keepSession()
             Greetd.launch(root.session, [], false)
             stuck.start()
         }

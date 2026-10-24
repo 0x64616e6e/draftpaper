@@ -66,8 +66,17 @@ until_state() {
     printf '%s' "$s"
 }
 
+# the sessions installed (wayland-sessions): Draftpaper's, another desktop's, and two that are not
+# offered -- one whose program is not installed (TryExec), one that asks not to be shown
+s=$t/share/wayland-sessions
+mkdir -p "$s" "$t/state"
+printf '[Desktop Entry]\nName=Draftpaper (Wayland)\nExec=draftpaper-session\nType=Application\n' > "$s/draftpaper.desktop"
+printf "[Desktop Entry]\nName=Tom's WM\nExec=twm-session\nTryExec=sh\nType=Application\n" > "$s/twm.desktop"
+printf '[Desktop Entry]\nName=Gone\nExec=gone\nTryExec=no-such-program-anywhere\nType=Application\n' > "$s/gone.desktop"
+printf '[Desktop Entry]\nName=Hidden\nExec=hidden\nNoDisplay=true\nType=Application\n' > "$s/hidden.desktop"
+
 # the login screen, as draftpaper-greeter starts it; the reader takes a finger for 3 s
-greeter_env="HOME=$look XDG_CONFIG_HOME=$look/.config DRAFTPAPER_CACHE=$look/.cache/draftpaper XDG_CACHE_HOME=$t/gcache DRAFTPAPER_GREETER_USER=drafttest"
+greeter_env="HOME=$look XDG_CONFIG_HOME=$look/.config DRAFTPAPER_CACHE=$look/.cache/draftpaper XDG_CACHE_HOME=$t/gcache XDG_STATE_HOME=$t/state XDG_DATA_DIRS=$t/share DRAFTPAPER_GREETER_USER=drafttest"
 "$fake" "$t/greetd.sock" "$t/started" "$t/finger" 3 &
 pids=$!
 # started with env itself, so $! is the process
@@ -83,6 +92,9 @@ ipc() { env $clean $common $greeter_env WAYLAND_DISPLAY="$wl" qs ipc -p "$repo/q
 i=0
 until ipc state > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
 ok "the name filled in, the reader listening at once" "$(until_state "^password finger$" 20)" "password finger"
+i=0
+until [ -n "$(ipc sessions 2>/dev/null)" ] || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
+ok "the sessions offered, Draftpaper's first" "$(ipc sessions)" "[Draftpaper (Wayland)] Tom's WM"
 ipc type wrong
 ipc enter
 ok "a password typed meanwhile, held" "$(ipc state)" "password busy finger"
@@ -108,13 +120,17 @@ if [ -n "${SHOT:-}" ]; then
     sleep 1
     mv "$look"/Pictures/*.png "$SHOT"
 fi
+# Tab: the other desktop, for this sign-in
+ipc nextSession
+ok "Tab: the next session" "$(ipc sessions)" "Draftpaper (Wayland) [Tom's WM]"
 touch "$t/finger"
 # the finger taken: the name slides into the title block (under half a second), the session is asked
 # for, and the compositor leaves
 i=0
 while kill -0 "$greeter" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.1; i=$((i + 1)); done
 ok "signed in by the finger, the compositor gone" "$(kill -0 "$greeter" 2>/dev/null && echo running || echo gone)" "gone"
-ok "greetd asked for the session" "$(tr -d ' \n' < "$t/started" 2>/dev/null)" '{"cmd":["draftpaper-session"],"env":[],"user":"drafttest"}'
+ok "greetd asked for the session chosen" "$(tr -d ' \n' < "$t/started" 2>/dev/null)" '{"cmd":["twm-session"],"env":[],"user":"drafttest"}'
+ok "and the choice kept for the name" "$(cat "$t/state/draftpaper-greeter-sessions.json" 2>/dev/null)" '{"drafttest":"twm"}'
 last=$(ls "$t"/last-*.png 2>/dev/null | head -n 1)
 ok "its last frame written" "$([ -n "$last" ] && echo yes)" "yes"
 
