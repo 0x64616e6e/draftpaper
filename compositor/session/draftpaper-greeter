@@ -32,8 +32,16 @@ export DRAFTPAPER_CACHE="$look/.cache/draftpaper"
 export XDG_CACHE_HOME="$run/cache"
 export XDG_DATA_HOME="$run/data"
 export XDG_STATE_HOME="$run/state"
-# where the login screen keeps the session each name chose last (until the machine restarts)
 mkdir -p "$XDG_STATE_HOME"
+# where the login screen keeps the session each name chose last: greetd's own home (/var/lib/greetd,
+# its user's alone), so the choice outlives a restart; without one it can write, the runtime state
+greeter_home=$(getent passwd "$(id -u)" | cut -d: -f6)
+if [ -n "$greeter_home" ] && [ -d "$greeter_home" ] && [ -w "$greeter_home" ]; then
+    export DRAFTPAPER_GREETER_STATE="$greeter_home/.local/state/draftpaper"
+    mkdir -p "$DRAFTPAPER_GREETER_STATE" || export DRAFTPAPER_GREETER_STATE="$XDG_STATE_HOME"
+else
+    export DRAFTPAPER_GREETER_STATE="$XDG_STATE_HOME"
+fi
 export DRAFTPAPER_GREETER_USER="$user"
 export DRAFTPAPER_GREETER_SESSION="${DRAFTPAPER_GREETER_SESSION:-draftpaper-session}"
 # its log (and the card's, and the holder's) to the journal: greetd keeps none (journalctl -t draftpaper-greeter)

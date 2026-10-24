@@ -76,7 +76,8 @@ printf '[Desktop Entry]\nName=Gone\nExec=gone\nTryExec=no-such-program-anywhere\
 printf '[Desktop Entry]\nName=Hidden\nExec=hidden\nNoDisplay=true\nType=Application\n' > "$s/hidden.desktop"
 
 # the login screen, as draftpaper-greeter starts it; the reader takes a finger for 3 s
-greeter_env="HOME=$look XDG_CONFIG_HOME=$look/.config DRAFTPAPER_CACHE=$look/.cache/draftpaper XDG_CACHE_HOME=$t/gcache XDG_STATE_HOME=$t/state XDG_DATA_DIRS=$t/share DRAFTPAPER_GREETER_USER=drafttest"
+mkdir -p "$t/kept"
+greeter_env="HOME=$look XDG_CONFIG_HOME=$look/.config DRAFTPAPER_CACHE=$look/.cache/draftpaper XDG_CACHE_HOME=$t/gcache XDG_STATE_HOME=$t/state DRAFTPAPER_GREETER_STATE=$t/kept XDG_DATA_DIRS=$t/share DRAFTPAPER_GREETER_USER=drafttest"
 "$fake" "$t/greetd.sock" "$t/started" "$t/finger" 3 &
 pids=$!
 # started with env itself, so $! is the process
@@ -130,7 +131,26 @@ i=0
 while kill -0 "$greeter" 2>/dev/null && [ $i -lt 60 ]; do sleep 0.1; i=$((i + 1)); done
 ok "signed in by the finger, the compositor gone" "$(kill -0 "$greeter" 2>/dev/null && echo running || echo gone)" "gone"
 ok "greetd asked for the session chosen" "$(tr -d ' \n' < "$t/started" 2>/dev/null)" '{"cmd":["twm-session"],"env":[],"user":"drafttest"}'
-ok "and the choice kept for the name" "$(cat "$t/state/draftpaper-greeter-sessions.json" 2>/dev/null)" '{"drafttest":"twm"}'
+ok "and the choice kept for the name" "$(cat "$t/kept/draftpaper-greeter-sessions.json" 2>/dev/null)" '{"drafttest":"twm"}'
+# the next login screen (after a restart: its runtime state gone, the kept state there) comes up on it
+rm -rf "$t/state" && mkdir -p "$t/state"
+"$fake" "$t/greetd2.sock" "$t/started2" "$t/finger2" 3 &
+pids="$pids $!"
+env $clean $common $greeter_env GREETD_SOCK="$t/greetd2.sock" DRAFTPAPER_GREETER_TEST=1 \
+    "$comp" --headless 3840x2160 --scale 1.5 --greeter > "$t/log3" 2>&1 &
+again=$!
+pids="$pids $again"
+i=0
+until grep -aq "draftpaper: wayland socket" "$t/log3" || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+wl3=$(grep -a "draftpaper: wayland socket" "$t/log3" | grep -o "wayland-[0-9]*" | head -1)
+ipc3() { env $clean $common $greeter_env WAYLAND_DISPLAY="$wl3" qs ipc -p "$repo/qml/greeter.qml" call greeter "$@"; }
+i=0
+until ipc3 state > /dev/null 2>&1 || [ $i -gt 100 ]; do sleep 0.1; i=$((i + 1)); done
+i=0
+until ipc3 sessions 2>/dev/null | grep -q '\[' || [ $i -gt 50 ]; do sleep 0.1; i=$((i + 1)); done
+ok "after a restart, the login screen comes up on the session chosen last" "$(ipc3 sessions)" "Draftpaper (Wayland) [Tom's WM]"
+kill "$again" 2>/dev/null
+wait "$again" 2>/dev/null
 last=$(ls "$t"/last-*.png 2>/dev/null | head -n 1)
 ok "its last frame written" "$([ -n "$last" ] && echo yes)" "yes"
 

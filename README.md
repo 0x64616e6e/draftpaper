@@ -361,8 +361,9 @@ manager the session opens the same way, from whatever was on screen.
 
 When another desktop is installed beside Draftpaper (an entry in `/usr/share/wayland-sessions` or
 `/usr/local/share/wayland-sessions`), the session that will start is lettered under the field: Tab
-(Shift+Tab, or a click on it) goes to the next. The choice is kept for your name until the machine
-restarts. With Draftpaper's session alone, nothing more is shown.
+(Shift+Tab, or a click on it) goes to the next. The session you last chose is remembered for your name
+(in greetd's home, `/var/lib/greetd`) and comes up first next time, after a restart too. With
+Draftpaper's session alone, nothing more is shown.
 
 ![The login screen: the sheet blurred inside its frame, one field in the middle, the fingerprint reader listening](docs/screenshots/greeter.jpg)
 

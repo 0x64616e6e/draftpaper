@@ -18,8 +18,8 @@
 //
 // When more than one session is installed (wayland-sessions: Draftpaper, and another desktop beside it),
 // the one that will start is lettered under the field, and Tab (Shift+Tab, a click) goes to the next;
-// with Draftpaper's alone, nothing more shows. The choice is kept per user until the machine restarts
-// (the greeter writes nothing that outlives it).
+// with Draftpaper's alone, nothing more shows. The choice is kept per user, in the greeter's own state
+// (DRAFTPAPER_GREETER_STATE: draftpaper-greeter puts it in greetd's home, so it outlives a restart).
 //
 // Started by the compositor (--greeter) with DRAFTPAPER_GREETER_USER (the name to fill in) and
 // DRAFTPAPER_GREETER_SESSION (the command; draftpaper-session, the default and the first). With
@@ -109,8 +109,9 @@ ShellRoot {
     onUserChanged: if (sessions.length) recallSession()
     FileView {
         id: chosenFile
-        // the greeter's own state (draftpaper-greeter: under its runtime directory, gone at a restart)
-        path: (Quickshell.env("XDG_STATE_HOME") || "/tmp") + "/draftpaper-greeter-sessions.json"
+        // the greeter's own lasting state (draftpaper-greeter: in greetd's home), else its runtime state
+        path: (Quickshell.env("DRAFTPAPER_GREETER_STATE") || Quickshell.env("XDG_STATE_HOME") || "/tmp") +
+            "/draftpaper-greeter-sessions.json"
         blockLoading: true
         printErrors: false
     }

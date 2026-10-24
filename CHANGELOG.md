@@ -7,7 +7,8 @@ What changed in each release, newest first. The Debian package's own record, wit
 
 - The login screen chooses the session when there is a choice: with another desktop installed beside
   Draftpaper (wayland-sessions), the one that will start is lettered under the field and Tab (Shift+Tab,
-  a click) goes to the next; the choice is kept for the name until a restart. The compositor lists the
+  a click) goes to the next; the session last chosen is remembered for the name, in greetd's home, and
+  comes up first next time, restarts included. The compositor lists the
   sessions (`msg sessions`), leaving out those whose program is not installed or that ask not to be
   shown. With Draftpaper's alone, the screen is as it was.
 - The sheet's own client (`sheet/`, docs/sheet-client.md): a Wayland client in Rust that draws the
