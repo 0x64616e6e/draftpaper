@@ -26,6 +26,44 @@ use serde_json::{Map, Value};
 
 use crate::util::{self, Paths};
 
+/// foot's version from `foot --version` ("foot version: 1.21.0 +pgo ..."), as (major, minor).
+fn foot_version() -> Option<(u32, u32)> {
+    let out = util::run(&["foot", "--version"], 5)?;
+    let v = out.split_whitespace().find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
+    let mut parts = v.split('.').map(|n| n.parse::<u32>().ok());
+    Some((parts.next()??, parts.next()??))
+}
+
+/// foot moved the cursor's colours from `[cursor] color=` to `[colors] cursor=` in 1.23, and dropped the
+/// old key in 1.26: apps/foot.ini writes the new form, and a foot older than 1.23 (Debian 13 has 1.21,
+/// which refuses the new key) is given the old one. An unknown version keeps the new form.
+fn foot_cursor_for(version: Option<(u32, u32)>, text: &str) -> String {
+    if !version.is_some_and(|v| v < (1, 23)) {
+        return text.to_string();
+    }
+    let mut out = String::new();
+    let mut section = String::new();
+    let mut cursor = None;
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with('[') {
+            section = t.to_string();
+        }
+        if section == "[colors]" {
+            if let Some(v) = t.strip_prefix("cursor=") {
+                cursor = Some(v.trim().to_string());
+                continue;
+            }
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    if let Some(v) = cursor {
+        out.push_str(&format!("[cursor]\ncolor={v}\n"));
+    }
+    out
+}
+
 fn render(p: &Paths, name: &str, pal: &Map<String, Value>) -> String {
     let text = util::read(&p.root.join("apps").join(name));
     let re = Regex::new(r"\{\{([a-z_0-9]+)(?:\.(raw|rgb|argb))?\}\}").unwrap();
@@ -196,7 +234,8 @@ pub fn apply(p: &Paths, t: &Map<String, Value>, cfg: &Map<String, Value>) {
     }
 
     if on("foot") {
-        util::write(&conf.join("foot/draftpaper.ini"), &crate::text::with_block(&render(p, "foot.ini", &pal), "#", fonts.foot.as_deref()));
+        let theme = foot_cursor_for(foot_version(), &render(p, "foot.ini", &pal));
+        util::write(&conf.join("foot/draftpaper.ini"), &crate::text::with_block(&theme, "#", fonts.foot.as_deref()));
         ensure_line(&conf.join("foot/foot.ini"), "include=~/.config/foot/draftpaper.ini", "draftpaper.ini", true);
     }
 
@@ -307,4 +346,25 @@ pub fn apply(p: &Paths, t: &Map<String, Value>, cfg: &Map<String, Value>) {
     }
     // the files above written again: [text]'s fonts at their ends again (text.rs)
     crate::text::apply(p, cfg);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const THEME: &str = "# generated\n[colors]\nbackground=0b0c0e\ncursor=0b0c0e ffa028\nregular0=15171b\n";
+
+    #[test]
+    fn foot_cursor_by_version() {
+        // 1.23 and later, or a version not known: as apps/foot.ini writes it
+        assert_eq!(foot_cursor_for(Some((1, 23)), THEME), THEME);
+        assert_eq!(foot_cursor_for(Some((1, 26)), THEME), THEME);
+        assert_eq!(foot_cursor_for(None, THEME), THEME);
+        // older: the colours under [cursor] color=, nothing else touched
+        let old = foot_cursor_for(Some((1, 21)), THEME);
+        assert_eq!(old, "# generated\n[colors]\nbackground=0b0c0e\nregular0=15171b\n[cursor]\ncolor=0b0c0e ffa028\n");
+        // a cursor= outside [colors] is not the colours'
+        let other = "[main]\ncursor=x\n[colors]\nbackground=0b0c0e\n";
+        assert_eq!(foot_cursor_for(Some((1, 21)), other), other);
+    }
 }
